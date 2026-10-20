@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python (Flask)
+__pycache__/
+*.pyc
+.venv/
+venv/
+instance/
+uploads/
+
+# Node (React JS)
+node_modules/
+dist/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
