@@ -1,0 +1,124 @@
+# Web HRM tích hợp AI — Docker Compose (chạy local / demo bảo vệ)
+#
+# Cách chạy:
+#   cp .env.example .env   # điền JWT_SECRET_KEY, AI_API_KEY... (KHÔNG commit .env)
+#   docker compose up --build
+#   - Frontend:  http://localhost:5173  (Nginx phục vụ React build)
+#   - API:       http://localhost:5000/api/v1/health
+#   - Frontend gọi API qua đường dẫn tương đối /api/... — Nginx (client/nginx.conf)
+#     proxy ngược sang service "api" nên FE-BE cùng origin, không cần CORS khi chạy Docker.
+#
+# Worker AI (tùy chọn, dạng profile — chỉ bật khi đã có entrypoint xử lý job):
+#   docker compose --profile worker up --build
+#
+# Mọi giá trị có đuôi ":-..." dưới đây là mặc định CHỈ cho môi trường dev/demo.
+# Khi triển khai thật phải đặt qua file .env hoặc biến môi trường của nền tảng.
+
+services:
+  db:
+    # PostgreSQL 16 + extension pgvector (phục vụ tìm vector cho chatbot RAG, bảng kb_chunks).
+    # Image chính thức của dự án pgvector, nền là postgres:16.
+    # (Image cũ ankane/pgvector đã ngừng phát triển — không dùng nữa.)
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hrm}
+      POSTGRES_USER: ${POSTGRES_USER:-hrm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hrm_dev_only_change_me}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrm} -d ${POSTGRES_DB:-hrm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    # Hàng đợi cho job AI (Celery/RQ). Nếu chọn phương án gọn "thread + bảng ai_jobs"
+    # (xem docs/architecture.md mục B2.2) thì service này có thể bỏ.
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      # Backend đọc toàn bộ cấu hình từ biến môi trường (docs/architecture.md mục B3.1, B7).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hrm}:${POSTGRES_PASSWORD:-hrm_dev_only_change_me}@db:5432/${POSTGRES_DB:-hrm}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev_only_change_me_in_env}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_MODEL: ${AI_MODEL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      UPLOAD_FOLDER: /app/uploads
+      MAX_CV_SIZE_MB: ${MAX_CV_SIZE_MB:-5}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      FLASK_ENV: ${FLASK_ENV:-production}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    volumes:
+      # File CV và tài liệu quy chế do người dùng tải lên — dùng chung với worker.
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    # Tiến trình nền xử lý job AI: trích text PDF, gọi AI phân tích CV, tạo embedding.
+    # Dùng CHUNG image với api (build từ server/Dockerfile), chỉ khác lệnh chạy.
+    # Để dạng profile vì entrypoint worker (Celery) có thể chưa có ở giai đoạn đầu —
+    # mặc định "docker compose up" không khởi động service này để tránh lỗi.
+    # Bật bằng: docker compose --profile worker up
+    # Nếu dự án chốt phương án thread + bảng ai_jobs trong Flask thì xóa hẳn service này.
+    profiles: ["worker"]
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hrm}:${POSTGRES_PASSWORD:-hrm_dev_only_change_me}@db:5432/${POSTGRES_DB:-hrm}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev_only_change_me_in_env}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_MODEL: ${AI_MODEL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      UPLOAD_FOLDER: /app/uploads
+      MAX_CV_SIZE_MB: ${MAX_CV_SIZE_MB:-5}
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      # Máy host 5173 → Nginx trong container cổng 80 (khớp cổng dev Vite cho quen thuộc).
+      - "${CLIENT_PORT:-5173}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  uploads_data:
