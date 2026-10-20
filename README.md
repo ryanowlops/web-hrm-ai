@@ -12,7 +12,31 @@ Hệ thống quản lý nhân sự (HRM) trên web, tích hợp AI sàng lọc C
 
 Đã có mã nguồn chạy được: backend Flask (`server/`), frontend React JS (`client/`), Docker Compose, CI, tài liệu hiệu năng và bảo mật (kèm kế hoạch quét Strix trong `docs/security-test-plan.md`).
 
-## Cách chạy local (không cần Docker)
+## Cách chạy nhanh nhất — 1 lệnh duy nhất
+
+Máy cần có sẵn: Git, Python 3.10+, Node.js 18+.
+
+**Windows** (mở PowerShell hoặc CMD rồi dán):
+
+```powershell
+git clone https://github.com/ryanowlops/web-hrm-ai.git; cd web-hrm-ai; .\run.bat
+```
+
+**macOS / Linux:**
+
+```bash
+git clone https://github.com/ryanowlops/web-hrm-ai.git && cd web-hrm-ai && ./run.sh
+```
+
+Lệnh trên tự làm hết: tải code → cài thư viện cho backend + frontend → tạo dữ liệu mẫu → chạy Flask (cổng 5000) + React (cổng 5173) → tự mở trình duyệt vào http://localhost:5173. Dừng bằng `Ctrl+C`. Những lần sau chỉ cần vào thư mục `web-hrm-ai` chạy lại `run.bat` / `./run.sh` (không phải clone lại).
+
+Nếu máy có Docker, còn gọn hơn nữa — không cần Python/Node:
+
+```bash
+git clone https://github.com/ryanowlops/web-hrm-ai.git && cd web-hrm-ai && docker compose up --build
+```
+
+## Cách chạy local thủ công (không cần Docker)
 
 ```bash
 # Backend (Flask) — cổng 5000
