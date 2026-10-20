@@ -8,11 +8,11 @@ import {
 // Lấy user hiện tại (role) một cách phòng thủ: localStorage 'user' -> JWT payload.
 function getCurrentUser() {
   try {
-    const raw = localStorage.getItem('user') || localStorage.getItem('currentUser');
+    const raw = localStorage.getItem('hrm_user') || localStorage.getItem('user') || localStorage.getItem('currentUser');
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
   try {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    const token = localStorage.getItem('hrm_access_token') || localStorage.getItem('access_token') || localStorage.getItem('token');
     if (token) {
       const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
       return { id: payload.sub, role: payload.role };

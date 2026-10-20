@@ -62,14 +62,14 @@ const errorMessage = (err, fallback) =>
 function resolveUser(propUser) {
   if (propUser?.role) return propUser;
   try {
-    for (const key of ['user', 'authUser', 'currentUser']) {
+    for (const key of ['hrm_user', 'user', 'authUser', 'currentUser']) {
       const raw = localStorage.getItem(key);
       if (raw) {
         const u = JSON.parse(raw);
         if (u?.role) return u;
       }
     }
-    for (const key of ['accessToken', 'access_token', 'token']) {
+    for (const key of ['hrm_access_token', 'accessToken', 'access_token', 'token']) {
       const t = localStorage.getItem(key);
       if (t && t.split('.').length === 3) {
         const payload = JSON.parse(
