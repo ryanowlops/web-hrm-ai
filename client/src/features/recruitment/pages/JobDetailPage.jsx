@@ -13,15 +13,29 @@ import {
   friendlyError,
   isAiUnavailable,
 } from '../services';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  Select,
+  Skeleton,
+  Spinner,
+  TableSkeleton,
+  Textarea,
+} from '../../../components/ui';
+import { IconFileText, IconSparkles, IconUsers, IconX } from '../../../components/icons.jsx';
 
 /* ------------------------------ Hằng số UI ------------------------------- */
 
 const CANDIDATE_STATUS = {
-  new: { label: 'Mới nộp', classes: 'bg-sky-100 text-sky-700 ring-sky-200' },
-  reviewing: { label: 'Đang xem xét', classes: 'bg-amber-100 text-amber-700 ring-amber-200' },
-  interview: { label: 'Mời phỏng vấn', classes: 'bg-violet-100 text-violet-700 ring-violet-200' },
-  passed: { label: 'Đạt', classes: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
-  rejected: { label: 'Đã loại', classes: 'bg-red-100 text-red-600 ring-red-200' },
+  new: { label: 'Mới nộp', tone: 'blue' },
+  reviewing: { label: 'Đang xem xét', tone: 'amber' },
+  interview: { label: 'Mời phỏng vấn', tone: 'violet' },
+  passed: { label: 'Đạt', tone: 'green' },
+  rejected: { label: 'Đã loại', tone: 'red' },
 };
 
 const STATUS_OPTIONS = Object.entries(CANDIDATE_STATUS).map(([value, v]) => ({
@@ -66,7 +80,7 @@ function scoreTone(score) {
   if (score == null) return { text: 'text-slate-400', bar: 'bg-slate-200', ring: '#cbd5e1' };
   if (score >= 75) return { text: 'text-emerald-600', bar: 'bg-emerald-500', ring: '#10b981' };
   if (score >= 50) return { text: 'text-amber-600', bar: 'bg-amber-500', ring: '#f59e0b' };
-  return { text: 'text-red-500', bar: 'bg-red-500', ring: '#ef4444' };
+  return { text: 'text-rose-500', bar: 'bg-rose-500', ring: '#f43f5e' };
 }
 
 function initials(name) {
@@ -123,12 +137,12 @@ function SkillChips({ items, tone }) {
   if (!items?.length) return <p className="text-sm text-slate-400">Không có dữ liệu.</p>;
   const cls =
     tone === 'ok'
-      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-      : 'bg-red-50 text-red-600 ring-red-200';
+      ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
+      : 'bg-rose-50 text-rose-600 ring-rose-600/20';
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((s, i) => (
-        <span key={`${s}-${i}`} className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${cls}`}>
+        <span key={`${s}-${i}`} className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${cls}`}>
           {s}
         </span>
       ))}
@@ -165,6 +179,7 @@ function CandidateDrawer({
 
   const score = analysis?.match_score ?? getScore(candidate);
   const a = analysis ?? candidate.latest_analysis ?? candidate.ai_analysis ?? null;
+  const statusMeta = CANDIDATE_STATUS[candidate.status] ?? CANDIDATE_STATUS.new;
 
   const handleSave = async () => {
     setSaving(true);
@@ -182,34 +197,37 @@ function CandidateDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex animate-fade-in justify-end bg-navy-950/50 backdrop-blur-[2px]"
+      onClick={onClose}
+    >
       <div
-        className="h-full w-full max-w-xl overflow-y-auto bg-white shadow-2xl"
+        className="nice-scroll h-full w-full max-w-xl animate-slide-in overflow-y-auto bg-white shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white/95 px-6 py-4 backdrop-blur">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold uppercase text-indigo-700">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-600 text-sm font-bold uppercase text-white shadow-[0_6px_16px_-6px_rgba(39,79,234,.55)]">
               {initials(candidate.full_name)}
             </div>
             <div>
-              <h2 className="text-base font-semibold text-slate-900">{candidate.full_name}</h2>
+              <h2 className="text-base font-bold tracking-[-0.01em] text-slate-900">{candidate.full_name}</h2>
               <p className="text-xs text-slate-500">Nộp ngày {formatDate(candidate.created_at)}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
             aria-label="Đóng chi tiết"
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
         <div className="space-y-6 px-6 py-5">
           {/* Liên hệ + CV gốc */}
           <section>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h3 className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
               Thông tin ứng viên
             </h3>
             <div className="space-y-1 text-sm text-slate-700">
@@ -219,15 +237,9 @@ function CandidateDrawer({
               <p>
                 <span className="text-slate-400">Điện thoại:</span> {candidate.phone || '—'}
               </p>
-              <p>
-                <span className="text-slate-400">Trạng thái hiện tại:</span>{' '}
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
-                    (CANDIDATE_STATUS[candidate.status] ?? CANDIDATE_STATUS.new).classes
-                  }`}
-                >
-                  {(CANDIDATE_STATUS[candidate.status] ?? CANDIDATE_STATUS.new).label}
-                </span>
+              <p className="flex items-center gap-2">
+                <span className="text-slate-400">Trạng thái hiện tại:</span>
+                <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
               </p>
             </div>
             {candidate.cv_file_url ? (
@@ -235,35 +247,44 @@ function CandidateDrawer({
                 href={candidate.cv_file_url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 ease-spring hover:-translate-y-px hover:bg-navy-800"
               >
-                📄 Xem CV gốc (PDF)
+                <IconFileText size={16} />
+                Xem CV gốc (PDF)
               </a>
             ) : (
               <p className="mt-3 text-sm text-slate-400">Ứng viên chưa có file CV.</p>
             )}
           </section>
 
-          {/* Kết quả AI */}
-          <section className="rounded-2xl bg-indigo-50/60 p-4 ring-1 ring-indigo-100">
+          {/* Kết quả AI — khu vực nhấn accent (teal) */}
+          <section className="rounded-2xl border border-accent-500/25 bg-accent-50/60 p-5 shadow-card">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-900">🤖 Kết quả AI sàng lọc</h3>
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
-                AI gợi ý — HR quyết định
-              </span>
+              <h3 className="flex items-center gap-2.5 text-sm font-bold text-slate-900">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-500 text-white shadow-[0_6px_16px_-6px_rgba(13,183,149,.55)]">
+                  <IconSparkles size={17} />
+                </span>
+                Kết quả AI sàng lọc
+              </h3>
+              <Badge tone="amber">AI gợi ý — HR quyết định</Badge>
             </div>
 
             {analysisLoading ? (
-              <div className="flex items-center gap-3 py-4 text-sm text-slate-500">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
-                Đang tải kết quả phân tích...
+              <div className="space-y-3 py-1">
+                <div className="flex items-center gap-2.5 text-sm font-medium text-accent-700">
+                  <Spinner className="h-5 w-5 text-accent-600" />
+                  <span className="animate-pulse-soft">Đang tải kết quả phân tích...</span>
+                </div>
+                <Skeleton className="h-20 w-full bg-white/70" />
+                <Skeleton className="h-4 w-2/3 bg-white/70" />
+                <Skeleton className="h-4 w-1/2 bg-white/70" />
               </div>
             ) : analysisError ? (
-              <div className="rounded-lg bg-white px-3 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+              <div className="rounded-xl bg-white px-3.5 py-3 text-sm leading-relaxed text-slate-600 ring-1 ring-accent-500/15">
                 {analysisError}
               </div>
             ) : !a ? (
-              <p className="py-2 text-sm text-slate-500">
+              <p className="py-2 text-sm leading-relaxed text-slate-500">
                 Ứng viên này chưa được AI phân tích. Đóng panel, chọn ứng viên trong danh sách rồi bấm
                 "Phân tích AI" để nhận gợi ý điểm phù hợp, kỹ năng khớp/thiếu và nhận xét.
               </p>
@@ -288,7 +309,7 @@ function CandidateDrawer({
 
                 {a.summary && (
                   <div>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                       Tóm tắt nhận xét
                     </p>
                     <p className="text-sm leading-relaxed text-slate-700">{a.summary}</p>
@@ -296,13 +317,13 @@ function CandidateDrawer({
                 )}
 
                 <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                     Kỹ năng khớp với JD
                   </p>
                   <SkillChips items={a.matched_skills} tone="ok" />
                 </div>
                 <div>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                     Kỹ năng còn thiếu
                   </p>
                   <SkillChips items={a.missing_skills} tone="miss" />
@@ -310,7 +331,7 @@ function CandidateDrawer({
 
                 {a.strengths?.length > 0 && (
                   <div>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                       Điểm mạnh
                     </p>
                     <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
@@ -322,7 +343,7 @@ function CandidateDrawer({
                 )}
                 {a.concerns?.length > 0 && (
                   <div>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                       Điểm cần lưu ý
                     </p>
                     <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
@@ -333,62 +354,58 @@ function CandidateDrawer({
                   </div>
                 )}
 
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700 ring-1 ring-amber-100">
-                  ⚠️ Điểm và nhận xét trên do AI gợi ý dựa trên nội dung CV, có thể chưa chính xác. Hãy
+                <Alert tone="warning">
+                  Điểm và nhận xét trên do AI gợi ý dựa trên nội dung CV, có thể chưa chính xác. Hãy
                   đọc CV gốc trước khi ra quyết định — trạng thái ứng viên chỉ thay đổi khi HR thao
                   tác ở mục bên dưới.
-                </p>
+                </Alert>
               </div>
             )}
           </section>
 
           {/* Quyết định của HR */}
           <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
               Quyết định của HR
             </h3>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái ứng viên</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <FormField label="Trạng thái ứng viên">
+              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
 
-            <label className="mb-1 mt-4 block text-sm font-medium text-slate-700">
-              Ghi chú của HR
-            </label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              placeholder="Ví dụ: CV mạnh về Flask, hẹn phỏng vấn vòng 1 thứ 5 tuần này..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
+            <FormField label="Ghi chú của HR" className="mt-4">
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={3}
+                placeholder="Ví dụ: CV mạnh về Flask, hẹn phỏng vấn vòng 1 thứ 5 tuần này..."
+              />
+            </FormField>
 
             {saveError && (
-              <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+              <Alert tone="error" className="mt-3">
                 {saveError}
-              </div>
+              </Alert>
             )}
             {savedMsg && (
-              <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 ring-1 ring-emerald-200">
+              <Alert tone="success" className="mt-3">
                 {savedMsg}
-              </div>
+              </Alert>
             )}
 
-            <button
+            <Button
+              variant="primary"
               onClick={handleSave}
-              disabled={saving}
-              className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+              loading={saving}
+              className="mt-4 w-full"
             >
               {saving ? 'Đang lưu...' : 'Lưu trạng thái & ghi chú'}
-            </button>
+            </Button>
           </section>
         </div>
       </div>
@@ -633,26 +650,35 @@ export default function JobDetailPage() {
 
   if (jobLoading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
-        <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
-        <div className="animate-pulse rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-          <div className="h-6 w-1/2 rounded bg-slate-200" />
-          <div className="mt-4 h-3 w-full rounded bg-slate-100" />
-          <div className="mt-2 h-3 w-5/6 rounded bg-slate-100" />
-          <div className="mt-2 h-3 w-2/3 rounded bg-slate-100" />
-        </div>
+      <div className="page-shell">
+        <Skeleton className="h-5 w-44" />
+        <Card className="mt-4 p-6">
+          <Skeleton className="h-7 w-1/2" />
+          <Skeleton className="mt-3 h-4 w-1/3" />
+          <Skeleton className="mt-6 h-3.5 w-full" />
+          <Skeleton className="mt-2 h-3.5 w-5/6" />
+          <Skeleton className="mt-2 h-3.5 w-2/3" />
+        </Card>
+        <Card className="mt-5">
+          <TableSkeleton rows={4} cols={4} />
+        </Card>
       </div>
     );
   }
 
   if (jobError || !job) {
     return (
-      <div className="mx-auto max-w-3xl p-6">
-        <Link to="/recruitment" className="text-sm font-medium text-indigo-600 hover:underline">
-          ← Quay lại danh sách tuyển dụng
-        </Link>
-        <div className="mt-4 rounded-xl bg-red-50 px-4 py-4 text-sm text-red-700 ring-1 ring-red-200">
-          {jobError || 'Không tìm thấy vị trí tuyển dụng này.'}
+      <div className="page-shell">
+        <div className="max-w-3xl">
+          <Link
+            to="/recruitment"
+            className="text-sm font-semibold text-brand-700 transition hover:text-brand-600 hover:underline"
+          >
+            ← Quay lại danh sách tuyển dụng
+          </Link>
+          <Alert tone="error" className="mt-4">
+            {jobError || 'Không tìm thấy vị trí tuyển dụng này.'}
+          </Alert>
         </div>
       </div>
     );
@@ -662,103 +688,116 @@ export default function JobDetailPage() {
     aiJob?.total > 0 ? Math.round(((aiJob.processed ?? 0) / aiJob.total) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6">
-      <Link to="/recruitment" className="text-sm font-medium text-indigo-600 hover:underline">
+    <div className="page-shell">
+      <Link
+        to="/recruitment"
+        className="text-sm font-semibold text-brand-700 transition hover:text-brand-600 hover:underline"
+      >
         ← Quay lại danh sách tuyển dụng
       </Link>
 
       {/* -------- Thông tin JD -------- */}
-      <section className="mt-3 rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900">{job.title}</h1>
-              <span
-                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${
-                  job.status === 'open'
-                    ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                    : 'bg-slate-100 text-slate-500 ring-slate-200'
-                }`}
-              >
-                {job.status === 'open' ? 'Đang tuyển' : 'Đã đóng'}
-              </span>
+      <Card className="mt-3">
+        <div className="p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+                  {job.title}
+                </h1>
+                {job.status === 'open' ? (
+                  <Badge tone="green" dot>
+                    Đang tuyển
+                  </Badge>
+                ) : (
+                  <Badge tone="slate" dot>
+                    Đã đóng
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                {(job.department_name ?? job.department?.name) && `${job.department_name ?? job.department.name} · `}
+                Tuyển {job.quantity ?? 1} người · Hạn nộp: {formatDate(job.deadline)} ·{' '}
+                {candidates.length} ứng viên
+              </p>
             </div>
-            <p className="mt-1.5 text-sm text-slate-500">
-              {(job.department_name ?? job.department?.name) && `${job.department_name ?? job.department.name} · `}
-              Tuyển {job.quantity ?? 1} người · Hạn nộp: {formatDate(job.deadline)} ·{' '}
-              {candidates.length} ứng viên
-            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleToggleJobStatus}
+              loading={toggling}
+              className="shrink-0"
+            >
+              {toggling ? 'Đang xử lý...' : job.status === 'open' ? 'Đóng tin' : 'Mở lại tin'}
+            </Button>
           </div>
-          <button
-            onClick={handleToggleJobStatus}
-            disabled={toggling}
-            className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 ring-1 ring-slate-300 transition hover:bg-slate-50 disabled:opacity-50"
-          >
-            {toggling ? 'Đang xử lý...' : job.status === 'open' ? 'Đóng tin' : 'Mở lại tin'}
-          </button>
-        </div>
 
-        {job.description && (
-          <div className="mt-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Mô tả công việc
-            </h2>
-            <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
-              {job.description}
-            </p>
-          </div>
-        )}
-        {job.requirements && (
-          <div className="mt-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Yêu cầu ứng viên <span className="normal-case text-slate-400">(chuẩn để AI đối chiếu CV)</span>
-            </h2>
-            <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
-              {job.requirements}
-            </p>
-          </div>
-        )}
-      </section>
+          {job.description && (
+            <div className="mt-6">
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                Mô tả công việc
+              </h2>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                {job.description}
+              </p>
+            </div>
+          )}
+          {job.requirements && (
+            <div className="mt-5 rounded-xl border border-accent-500/20 bg-accent-50/50 px-4 py-3.5">
+              <h2 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-accent-700">
+                <IconSparkles size={14} />
+                Yêu cầu ứng viên{' '}
+                <span className="font-semibold normal-case tracking-normal text-slate-400">
+                  (chuẩn để AI đối chiếu CV)
+                </span>
+              </h2>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                {job.requirements}
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* -------- Banner kết quả AI / lỗi -------- */}
       {aiBanner && (
-        <div
-          className={`mt-4 rounded-xl px-4 py-3 text-sm ring-1 ${
-            aiBanner.type === 'success'
-              ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-              : 'bg-red-50 text-red-700 ring-red-200'
-          }`}
-          role="alert"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <p>{aiBanner.text}</p>
-            <button
-              onClick={() => setAiBanner(null)}
-              className="shrink-0 rounded px-1 text-current opacity-60 transition hover:opacity-100"
-              aria-label="Đóng thông báo"
-            >
-              ✕
-            </button>
-          </div>
+        <div className="relative mt-4 animate-scale-in">
+          <Alert tone={aiBanner.type === 'success' ? 'success' : 'error'} className="pr-10 shadow-card">
+            {aiBanner.text}
+          </Alert>
+          <button
+            onClick={() => setAiBanner(null)}
+            className="absolute right-3 top-3 rounded-md p-1 text-current opacity-60 transition hover:bg-black/5 hover:opacity-100"
+            aria-label="Đóng thông báo"
+          >
+            <IconX size={15} />
+          </button>
         </div>
       )}
 
       {/* -------- Thanh tiến trình khi AI đang chạy -------- */}
       {aiRunning && (
-        <div className="mt-4 rounded-xl bg-indigo-50 px-4 py-4 ring-1 ring-indigo-100">
-          <div className="flex items-center gap-3">
-            <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+        <div className="mt-4 animate-fade-in rounded-2xl border border-accent-500/30 bg-accent-50 px-5 py-4 shadow-card">
+          <div className="flex items-start gap-3.5">
+            <span className="flex h-10 w-10 shrink-0 animate-pulse-soft items-center justify-center rounded-xl bg-accent-500 text-white shadow-[0_6px_16px_-6px_rgba(13,183,149,.55)]">
+              <IconSparkles size={19} />
+            </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-indigo-900">
-                AI đang phân tích CV... {aiJob.processed ?? 0}/{aiJob.total ?? '?'} ứng viên
-              </p>
-              <p className="text-xs text-indigo-500">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">
+                  AI đang phân tích CV... {aiJob.processed ?? 0}/{aiJob.total ?? '?'} ứng viên
+                </p>
+                <span className="animate-pulse-soft text-sm font-bold text-accent-700">
+                  {aiProgress}%
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
                 Quá trình chạy nền — bạn cứ để trang này mở, danh sách sẽ tự cập nhật khi phân tích
                 xong. Có thể mất vài chục giây mỗi CV.
               </p>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-indigo-100">
+              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-accent-100">
                 <div
-                  className="h-full animate-pulse rounded-full bg-indigo-500 transition-all duration-500"
+                  className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-600 transition-all duration-500"
                   style={{ width: `${Math.max(aiProgress, 6)}%` }}
                 />
               </div>
@@ -768,49 +807,46 @@ export default function JobDetailPage() {
       )}
 
       {/* -------- Toolbar ứng viên -------- */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-slate-900">
-          Ứng viên <span className="text-sm font-normal text-slate-400">({counts.all})</span>
+      <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold tracking-[-0.01em] text-slate-900">
+          Ứng viên <span className="text-sm font-medium text-slate-400">({counts.all})</span>
         </h2>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           <label className="text-sm text-slate-500" htmlFor="sortBy">
             Sắp xếp:
           </label>
-          <select
+          <Select
             id="sortBy"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="w-52"
           >
             <option value="match_score">Điểm AI cao → thấp</option>
             <option value="created_at">Mới nộp nhất</option>
             <option value="full_name">Tên A → Z</option>
-          </select>
-          <button
+          </Select>
+          <Button
+            variant="accent"
             onClick={handleAnalyze}
-            disabled={selected.size === 0 || aiRunning}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={selected.size === 0}
+            loading={aiRunning}
           >
-            {aiRunning ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                AI đang chạy...
-              </>
-            ) : (
-              <>🤖 Phân tích AI{selected.size > 0 ? ` (${selected.size} đã chọn)` : ''}</>
-            )}
-          </button>
+            <IconSparkles size={17} />
+            {aiRunning
+              ? 'AI đang chạy...'
+              : `Phân tích AI${selected.size > 0 ? ` (${selected.size} đã chọn)` : ''}`}
+          </Button>
         </div>
       </div>
 
       {/* Lọc theo trạng thái */}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3.5 flex flex-wrap gap-2">
         <button
           onClick={() => setStatusFilter('')}
-          className={`rounded-full px-3 py-1.5 text-sm font-medium ring-1 transition ${
+          className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold ring-1 ring-inset transition-all duration-200 ease-spring ${
             statusFilter === ''
-              ? 'bg-slate-900 text-white ring-slate-900'
-              : 'bg-white text-slate-600 ring-slate-300 hover:bg-slate-50'
+              ? 'bg-navy-900 text-white ring-navy-900 shadow-sm'
+              : 'bg-white text-slate-600 ring-slate-300 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900'
           }`}
         >
           Tất cả ({counts.all})
@@ -819,10 +855,10 @@ export default function JobDetailPage() {
           <button
             key={o.value}
             onClick={() => setStatusFilter(o.value)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium ring-1 transition ${
+            className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold ring-1 ring-inset transition-all duration-200 ease-spring ${
               statusFilter === o.value
-                ? 'bg-slate-900 text-white ring-slate-900'
-                : 'bg-white text-slate-600 ring-slate-300 hover:bg-slate-50'
+                ? 'bg-navy-900 text-white ring-navy-900 shadow-sm'
+                : 'bg-white text-slate-600 ring-slate-300 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
             {o.label} ({counts[o.value] ?? 0})
@@ -830,133 +866,122 @@ export default function JobDetailPage() {
         ))}
       </div>
 
-      <p className="mt-3 text-xs text-slate-400">
+      <p className="mt-3 text-xs leading-relaxed text-slate-400">
         Chọn 1 hoặc nhiều ứng viên rồi bấm "Phân tích AI" (tối đa {AI_BATCH_LIMIT} CV/lượt). Điểm AI
         chỉ là gợi ý tham khảo — HR là người ra quyết định cuối cùng.
       </p>
 
       {/* -------- Danh sách ứng viên -------- */}
       {candError && (
-        <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
+        <Alert tone="error" className="mt-4">
           {candError}
-        </div>
+        </Alert>
       )}
 
       {candLoading ? (
-        <div className="mt-4 space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl bg-white p-4 ring-1 ring-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-slate-200" />
-                <div className="flex-1">
-                  <div className="h-4 w-1/4 rounded bg-slate-200" />
-                  <div className="mt-2 h-3 w-1/3 rounded bg-slate-100" />
-                </div>
-                <div className="h-8 w-16 rounded-full bg-slate-100" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <Card className="mt-4">
+          <TableSkeleton rows={4} cols={4} />
+        </Card>
       ) : candidates.length === 0 ? (
-        <div className="mt-4 rounded-xl bg-white px-6 py-12 text-center ring-1 ring-slate-200">
-          <p className="font-medium text-slate-700">
-            {statusFilter ? 'Không có ứng viên nào ở trạng thái này' : 'Chưa có ứng viên nào nộp CV'}
-          </p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-slate-400">
-            Ứng viên nộp CV qua trang tuyển dụng công khai sẽ xuất hiện tại đây. Khi có CV, hãy chọn
-            ứng viên và dùng AI sàng lọc để được gợi ý mức độ phù hợp với JD.
-          </p>
-        </div>
+        <Card className="mt-4 animate-fade-in">
+          <EmptyState
+            icon={<IconUsers size={26} />}
+            title={statusFilter ? 'Không có ứng viên nào ở trạng thái này' : 'Chưa có ứng viên nào nộp CV'}
+            description="Ứng viên nộp CV qua trang tuyển dụng công khai sẽ xuất hiện tại đây. Khi có CV, hãy chọn ứng viên và dùng AI sàng lọc để được gợi ý mức độ phù hợp với JD."
+          />
+        </Card>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-          <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+        <Card className="mt-4 animate-fade-in overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
             <input
               type="checkbox"
               checked={allSelected}
               onChange={toggleAll}
-              className="h-4 w-4 rounded border-slate-300 accent-indigo-600"
+              className="h-4 w-4 rounded border-slate-300 accent-brand-600"
               aria-label="Chọn tất cả ứng viên"
             />
-            <span className="text-sm text-slate-500">
+            <span className="text-[13px] font-medium text-slate-500">
               {selected.size > 0 ? `Đã chọn ${selected.size} ứng viên` : 'Chọn ứng viên để phân tích AI'}
             </span>
           </div>
-          <ul className="divide-y divide-slate-100">
-            {candidates.map((c) => {
-              const score = getScore(c);
-              const tone = scoreTone(score);
-              const st = CANDIDATE_STATUS[c.status] ?? CANDIDATE_STATUS.new;
-              return (
-                <li
-                  key={c.id}
-                  className={`flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 ${
-                    selected.has(c.id) ? 'bg-indigo-50/50' : ''
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(c.id)}
-                    onChange={() => toggleOne(c.id)}
-                    className="h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600"
-                    aria-label={`Chọn ${c.full_name}`}
-                  />
-                  <button
-                    onClick={() => openDrawer(c)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold uppercase text-indigo-700">
-                      {initials(c.full_name)}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-slate-900">
-                        {c.full_name}
-                      </span>
-                      <span className="block truncate text-xs text-slate-500">
-                        {c.email || '—'}
-                        {c.phone ? ` · ${c.phone}` : ''} · Nộp {formatDate(c.created_at)}
-                      </span>
-                    </span>
-                  </button>
-
-                  {/* Điểm AI dạng pill */}
-                  {score != null ? (
-                    <span
-                      className="hidden shrink-0 items-center gap-2 sm:flex"
-                      title="Điểm phù hợp do AI gợi ý"
-                    >
-                      <span className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100">
-                        <span
-                          className={`block h-full rounded-full ${tone.bar}`}
-                          style={{ width: `${score}%` }}
+          <div className="overflow-x-auto">
+            <table className="ui-table min-w-[780px]">
+              <thead>
+                <tr>
+                  <th className="ui-th w-10">
+                    <span className="sr-only">Chọn</span>
+                  </th>
+                  <th className="ui-th">Ứng viên</th>
+                  <th className="ui-th w-52">Điểm AI</th>
+                  <th className="ui-th w-40">Trạng thái</th>
+                  <th className="ui-th w-24 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((c) => {
+                  const score = getScore(c);
+                  const tone = scoreTone(score);
+                  const st = CANDIDATE_STATUS[c.status] ?? CANDIDATE_STATUS.new;
+                  return (
+                    <tr key={c.id} className={`ui-tr ${selected.has(c.id) ? 'bg-accent-50/60' : ''}`}>
+                      <td className="ui-td">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(c.id)}
+                          onChange={() => toggleOne(c.id)}
+                          className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                          aria-label={`Chọn ${c.full_name}`}
                         />
-                      </span>
-                      <span className={`text-sm font-bold ${tone.text}`}>{score}</span>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                        AI
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="hidden shrink-0 text-xs italic text-slate-400 sm:block">
-                      Chưa phân tích
-                    </span>
-                  )}
-
-                  <span
-                    className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${st.classes}`}
-                  >
-                    {st.label}
-                  </span>
-                  <button
-                    onClick={() => openDrawer(c)}
-                    className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
-                  >
-                    Chi tiết
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+                      </td>
+                      <td className="ui-td">
+                        <button
+                          onClick={() => openDrawer(c)}
+                          className="flex min-w-0 items-center gap-3 text-left"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold uppercase text-white shadow-[0_4px_12px_-4px_rgba(39,79,234,.5)]">
+                            {initials(c.full_name)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-slate-900">
+                              {c.full_name}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {c.email || '—'}
+                              {c.phone ? ` · ${c.phone}` : ''} · Nộp {formatDate(c.created_at)}
+                            </span>
+                          </span>
+                        </button>
+                      </td>
+                      <td className="ui-td">
+                        {score != null ? (
+                          <div className="flex items-center gap-2.5" title="Điểm phù hợp do AI gợi ý">
+                            <span className="w-20 shrink-0">
+                              <ScoreBar score={score} />
+                            </span>
+                            <span className={`text-sm font-bold ${tone.text}`}>{score}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              AI
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs italic text-slate-400">Chưa phân tích</span>
+                        )}
+                      </td>
+                      <td className="ui-td">
+                        <Badge tone={st.tone}>{st.label}</Badge>
+                      </td>
+                      <td className="ui-td text-right">
+                        <Button variant="ghost" size="sm" onClick={() => openDrawer(c)}>
+                          Chi tiết
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* -------- Drawer chi tiết -------- */}

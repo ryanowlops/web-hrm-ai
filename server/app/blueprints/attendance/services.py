@@ -58,8 +58,14 @@ EDITABLE_STATUSES = ("present", "late", "absent", "on_leave")
 # Helpers: thời gian / cấu hình
 # ---------------------------------------------------------------------------
 def _now():
-    """Giờ server hiện tại (naive local time)."""
-    return datetime.now()
+    """Giờ hiện tại theo múi giờ nghiệp vụ Asia/Ho_Chi_Minh (naive).
+
+    Dùng cố định múi giờ Việt Nam để "hôm nay" khi chấm công không phụ
+    thuộc múi giờ của máy chạy server (UTC trên cloud, +07 trên máy cá nhân).
+    """
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
 
 
 def _parse_time_value(value):
@@ -179,7 +185,7 @@ def get_current_employee():
 def parse_month(value):
     """Parse 'YYYY-MM' -> (date đầu tháng, date đầu tháng sau). Mặc định tháng hiện tại."""
     if not value:
-        today = date.today()
+        today = _now().date()
         first = today.replace(day=1)
     else:
         try:
@@ -231,6 +237,7 @@ def summarize(records):
         "on_leave": 0,
         "late_count": 0,
         "days_worked": 0,
+        "workdays": 0,  # alias của days_worked cho frontend
         "missing_checkout": 0,
     }
     for record in records:
@@ -241,6 +248,7 @@ def summarize(records):
             summary["late_count"] += 1
         if getattr(record, "check_in_at", None) is not None:
             summary["days_worked"] += 1
+            summary["workdays"] += 1
             if getattr(record, "check_out_at", None) is None:
                 summary["missing_checkout"] += 1
     return summary
@@ -294,7 +302,7 @@ def check_in():
 def check_out():
     """Check-out hôm nay. Phải đã check-in và chưa check-out."""
     employee = get_current_employee()
-    today = date.today()
+    today = _now().date()
 
     record = _get_record(employee.id, today)
     if record is None or getattr(record, "check_in_at", None) is None:
@@ -312,7 +320,7 @@ def check_out():
 def get_today():
     """Bản ghi hôm nay của chính mình (None nếu chưa check-in)."""
     employee = get_current_employee()
-    return _get_record(employee.id, date.today())
+    return _get_record(employee.id, _now().date())
 
 
 # ---------------------------------------------------------------------------
@@ -362,13 +370,47 @@ def _manager_department_ids(employee, user_identity):
 
 
 def get_monthly(month_value, args, current_role):
-    """Bảng công tháng cho HR/Admin (tất cả) hoặc Manager (phòng mình).
+    """Bảng công tháng cho HR/Admin (tất cả), Manager (phòng mình),
+    Employee (chỉ bản thân).
 
-    Employee bị chặn ở tầng route bằng require_roles (403).
-    Trả về rows theo từng nhân viên: thông tin + tổng hợp + records trong tháng.
+    Trả về (body, first):
+    - mine=1: body = { data: [bản ghi của người gọi], summary, meta }
+    - còn lại: body = { data: [row theo nhân viên {summary, records}], meta }
+    Chấp nhận cả month=YYYY-MM lẫn month=&year= riêng lẻ.
     """
+    year_arg = args.get("year", type=int)
+    month_arg = args.get("month", type=int)
+    if year_arg and month_arg:
+        month_value = f"{year_arg:04d}-{month_arg:02d}"
     first, next_first = parse_month(month_value)
     page, limit = parse_pagination(args)
+
+    from .schemas import attendance_list_schema
+
+    # --- Chế độ "của tôi": mọi vai trò đều chỉ nhận bản ghi của chính mình ---
+    if str(args.get("mine", "")).lower() in ("1", "true", "yes"):
+        me = get_current_employee()
+        my_records = (
+            db.session.query(Attendance)
+            .filter(
+                Attendance.employee_id == me.id,
+                Attendance.work_date >= first,
+                Attendance.work_date < next_first,
+            )
+            .order_by(Attendance.work_date.asc())
+            .all()
+        )
+        body = {
+            "data": attendance_list_schema.dump(my_records),
+            "summary": summarize(my_records),
+            "meta": pagination_meta(1, max(len(my_records), 1), len(my_records)),
+        }
+        return body, first
+
+    # Employee không có mine vẫn bị ép phạm vi về chính mình ở truy vấn dưới.
+    force_self_id = None
+    if current_role == "employee":
+        force_self_id = get_current_employee().id
 
     employee_query = db.session.query(Employee)
     # Nhân viên đã nghỉ việc vẫn có bảng công trong tháng nếu có bản ghi;
@@ -396,7 +438,9 @@ def get_monthly(month_value, args, current_role):
             Employee.department_id == department_id
         )
     employee_id = args.get("employee_id", type=int)
-    if employee_id:
+    if force_self_id is not None:
+        employee_query = employee_query.filter(Employee.id == force_self_id)
+    elif employee_id:
         employee_query = employee_query.filter(Employee.id == employee_id)
 
     employees = employee_query.order_by(Employee.id.asc()).all()
@@ -436,7 +480,8 @@ def get_monthly(month_value, args, current_role):
     total = len(rows)
     start = (page - 1) * limit
     page_rows = rows[start : start + limit]
-    return page_rows, pagination_meta(page, limit, total), first
+    body = {"data": page_rows, "meta": pagination_meta(page, limit, total)}
+    return body, first
 
 
 # ---------------------------------------------------------------------------

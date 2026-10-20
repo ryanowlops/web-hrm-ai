@@ -2,6 +2,7 @@
 // Bảng phân trang, tìm kiếm, lọc phòng ban / trạng thái.
 // Thao tác ghi (thêm / sửa / xóa) chỉ hiển thị với vai trò admin và hr
 // (ẩn nút chỉ là trải nghiệm — server vẫn kiểm tra quyền thật, xem B8).
+// Trình bày: design system v2 (UI kit trong src/components/ui + class .ui-*).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../app/AuthContext.jsx';
@@ -13,6 +14,19 @@ import {
   parseApiError,
 } from '../services';
 import { getDepartments, getPositions } from '../../departments/services';
+import {
+  Button,
+  Card,
+  Badge,
+  Modal,
+  PageHeader,
+  EmptyState,
+  TableSkeleton,
+  Alert,
+  FormField,
+  Input,
+  Select,
+} from '../../../components/ui';
 
 const STATUS_OPTIONS = [
   { value: 'working', label: 'Đang làm việc' },
@@ -20,10 +34,10 @@ const STATUS_OPTIONS = [
   { value: 'resigned', label: 'Đã nghỉ việc' },
 ];
 const STATUS_LABEL = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
-const STATUS_CLASS = {
-  working: 'bg-emerald-100 text-emerald-700',
-  on_leave: 'bg-amber-100 text-amber-700',
-  resigned: 'bg-slate-200 text-slate-600',
+const STATUS_TONE = {
+  working: 'green',
+  on_leave: 'amber',
+  resigned: 'slate',
 };
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Nam' },
@@ -60,48 +74,32 @@ function initials(name = '') {
   return ((parts[0]?.[0] || '') + (parts[parts.length - 1]?.[0] || '')).toUpperCase() || 'NV';
 }
 
-// ---------- UI dùng cục bộ (components/ui.jsx chưa có nên khai báo tại đây) ----------
+// Class bổ sung để ô nhập có lỗi hiển thị viền đỏ (trên nền .ui-input/.ui-select của kit).
+const errCls = (hasError) =>
+  hasError ? 'border-rose-400 hover:border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : '';
 
-function Modal({ title, onClose, children, wide = false }) {
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4" onClick={onClose}>
-      <div
-        className={`my-8 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl bg-white p-6 shadow-xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Đóng">
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
+// Nhãn trường có dấu * bắt buộc (dùng với FormField của UI kit).
+const reqLabel = (text) => (
+  <>
+    {text} <span className="text-rose-500">*</span>
+  </>
+);
 
-function Field({ label, error, required = false, children }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </span>
-      {children}
-      {error && <span className="mt-1 block text-sm text-red-600">{error}</span>}
-    </label>
-  );
-}
+const SearchIcon = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+);
 
-const inputClass = (hasError) =>
-  `w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 ${
-    hasError ? 'border-red-400 focus:ring-red-200' : 'border-slate-300 focus:border-indigo-400 focus:ring-indigo-200'
-  }`;
+const UsersIcon = (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
 
 // ---------- Form thêm / sửa nhân viên ----------
 
@@ -188,77 +186,81 @@ function EmployeeForm({ initial, departments, positions, employees, onSubmit, on
 
   return (
     <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {formError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{formError}</div>}
-      {isCreate && (
-        <Field label="Mã nhân viên" required error={errors.code}>
-          <input className={inputClass(errors.code)} value={form.code} onChange={set('code')} placeholder="VD: NV001" />
-        </Field>
+      {formError && (
+        <Alert tone="error" className="sm:col-span-2">
+          {formError}
+        </Alert>
       )}
-      <Field label="Họ tên" required error={errors.full_name}>
-        <input className={inputClass(errors.full_name)} value={form.full_name} onChange={set('full_name')} placeholder="Nguyễn Văn A" />
-      </Field>
-      <Field label="Email" required error={errors.email}>
-        <input type="email" className={inputClass(errors.email)} value={form.email} onChange={set('email')} placeholder="ten@congty.vn" />
-      </Field>
-      <Field label="Số điện thoại" error={errors.phone}>
-        <input className={inputClass(errors.phone)} value={form.phone} onChange={set('phone')} placeholder="09xxxxxxxx" />
-      </Field>
-      <Field label="Ngày sinh" error={errors.date_of_birth}>
-        <input type="date" className={inputClass(errors.date_of_birth)} value={form.date_of_birth} onChange={set('date_of_birth')} />
-      </Field>
-      <Field label="Giới tính">
-        <select className={inputClass(false)} value={form.gender} onChange={set('gender')}>
+      {isCreate && (
+        <FormField label={reqLabel('Mã nhân viên')} error={errors.code}>
+          <Input className={errCls(errors.code)} value={form.code} onChange={set('code')} placeholder="VD: NV001" />
+        </FormField>
+      )}
+      <FormField label={reqLabel('Họ tên')} error={errors.full_name}>
+        <Input className={errCls(errors.full_name)} value={form.full_name} onChange={set('full_name')} placeholder="Nguyễn Văn A" />
+      </FormField>
+      <FormField label={reqLabel('Email')} error={errors.email}>
+        <Input type="email" className={errCls(errors.email)} value={form.email} onChange={set('email')} placeholder="ten@congty.vn" />
+      </FormField>
+      <FormField label="Số điện thoại" error={errors.phone}>
+        <Input className={errCls(errors.phone)} value={form.phone} onChange={set('phone')} placeholder="09xxxxxxxx" />
+      </FormField>
+      <FormField label="Ngày sinh" error={errors.date_of_birth}>
+        <Input type="date" className={errCls(errors.date_of_birth)} value={form.date_of_birth} onChange={set('date_of_birth')} />
+      </FormField>
+      <FormField label="Giới tính">
+        <Select value={form.gender} onChange={set('gender')}>
           {GENDER_OPTIONS.map((g) => (
             <option key={g.value} value={g.value}>{g.label}</option>
           ))}
-        </select>
-      </Field>
-      <Field label="Ngày vào làm" required error={errors.start_date}>
-        <input type="date" className={inputClass(errors.start_date)} value={form.start_date} onChange={set('start_date')} />
-      </Field>
-      <Field label="Phòng ban" required error={errors.department_id}>
-        <select className={inputClass(errors.department_id)} value={form.department_id} onChange={set('department_id')}>
+        </Select>
+      </FormField>
+      <FormField label={reqLabel('Ngày vào làm')} error={errors.start_date}>
+        <Input type="date" className={errCls(errors.start_date)} value={form.start_date} onChange={set('start_date')} />
+      </FormField>
+      <FormField label={reqLabel('Phòng ban')} error={errors.department_id}>
+        <Select className={errCls(errors.department_id)} value={form.department_id} onChange={set('department_id')}>
           <option value="">— Chọn phòng ban —</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>
           ))}
-        </select>
-      </Field>
-      <Field label="Chức vụ">
-        <select className={inputClass(false)} value={form.position_id} onChange={set('position_id')}>
+        </Select>
+      </FormField>
+      <FormField label="Chức vụ">
+        <Select value={form.position_id} onChange={set('position_id')}>
           <option value="">— Chưa gán —</option>
           {positionOptions.map((p) => (
             <option key={p.id} value={p.id}>{p.title}</option>
           ))}
-        </select>
-      </Field>
-      <Field label="Quản lý trực tiếp">
-        <select className={inputClass(false)} value={form.manager_id} onChange={set('manager_id')}>
+        </Select>
+      </FormField>
+      <FormField label="Quản lý trực tiếp">
+        <Select value={form.manager_id} onChange={set('manager_id')}>
           <option value="">— Chưa gán —</option>
           {employees.filter((e) => e.id !== initial?.id).map((e) => (
             <option key={e.id} value={e.id}>{e.full_name} ({e.code})</option>
           ))}
-        </select>
-      </Field>
+        </Select>
+      </FormField>
       {!isCreate && (
-        <Field label="Trạng thái làm việc">
-          <select className={inputClass(false)} value={form.status} onChange={set('status')}>
+        <FormField label="Trạng thái làm việc">
+          <Select value={form.status} onChange={set('status')}>
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
-          </select>
-        </Field>
+          </Select>
+        </FormField>
       )}
-      <Field label="Địa chỉ">
-        <input className={inputClass(false)} value={form.address} onChange={set('address')} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành" />
-      </Field>
-      <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
-        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+      <FormField label="Địa chỉ">
+        <Input value={form.address} onChange={set('address')} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành" />
+      </FormField>
+      <div className="flex justify-end gap-2.5 pt-2 sm:col-span-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Huỷ
-        </button>
-        <button type="submit" disabled={submitting} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60">
+        </Button>
+        <Button type="submit" loading={submitting}>
           {submitting ? 'Đang lưu...' : isCreate ? 'Thêm nhân viên' : 'Lưu thay đổi'}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -375,163 +377,189 @@ export default function EmployeeListPage() {
   const totalPages = meta?.totalPages || 1;
 
   return (
-    <div className="mx-auto max-w-7xl p-4 sm:p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Nhân viên</h1>
-          <p className="text-sm text-slate-500">
-            {meta ? `Tổng cộng ${meta.totalItems} nhân viên` : 'Quản lý hồ sơ nhân viên toàn công ty'}
-          </p>
-        </div>
-        {canWrite && (
-          <button
-            type="button"
-            onClick={() => setFormTarget('create')}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
-          >
-            + Thêm nhân viên
-          </button>
-        )}
-      </div>
+    <div className="page-shell">
+      <PageHeader
+        title="Nhân viên"
+        subtitle={meta ? `Tổng cộng ${meta.totalItems} nhân viên` : 'Quản lý hồ sơ nhân viên toàn công ty'}
+        actions={
+          canWrite ? (
+            <Button type="button" onClick={() => setFormTarget('create')}>
+              + Thêm nhân viên
+            </Button>
+          ) : undefined
+        }
+      />
 
       {notice && (
-        <div className="mb-4 flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-700">✕</button>
+        <div className="mb-4 flex animate-fade-in items-start gap-2">
+          <Alert tone="success" className="flex-1">
+            {notice}
+          </Alert>
+          <button
+            type="button"
+            onClick={() => setNotice('')}
+            aria-label="Đóng thông báo"
+            className="mt-1 rounded-lg p-1.5 text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-800"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {/* Bộ lọc */}
-      <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-3">
-        <input
-          className={inputClass(false)}
-          placeholder="Tìm theo tên, mã NV, email..."
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        <select
-          className={inputClass(false)}
-          value={departmentId}
-          onChange={(e) => { setDepartmentId(e.target.value); setPage(1); }}
-        >
-          <option value="">Tất cả phòng ban</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-        <select
-          className={inputClass(false)}
-          value={status}
-          onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-      <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
-              <th className="px-4 py-3">Nhân viên</th>
-              <th className="px-4 py-3">Phòng ban</th>
-              <th className="px-4 py-3">Chức vụ</th>
-              <th className="px-4 py-3">Ngày vào làm</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              {canWrite && <th className="px-4 py-3 text-right">Thao tác</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={canWrite ? 6 : 5} className="px-4 py-10 text-center text-slate-400">Đang tải dữ liệu...</td></tr>
-            )}
-            {!loading && items.length === 0 && (
-              <tr>
-                <td colSpan={canWrite ? 6 : 5} className="px-4 py-10 text-center text-slate-400">
-                  Chưa có nhân viên nào khớp bộ lọc. {canWrite && 'Hãy bấm "Thêm nhân viên" để bắt đầu.'}
-                </td>
-              </tr>
-            )}
-            {!loading && items.map((emp) => (
-              <tr key={emp.id} className="border-b border-slate-50 transition hover:bg-slate-50">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {emp.avatar_url ? (
-                      <img src={emp.avatar_url} alt={emp.full_name} className="h-9 w-9 rounded-full object-cover" />
-                    ) : (
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600">
-                        {initials(emp.full_name)}
-                      </span>
-                    )}
-                    <div>
-                      <Link to={`/employees/${emp.id}`} className="font-medium text-slate-800 hover:text-indigo-600">
-                        {emp.full_name}
-                      </Link>
-                      <div className="text-xs text-slate-400">{emp.code} · {emp.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{deptName(emp)}</td>
-                <td className="px-4 py-3 text-slate-600">{posTitle(emp)}</td>
-                <td className="px-4 py-3 text-slate-600">{formatDate(emp.start_date)}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASS[emp.status] || 'bg-slate-100 text-slate-600'}`}>
-                    {STATUS_LABEL[emp.status] || emp.status}
-                  </span>
-                </td>
-                {canWrite && (
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1">
-                      <button type="button" onClick={() => navigate(`/employees/${emp.id}`)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
-                        Chi tiết
-                      </button>
-                      <button type="button" onClick={() => setFormTarget(emp)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50">
-                        Sửa
-                      </button>
-                      <button type="button" onClick={() => setDeleteTarget(emp)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
-                )}
-              </tr>
+      {/* Thanh công cụ: tìm kiếm + bộ lọc */}
+      <Card className="mb-5 p-4 sm:p-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+              {SearchIcon}
+            </span>
+            <Input
+              className="pl-10"
+              placeholder="Tìm theo tên, mã NV, email..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <Select
+            value={departmentId}
+            onChange={(e) => { setDepartmentId(e.target.value); setPage(1); }}
+          >
+            <option value="">Tất cả phòng ban</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </Select>
+          <Select
+            value={status}
+            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+          >
+            <option value="">Tất cả trạng thái</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </Select>
+        </div>
+      </Card>
+
+      {error && (
+        <Alert tone="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
+
+      <Card className="overflow-hidden">
+        {loading ? (
+          <TableSkeleton rows={6} cols={canWrite ? 5 : 4} />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={UsersIcon}
+            title="Không tìm thấy nhân viên nào"
+            description={
+              canWrite
+                ? 'Chưa có nhân viên nào khớp bộ lọc. Hãy bấm "Thêm nhân viên" để bắt đầu.'
+                : 'Chưa có nhân viên nào khớp bộ lọc.'
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="ui-table">
+              <thead>
+                <tr>
+                  <th className="ui-th">Nhân viên</th>
+                  <th className="ui-th">Phòng ban</th>
+                  <th className="ui-th">Chức vụ</th>
+                  <th className="ui-th">Ngày vào làm</th>
+                  <th className="ui-th">Trạng thái</th>
+                  {canWrite && <th className="ui-th text-right">Thao tác</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((emp) => (
+                  <tr key={emp.id} className="ui-tr">
+                    <td className="ui-td">
+                      <div className="flex items-center gap-3">
+                        {emp.avatar_url ? (
+                          <img src={emp.avatar_url} alt={emp.full_name} className="h-10 w-10 rounded-full object-cover ring-1 ring-inset ring-slate-900/5" />
+                        ) : (
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-bold text-brand-700 ring-1 ring-inset ring-brand-100">
+                            {initials(emp.full_name)}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <Link to={`/employees/${emp.id}`} className="font-semibold text-slate-900 transition hover:text-brand-600">
+                            {emp.full_name}
+                          </Link>
+                          <div className="truncate text-xs text-slate-400">{emp.code} · {emp.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="ui-td">{deptName(emp)}</td>
+                    <td className="ui-td">{posTitle(emp)}</td>
+                    <td className="ui-td">{formatDate(emp.start_date)}</td>
+                    <td className="ui-td">
+                      <Badge tone={STATUS_TONE[emp.status] || 'slate'} dot>
+                        {STATUS_LABEL[emp.status] || emp.status}
+                      </Badge>
+                    </td>
+                    {canWrite && (
+                      <td className="ui-td">
+                        <div className="flex justify-end gap-1">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => navigate(`/employees/${emp.id}`)}>
+                            Chi tiết
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setFormTarget(emp)} className="text-brand-600 hover:bg-brand-50 hover:text-brand-700">
+                            Sửa
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget(emp)} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+                            Xóa
+                          </Button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {/* Phân trang */}
       {meta && totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-          <span>Trang {meta.page} / {totalPages}</span>
+        <div className="mt-5 flex items-center justify-between text-sm text-slate-500">
+          <span>
+            Trang <strong className="font-semibold text-slate-700">{meta.page}</strong> / {totalPages}
+          </span>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 transition hover:bg-white disabled:opacity-40"
             >
               ← Trước
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 transition hover:bg-white disabled:opacity-40"
             >
               Sau →
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Modal thêm / sửa */}
       {formTarget && (
-        <Modal title={formTarget === 'create' ? 'Thêm nhân viên' : `Sửa hồ sơ — ${formTarget.full_name}`} onClose={() => setFormTarget(null)} wide>
+        <Modal
+          title={formTarget === 'create' ? 'Thêm nhân viên' : `Sửa hồ sơ — ${formTarget.full_name}`}
+          onClose={() => setFormTarget(null)}
+          width="max-w-2xl"
+        >
           <EmployeeForm
             initial={formTarget === 'create' ? null : formTarget}
             departments={departments}
@@ -547,17 +575,17 @@ export default function EmployeeListPage() {
       {/* Modal xác nhận xóa */}
       {deleteTarget && (
         <Modal title="Xóa nhân viên" onClose={() => !submitting && setDeleteTarget(null)}>
-          <p className="text-sm text-slate-600">
-            Anh/chị có chắc muốn xóa hồ sơ của <strong>{deleteTarget.full_name}</strong> ({deleteTarget.code})?
+          <p className="text-sm leading-relaxed text-slate-600">
+            Anh/chị có chắc muốn xóa hồ sơ của <strong className="font-semibold text-slate-800">{deleteTarget.full_name}</strong> ({deleteTarget.code})?
             Thao tác này không thể hoàn tác và có thể ảnh hưởng tới dữ liệu chấm công, nghỉ phép, lương đã gắn với nhân viên.
           </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => setDeleteTarget(null)} disabled={submitting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+          <div className="mt-6 flex justify-end gap-2.5">
+            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={submitting}>
               Huỷ
-            </button>
-            <button type="button" onClick={handleDelete} disabled={submitting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60">
+            </Button>
+            <Button type="button" variant="danger" onClick={handleDelete} loading={submitting}>
               {submitting ? 'Đang xóa...' : 'Xóa nhân viên'}
-            </button>
+            </Button>
           </div>
         </Modal>
       )}

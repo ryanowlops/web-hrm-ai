@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../app/AuthContext.jsx';
+import { notificationsApi } from '../api/index.js';
 
-// Layout chính cho khu vực đã đăng nhập: sidebar theo role + header + Outlet.
-// Icon dùng SVG nội tuyến (không dùng emoji). Style tối thiểu nằm ngay trong
-// file này; worker design-system có thể thay bằng hệ class dùng chung sau,
-// giữ nguyên các class hrm-* dưới đây để không phải sửa JSX.
+// Layout chính cho khu vực đã đăng nhập (design system v2 — enterprise):
+// sidebar navy (logo, menu theo role có nhóm + thanh chỉ thị active, thẻ
+// người dùng ở đáy) + topbar trắng mờ (tìm kiếm, chuông thông báo, chip
+// người dùng, nút Đăng xuất) + vùng nội dung nền canvas (.page-shell ở page).
 
 const ROLE_LABELS = {
   admin: 'Quản trị viên',
@@ -139,6 +141,39 @@ const ICONS = {
   ),
 };
 
+// Icon phụ cho topbar / chân sidebar (cùng phong cách nét với ICONS).
+const searchIcon = (
+  <Icon
+    paths={
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20.5 20.5-4-4" />
+      </>
+    }
+  />
+);
+const bellIcon = (
+  <Icon
+    paths={
+      <>
+        <path d="M18 8.5a6 6 0 1 0-12 0c0 6.5-2.7 8-2.7 8h17.4s-2.7-1.5-2.7-8" />
+        <path d="M10.4 20a2 2 0 0 0 3.2 0" />
+      </>
+    }
+  />
+);
+const globeIcon = (
+  <Icon
+    paths={
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <path d="M12 3c2.7 2.6 4 5.6 4 9s-1.3 6.4-4 9c-2.7-2.6-4-5.6-4-9s1.3-6.4 4-9Z" />
+      </>
+    }
+  />
+);
+
 const NAV_ITEMS = [
   { to: '/', label: 'Tổng quan', icon: ICONS.dashboard, end: true },
   { to: '/employees', label: 'Nhân viên', icon: ICONS.employees },
@@ -161,57 +196,83 @@ const NAV_ITEMS = [
   { to: '/admin', label: 'Quản trị', icon: ICONS.admin, roles: ['admin'] },
 ];
 
-const LAYOUT_CSS = `
-.hrm-shell{display:flex;min-height:100dvh;background:#f8fafc;color:#0f172a}
-.hrm-skip{position:absolute;left:-9999px;top:0;background:#1d4ed8;color:#fff;padding:.6rem 1rem;z-index:60;border-radius:0 0 .5rem 0}
-.hrm-skip:focus{left:0}
-.hrm-sidebar{width:248px;flex:0 0 248px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;position:sticky;top:0;height:100dvh}
-.hrm-brand{display:flex;align-items:center;gap:.6rem;padding:1rem 1.1rem;font-weight:700;font-size:1.05rem;color:#0f172a;border-bottom:1px solid #e2e8f0}
-.hrm-brand-badge{width:30px;height:30px;border-radius:8px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
-.hrm-nav{padding:.75rem;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
-.hrm-nav-link{display:flex;align-items:center;gap:.6rem;padding:.55rem .7rem;border-radius:.55rem;color:#334155;text-decoration:none;font-size:.925rem;font-weight:500;transition:background-color .16s ease,color .16s ease}
-.hrm-nav-link:hover{background:#f1f5f9;color:#0f172a}
-.hrm-nav-link.is-active{background:#dbeafe;color:#1e40af;font-weight:600}
-.hrm-nav-link:focus-visible,.hrm-logout:focus-visible,.hrm-public-link:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
-.hrm-sidebar-foot{margin-top:auto;padding:.9rem 1.1rem;border-top:1px solid #e2e8f0}
-.hrm-public-link{color:#1e40af;font-size:.875rem;font-weight:600;text-decoration:none}
-.hrm-public-link:hover{text-decoration:underline}
-.hrm-body{flex:1;min-width:0;display:flex;flex-direction:column}
-.hrm-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.8rem 1.5rem;background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:20}
-.hrm-user{display:flex;align-items:center;gap:.65rem;min-width:0}
-.hrm-user-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hrm-role-badge{background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:.1rem .55rem;font-size:.75rem;font-weight:600;white-space:nowrap}
-.hrm-logout{display:inline-flex;align-items:center;gap:.45rem;border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:.55rem;padding:.45rem .8rem;font-size:.875rem;font-weight:600;cursor:pointer;transition:background-color .16s ease}
-.hrm-logout:hover{background:#f1f5f9}
-.hrm-main{flex:1;padding:1.5rem;max-width:1280px;width:100%;margin:0 auto}
-@media (prefers-reduced-motion: reduce){.hrm-nav-link,.hrm-logout{transition:none}}
-@media (max-width: 860px){
-  .hrm-shell{flex-direction:column}
-  .hrm-sidebar{width:100%;flex:none;height:auto;position:static;border-right:none;border-bottom:1px solid #e2e8f0}
-  .hrm-nav{flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:.6rem}
-  .hrm-nav-link{white-space:nowrap}
-  .hrm-sidebar-foot{display:none}
-  .hrm-main{padding:1rem}
+// Nhóm menu hiển thị trong sidebar (giữ nguyên thứ tự của NAV_ITEMS).
+const NAV_GROUPS = [
+  { label: 'Menu chính', paths: ['/'] },
+  { label: 'Quản lý', paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll'] },
+  { label: 'Tuyển dụng & AI', paths: ['/recruitment', '/chatbot'] },
+  { label: 'Hệ thống', paths: ['/admin'] },
+];
+
+function groupNavItems(items) {
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: items.filter((item) => group.paths.includes(item.to)),
+  })).filter((group) => group.items.length > 0);
 }
-`;
+
+function getInitials(user) {
+  const name = String(user?.fullName || user?.email || 'Người dùng').trim();
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'ND';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const navLinkClass = ({ isActive }) =>
+  [
+    'group relative flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium',
+    'transition-all duration-200 ease-spring',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-900',
+    isActive
+      ? 'bg-white/10 font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
+      : 'text-slate-300/85 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white',
+  ].join(' ');
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user?.role));
+  const navSections = groupNavItems(visibleItems);
+  const displayName = user?.fullName || user?.email || 'Người dùng';
+  const roleLabel = user?.role ? ROLE_LABELS[user.role] || user.role : null;
+
+  // Số thông báo chưa đọc cho chấm đỏ trên chuông (chỉ hiển thị, lỗi thì ẩn).
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    notificationsApi
+      .unreadCount()
+      .then((res) => {
+        const body = res?.data ?? res;
+        const count = body?.count ?? body?.unread_count ?? body?.unreadCount ?? 0;
+        if (!cancelled) setUnreadCount(Number(count) || 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
-    <div className="hrm-shell">
-      <style>{LAYOUT_CSS}</style>
-      <a className="hrm-skip" href="#main-content">
+    <div className="flex min-h-dvh flex-col bg-canvas text-slate-800 lg:flex-row">
+      <a
+        className="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[60] focus:rounded-br-xl focus:bg-brand-700 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white"
+        href="#main-content"
+      >
         Bỏ qua tới nội dung chính
       </a>
 
-      <aside className="hrm-sidebar">
-        <div className="hrm-brand">
-          <span className="hrm-brand-badge" aria-hidden="true">
+      {/* ============================ SIDEBAR ============================ */}
+      <aside className="flex w-full flex-none flex-col bg-gradient-to-b from-navy-950 via-navy-900 to-navy-800 text-slate-200 shadow-lift lg:sticky lg:top-0 lg:h-dvh lg:w-[264px]">
+        {/* Khối logo */}
+        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4 lg:py-5">
+          <span
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 text-white shadow-lift ring-1 ring-white/25"
+            aria-hidden="true"
+          >
             <svg
-              width="17"
-              height="17"
+              width="19"
+              height="19"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -222,45 +283,156 @@ export default function AppLayout() {
               <path d="M4.5 20.5c1.2-4 4-6 7.5-6s6.3 2 7.5 6" />
             </svg>
           </span>
-          Web HRM AI
+          <span className="text-[17px] font-bold leading-tight tracking-tight text-white">
+            Web HRM AI
+          </span>
+          <span
+            className="ml-auto h-2 w-2 flex-none rounded-full bg-accent-400 shadow-[0_0_10px_rgba(39,207,169,0.9)] animate-pulse-soft lg:ml-0"
+            aria-hidden="true"
+          />
         </div>
 
-        <nav className="hrm-nav" aria-label="Điều hướng chính">
-          {visibleItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) => `hrm-nav-link${isActive ? ' is-active' : ''}`}
-            >
-              {item.icon}
-              {item.label}
-            </NavLink>
+        {/* Menu theo role, chia nhóm */}
+        <nav
+          className="nice-scroll flex gap-1 overflow-x-auto px-3 py-3 lg:flex-1 lg:flex-col lg:gap-0 lg:overflow-x-hidden lg:overflow-y-auto lg:py-4"
+          aria-label="Điều hướng chính"
+        >
+          {navSections.map((section) => (
+            <div key={section.label} className="flex items-start gap-1 lg:mt-4 lg:block lg:first:mt-0">
+              <p className="hidden px-3 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-slate-400/60 lg:block">
+                {section.label}
+              </p>
+              <div className="flex gap-1 lg:flex-col lg:gap-0.5">
+                {section.items.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
+                    {({ isActive }) => (
+                      <>
+                        {isActive ? (
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-accent-400 shadow-[0_0_12px_rgba(39,207,169,0.85)] animate-fade-in"
+                          />
+                        ) : null}
+                        <span
+                          className={`transition-colors duration-200 ${
+                            isActive ? 'text-accent-300' : 'text-slate-400 group-hover:text-slate-100'
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
-        <div className="hrm-sidebar-foot">
-          <NavLink className="hrm-public-link" to="/jobs">
+        {/* Chân sidebar: link công khai + thẻ người dùng */}
+        <div className="mt-auto hidden space-y-2 border-t border-white/10 p-3 lg:block">
+          <NavLink
+            to="/jobs"
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300/85 transition-all duration-200 ease-spring hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70"
+          >
+            <span className="text-slate-400">{globeIcon}</span>
             Trang tuyển dụng công khai
           </NavLink>
+
+          <div className="flex items-center gap-3 rounded-xl bg-white/[0.06] px-3 py-2.5 ring-1 ring-white/10">
+            <span
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-accent-500 text-xs font-bold text-white ring-2 ring-white/15"
+              aria-hidden="true"
+            >
+              {getInitials(user)}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold leading-tight text-white">
+                {displayName}
+              </span>
+              {roleLabel ? (
+                <span className="block truncate text-xs leading-tight text-slate-400">
+                  {roleLabel}
+                </span>
+              ) : null}
+            </span>
+          </div>
         </div>
       </aside>
 
-      <div className="hrm-body">
-        <header className="hrm-header">
-          <div className="hrm-user">
-            <span className="hrm-user-name">{user?.fullName || user?.email || 'Người dùng'}</span>
-            {user?.role ? (
-              <span className="hrm-role-badge">{ROLE_LABELS[user.role] || user.role}</span>
-            ) : null}
+      {/* ============================ THÂN TRANG ============================ */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Topbar trắng mờ */}
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/75 backdrop-blur-xl">
+          <div className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-5 lg:px-8">
+            {/* Ô tìm kiếm (trang trí) */}
+            <div className="relative hidden w-full max-w-sm md:block">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                {searchIcon}
+              </span>
+              <input
+                type="search"
+                aria-label="Tìm kiếm"
+                placeholder="Tìm kiếm nhân viên, phòng ban…"
+                className="w-full rounded-xl border border-slate-200/90 bg-slate-100/70 py-2 pl-10 pr-4 text-sm text-slate-700 shadow-[inset_0_1px_2px_rgba(16,24,40,0.04)] transition duration-200 ease-spring placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/15"
+              />
+            </div>
+            <div className="min-w-0 flex-1 md:hidden">
+              <span className="block truncate text-sm font-semibold text-slate-800">
+                {displayName}
+              </span>
+            </div>
+
+            <div className="ml-auto flex items-center gap-2.5 sm:gap-3.5">
+              {/* Chuông thông báo */}
+              <button
+                type="button"
+                aria-label="Thông báo"
+                className="relative flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-card transition duration-200 ease-spring hover:-translate-y-px hover:border-brand-200 hover:text-brand-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20"
+              >
+                {bellIcon}
+                {unreadCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white animate-scale-in">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                ) : null}
+              </button>
+
+              {/* Chip người dùng */}
+              <div className="hidden items-center gap-2.5 rounded-full border border-slate-200/90 bg-white py-1.5 pl-1.5 pr-3.5 shadow-card sm:flex">
+                <span
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[11px] font-bold text-white"
+                  aria-hidden="true"
+                >
+                  {getInitials(user)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block max-w-[150px] truncate text-[13px] font-semibold leading-tight text-slate-800">
+                    {displayName}
+                  </span>
+                  {roleLabel ? (
+                    <span className="block text-[11px] leading-tight text-slate-500">
+                      {roleLabel}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+
+              {/* Đăng xuất */}
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex flex-none items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-card transition duration-200 ease-spring hover:-translate-y-px hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/15 sm:px-3.5"
+              >
+                {ICONS.logout}
+                Đăng xuất
+              </button>
+            </div>
           </div>
-          <button type="button" className="hrm-logout" onClick={logout}>
-            {ICONS.logout}
-            Đăng xuất
-          </button>
         </header>
 
-        <main id="main-content" className="hrm-main" tabIndex={-1}>
+        <main id="main-content" className="min-w-0 flex-1" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

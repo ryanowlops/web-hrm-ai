@@ -5,15 +5,15 @@ import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './app/AuthContext.jsx';
 import router from './app/router.jsx';
 
-// Design system (ui-ux-pro-max): thứ tự nạp tokens → base → components → animations
+// Font Inter (đóng gói sẵn, không phụ thuộc CDN)
+import '@fontsource-variable/inter';
+
+// Design system v2 (enterprise): Tailwind → tokens → base → animations → motion
+import './styles/tailwind.css';
 import './styles/tokens.css';
 import './styles/base.css';
-import './styles/components.css';
 import './styles/animations.css';
-
-// LƯU Ý cho worker design-system: nếu có file style toàn cục (src/index.css),
-// hãy thêm dòng import './index.css'; vào đây. Nền tảng này cố ý không import
-// CSS nào ngoài phần nền tối thiểu đã đặt inline trong index.html.
+import './styles/motion.css';
 
 // TanStack Query giữ toàn bộ dữ liệu server (danh sách, chi tiết, thống kê).
 // State toàn cục của app chỉ gồm phiên đăng nhập (AuthContext).

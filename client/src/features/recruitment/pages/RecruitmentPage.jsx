@@ -9,10 +9,34 @@ import {
   listDepartments,
   friendlyError,
 } from '../services';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  FormField,
+  Input,
+  Modal,
+  PageHeader,
+  Select,
+  Skeleton,
+  StatCard,
+  Textarea,
+} from '../../../components/ui';
+import {
+  IconBriefcase,
+  IconBuilding,
+  IconCalendar,
+  IconCheck,
+  IconSearch,
+  IconUsers,
+} from '../../../components/icons.jsx';
 
 const JOB_STATUS = {
-  open: { label: 'Đang tuyển', classes: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
-  closed: { label: 'Đã đóng', classes: 'bg-slate-100 text-slate-500 ring-slate-200' },
+  open: { label: 'Đang tuyển', tone: 'green' },
+  closed: { label: 'Đã đóng', tone: 'slate' },
 };
 
 const EMPTY_FORM = {
@@ -78,136 +102,108 @@ function JobFormModal({ open, initial, departments, saving, error, onClose, onSu
     });
   };
 
-  const inputCls =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200';
-  const labelCls = 'mb-1 block text-sm font-medium text-slate-700';
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
-      >
-        <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {initial ? 'Sửa tin tuyển dụng' : 'Đăng tin tuyển dụng mới'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Đóng"
-          >
-            ✕
-          </button>
-        </div>
-
+    <Modal
+      open={open}
+      title={initial ? 'Sửa tin tuyển dụng' : 'Đăng tin tuyển dụng mới'}
+      onClose={onClose}
+      width="max-w-2xl"
+      actions={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button type="submit" form="job-form" loading={saving}>
+            {saving ? 'Đang lưu...' : initial ? 'Lưu thay đổi' : 'Đăng tin'}
+          </Button>
+        </>
+      }
+    >
+      <form id="job-form" onSubmit={handleSubmit}>
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+          <Alert tone="error" className="mb-5">
             {error}
-          </div>
+          </Alert>
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={labelCls}>
-              Vị trí tuyển <span className="text-red-500">*</span>
-            </label>
-            <input
-              className={inputCls}
+          <FormField
+            className="sm:col-span-2"
+            label={
+              <>
+                Vị trí tuyển <span className="text-rose-500">*</span>
+              </>
+            }
+          >
+            <Input
               value={form.title}
               onChange={set('title')}
               required
               placeholder="Ví dụ: Lập trình viên Python (Flask)"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className={labelCls}>Phòng ban</label>
-            <select className={inputCls} value={form.department_id} onChange={set('department_id')}>
+          <FormField label="Phòng ban">
+            <Select value={form.department_id} onChange={set('department_id')}>
               <option value="">— Chưa chọn —</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Số lượng</label>
-              <input
-                type="number"
-                min="1"
-                className={inputCls}
-                value={form.quantity}
-                onChange={set('quantity')}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Hạn nộp CV</label>
-              <input type="date" className={inputCls} value={form.deadline} onChange={set('deadline')} />
-            </div>
+            <FormField label="Số lượng">
+              <Input type="number" min="1" value={form.quantity} onChange={set('quantity')} />
+            </FormField>
+            <FormField label="Hạn nộp CV">
+              <Input type="date" value={form.deadline} onChange={set('deadline')} />
+            </FormField>
           </div>
 
-          <div className="sm:col-span-2">
-            <label className={labelCls}>
-              Mô tả công việc (JD) <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              className={inputCls}
+          <FormField
+            className="sm:col-span-2"
+            label={
+              <>
+                Mô tả công việc (JD) <span className="text-rose-500">*</span>
+              </>
+            }
+          >
+            <Textarea
               rows={5}
               value={form.description}
               onChange={set('description')}
               required
               placeholder="Công việc chính, trách nhiệm, quyền lợi..."
             />
-          </div>
+          </FormField>
 
-          <div className="sm:col-span-2">
-            <label className={labelCls}>Yêu cầu ứng viên</label>
-            <textarea
-              className={inputCls}
+          <FormField
+            className="sm:col-span-2"
+            label="Yêu cầu ứng viên"
+            hint="Mẹo: viết yêu cầu càng cụ thể, kết quả AI sàng lọc CV càng sát."
+          >
+            <Textarea
               rows={4}
               value={form.requirements}
               onChange={set('requirements')}
               placeholder="Kỹ năng bắt buộc, số năm kinh nghiệm... — nội dung này là chuẩn để AI đối chiếu khi sàng lọc CV"
             />
-            <p className="mt-1 text-xs text-slate-400">
-              Mẹo: viết yêu cầu càng cụ thể, kết quả AI sàng lọc CV càng sát.
-            </p>
-          </div>
+          </FormField>
 
           {initial && (
-            <div>
-              <label className={labelCls}>Trạng thái</label>
-              <select className={inputCls} value={form.status} onChange={set('status')}>
+            <FormField label="Trạng thái">
+              <Select value={form.status} onChange={set('status')}>
                 <option value="open">Đang tuyển</option>
                 <option value="closed">Đã đóng</option>
-              </select>
-            </div>
+              </Select>
+            </FormField>
           )}
         </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-          >
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? 'Đang lưu...' : initial ? 'Lưu thay đổi' : 'Đăng tin'}
-          </button>
-        </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -276,6 +272,12 @@ export default function RecruitmentPage() {
     [jobs],
   );
 
+  const openCreateModal = () => {
+    setEditing(null);
+    setFormError('');
+    setModalOpen(true);
+  };
+
   const handleSubmitForm = async (payload) => {
     setSaving(true);
     setFormError('');
@@ -316,196 +318,213 @@ export default function RecruitmentPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6">
+    <div className="page-shell">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tuyển dụng</h1>
-          <p className="mt-1 text-sm text-slate-500">
+      <PageHeader
+        eyebrow="Tuyển dụng"
+        title="Tuyển dụng"
+        subtitle={
+          <>
             Quản lý tin tuyển dụng và ứng viên. Mở 1 vị trí để xem CV và dùng{' '}
-            <span className="font-medium text-indigo-600">AI sàng lọc CV</span> — AI chỉ gợi ý, HR là
+            <span className="font-semibold text-accent-600">AI sàng lọc CV</span> — AI chỉ gợi ý, HR là
             người quyết định.
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setFormError('');
-            setModalOpen(true);
-          }}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500"
-        >
-          + Đăng tin tuyển dụng
-        </button>
-      </div>
+          </>
+        }
+        actions={<Button onClick={openCreateModal}>+ Đăng tin tuyển dụng</Button>}
+      />
 
       {/* Mini stats */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Tin đang hiển thị</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{meta.totalItems ?? jobs.length}</p>
-        </div>
-        <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Đang tuyển (trang này)</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-600">{stats.open}</p>
-        </div>
-        <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Ứng viên (trang này)</p>
-          <p className="mt-1 text-2xl font-bold text-indigo-600">{stats.candidates}</p>
-        </div>
+      <div className="stagger mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={<IconBriefcase size={22} />}
+          label="Tin đang hiển thị"
+          value={meta.totalItems ?? jobs.length}
+          tone="blue"
+        />
+        <StatCard
+          icon={<IconCheck size={22} />}
+          label="Đang tuyển (trang này)"
+          value={stats.open}
+          tone="teal"
+        />
+        <StatCard
+          icon={<IconUsers size={22} />}
+          label="Ứng viên (trang này)"
+          value={stats.candidates}
+          tone="violet"
+        />
       </div>
 
       {notice && (
-        <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200">
+        <Alert tone="success" className="mb-4">
           {notice}
-        </div>
+        </Alert>
       )}
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
+        <Alert tone="error" className="mb-4">
           {error}
-        </div>
+        </Alert>
       )}
 
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Tìm theo tên vị trí..."
-          className="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setPage(1);
-          }}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="open">Đang tuyển</option>
-          <option value="closed">Đã đóng</option>
-        </select>
-        <button
-          onClick={loadJobs}
-          className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-slate-300 transition hover:bg-slate-50"
-        >
-          Tải lại
-        </button>
-      </div>
+      <Card className="mb-5">
+        <CardBody className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[220px] flex-1">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+              <IconSearch size={17} />
+            </span>
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Tìm theo tên vị trí..."
+              className="pl-10"
+            />
+          </div>
+          <Select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
+            className="w-auto min-w-[180px]"
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="open">Đang tuyển</option>
+            <option value="closed">Đã đóng</option>
+          </Select>
+          <Button variant="secondary" onClick={loadJobs}>
+            Tải lại
+          </Button>
+        </CardBody>
+      </Card>
 
       {/* List */}
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-4" aria-hidden="true">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl bg-white p-5 ring-1 ring-slate-200">
-              <div className="h-4 w-1/3 rounded bg-slate-200" />
-              <div className="mt-3 h-3 w-2/3 rounded bg-slate-100" />
-              <div className="mt-2 h-3 w-1/2 rounded bg-slate-100" />
-            </div>
+            <Card key={i}>
+              <CardBody>
+                <Skeleton className="h-5 w-1/3" />
+                <Skeleton className="mt-3 h-4 w-2/3" />
+                <Skeleton className="mt-2 h-4 w-1/2" />
+              </CardBody>
+            </Card>
           ))}
         </div>
       ) : jobs.length === 0 ? (
-        <div className="rounded-xl bg-white px-6 py-14 text-center ring-1 ring-slate-200">
-          <p className="text-base font-medium text-slate-700">Chưa có tin tuyển dụng nào</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-slate-400">
-            Bấm "Đăng tin tuyển dụng" để tạo vị trí đầu tiên. Sau khi ứng viên nộp CV, bạn có thể dùng AI
-            sàng lọc ngay trong trang chi tiết của vị trí.
-          </p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<IconBriefcase size={26} />}
+            title="Chưa có tin tuyển dụng nào"
+            description={'Bấm "Đăng tin tuyển dụng" để tạo vị trí đầu tiên. Sau khi ứng viên nộp CV, bạn có thể dùng AI sàng lọc ngay trong trang chi tiết của vị trí.'}
+            action={<Button onClick={openCreateModal}>+ Đăng tin tuyển dụng</Button>}
+          />
+        </Card>
       ) : (
-        <div className="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-          <ul className="divide-y divide-slate-100">
-            {jobs.map((job) => {
-              const st = JOB_STATUS[job.status] ?? JOB_STATUS.closed;
-              const deptName = job.department_name ?? job.department?.name;
-              const count = job.candidates_count ?? job.candidate_count ?? 0;
-              return (
-                <li key={job.id} className="p-5 transition hover:bg-slate-50">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          to={`/recruitment/${job.id}`}
-                          className="text-base font-semibold text-slate-900 transition hover:text-indigo-600"
-                        >
-                          {job.title}
-                        </Link>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${st.classes}`}
-                        >
-                          {st.label}
-                        </span>
-                        {isOverdue(job) && (
-                          <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-red-200">
-                            Quá hạn nộp
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {deptName ? `${deptName} · ` : ''}Tuyển {job.quantity ?? 1} người · Hạn nộp:{' '}
-                        {formatDate(job.deadline)} · {count} ứng viên
-                      </p>
-                      {job.description && (
-                        <p className="mt-2 line-clamp-2 max-w-3xl text-sm text-slate-500">{job.description}</p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="stagger space-y-4">
+          {jobs.map((job) => {
+            const st = JOB_STATUS[job.status] ?? JOB_STATUS.closed;
+            const deptName = job.department_name ?? job.department?.name;
+            const count = job.candidates_count ?? job.candidate_count ?? 0;
+            const overdue = isOverdue(job);
+            return (
+              <Card key={job.id} hover>
+                <CardBody className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={`/recruitment/${job.id}`}
-                        className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
+                        className="text-base font-bold tracking-[-0.01em] text-slate-900 transition-colors hover:text-brand-700"
                       >
-                        Xem ứng viên
+                        {job.title}
                       </Link>
-                      <button
-                        onClick={() => {
-                          setEditing(job);
-                          setFormError('');
-                          setModalOpen(true);
-                        }}
-                        className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 ring-1 ring-slate-300 transition hover:bg-slate-50"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(job)}
-                        disabled={busyJobId === job.id}
-                        className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 ring-1 ring-slate-300 transition hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        {busyJobId === job.id ? 'Đang xử lý...' : job.status === 'open' ? 'Đóng tin' : 'Mở lại'}
-                      </button>
+                      <Badge tone={st.tone} dot={job.status === 'open'}>
+                        {st.label}
+                      </Badge>
+                      {overdue && <Badge tone="red">Quá hạn nộp</Badge>}
                     </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                      {deptName && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <IconBuilding size={15} className="text-slate-400" />
+                          {deptName}
+                        </span>
+                      )}
+                      <span>Tuyển {job.quantity ?? 1} người</span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 ${overdue ? 'font-semibold text-rose-600' : ''}`}
+                      >
+                        <IconCalendar size={15} className={overdue ? 'text-rose-400' : 'text-slate-400'} />
+                        Hạn nộp: {formatDate(job.deadline)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 font-medium text-slate-600">
+                        <IconUsers size={15} className="text-slate-400" />
+                        {count} ứng viên
+                      </span>
+                    </div>
+
+                    {job.description && (
+                      <p className="mt-2.5 line-clamp-2 max-w-3xl text-sm leading-relaxed text-slate-500">
+                        {job.description}
+                      </p>
+                    )}
                   </div>
-                </li>
-              );
-            })}
-          </ul>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Link
+                      to={`/recruitment/${job.id}`}
+                      className="inline-flex h-9 select-none items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3.5 text-[13px] font-semibold tracking-[0.01em] text-white shadow-[0_6px_16px_-6px_rgba(39,79,234,.55)] transition-all duration-200 ease-spring hover:-translate-y-px hover:bg-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 active:translate-y-0 active:scale-[.99]"
+                    >
+                      Xem ứng viên
+                    </Link>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(job);
+                        setFormError('');
+                        setModalOpen(true);
+                      }}
+                    >
+                      Sửa
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleToggleStatus(job)}
+                      disabled={busyJobId === job.id}
+                    >
+                      {busyJobId === job.id ? 'Đang xử lý...' : job.status === 'open' ? 'Đóng tin' : 'Mở lại'}
+                    </Button>
+                  </div>
+                </CardBody>
+              </Card>
+            );
+          })}
         </div>
       )}
 
       {/* Pagination */}
       {meta.totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-end gap-2 text-sm">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-lg px-3 py-1.5 ring-1 ring-slate-300 transition enabled:hover:bg-slate-50 disabled:opacity-40"
-          >
+        <div className="mt-5 flex items-center justify-end gap-2.5 text-sm">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
             ← Trước
-          </button>
-          <span className="text-slate-500">
+          </Button>
+          <span className="font-medium text-slate-500">
             Trang {meta.page ?? page}/{meta.totalPages}
           </span>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={page >= meta.totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="rounded-lg px-3 py-1.5 ring-1 ring-slate-300 transition enabled:hover:bg-slate-50 disabled:opacity-40"
           >
             Sau →
-          </button>
+          </Button>
         </div>
       )}
 

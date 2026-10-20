@@ -57,6 +57,9 @@ class JobPostingSchema(Schema):
     id = fields.Integer()
     title = fields.String()
     department_id = fields.Integer(allow_none=True)
+    department_name = fields.Function(
+        lambda obj: getattr(getattr(obj, "department", None), "name", None)
+    )
     description = fields.String(allow_none=True)
     requirements = fields.String(allow_none=True)
     quantity = fields.Integer(allow_none=True)

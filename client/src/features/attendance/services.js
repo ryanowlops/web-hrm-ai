@@ -27,7 +27,9 @@ export async function checkOut() {
  *  GET /attendance/monthly?month=&year=&mine=1
  *  -> { data: [record...], summary: { workdays, late, on_leave, absent, missing_checkout } } */
 export async function getMyMonthly(month, year) {
-  return unwrap(await api.get('/attendance/monthly', { params: { month, year, mine: 1 } }));
+  // Body gồm { data, summary, meta } — interceptor đã bóc response.data,
+  // KHÔNG unwrap thêm (unwrap sẽ chỉ còn mảng data và làm mất summary).
+  return api.get('/attendance/monthly', { params: { month, year, mine: 1 } });
 }
 
 /** Bảng công tháng toàn công ty / theo phòng (HR, Admin, Manager-phạm vi phòng).
@@ -37,7 +39,8 @@ export async function getTeamMonthly({ month, year, departmentId, employeeId, pa
   const params = { month, year, page, limit };
   if (departmentId) params.department_id = departmentId;
   if (employeeId) params.employee_id = employeeId;
-  return unwrap(await api.get('/attendance/monthly', { params }));
+  // Giữ nguyên body { data, meta } như getMyMonthly.
+  return api.get('/attendance/monthly', { params });
 }
 
 /** Danh sách phòng ban cho bộ lọc (chỉ gọi khi có quyền; lỗi -> []). */

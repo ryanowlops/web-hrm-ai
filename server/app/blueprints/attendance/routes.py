@@ -16,7 +16,8 @@ from .schemas import attendance_schema, attendance_update_schema
 from .services import ApiError
 
 HR_ROLES = ("hr", "admin")
-MONTHLY_ROLES = ("hr", "admin", "manager")  # Employee gọi -> 403
+# Employee được gọi monthly nhưng service ép phạm vi về đúng bản ghi của mình.
+MONTHLY_ROLES = ("hr", "admin", "manager", "employee")
 
 
 @bp.errorhandler(ApiError)
@@ -86,17 +87,18 @@ def my_attendance():
 @jwt_required()
 @require_roles(*MONTHLY_ROLES)
 def monthly_attendance():
-    """Bảng công tháng: HR/Admin xem tất cả, Manager chỉ xem phòng mình.
+    """Bảng công tháng: HR/Admin xem tất cả, Manager chỉ xem phòng mình,
+    Employee chỉ xem của chính mình.
 
-    Employee không thuộc MONTHLY_ROLES nên bị chặn 403 tại require_roles.
-    Query: ?month=YYYY-MM&department_id=&employee_id=&page=&limit=
+    Query: ?month=YYYY-MM (hoặc month=&year= riêng), &mine=1,
+    &department_id=&employee_id=&page=&limit=
+    Với mine=1: trả { data: [bản ghi...], summary } của người gọi.
     """
-    rows, meta, first = services.get_monthly(
+    body, first = services.get_monthly(
         request.args.get("month"), request.args, _current_role()
     )
-    return jsonify(
-        {"data": rows, "meta": meta, "month": first.strftime("%Y-%m")}
-    ), 200
+    body["month"] = first.strftime("%Y-%m")
+    return jsonify(body), 200
 
 
 @bp.patch("/attendance/<int:attendance_id>")

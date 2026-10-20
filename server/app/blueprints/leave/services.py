@@ -270,7 +270,10 @@ def list_leave_requests(user, employee, status=None, scope=None, page=1, limit=2
         raise ApiError(400, "VALIDATION_ERROR", f"Trạng thái không hợp lệ: {status}.")
 
     query = LeaveRequest.query
-    if user.role == "employee":
+    if scope == "mine":
+        # Mọi vai trò đều xem được đúng đơn của chính mình khi scope=mine.
+        query = query.filter(LeaveRequest.employee_id == employee.id)
+    elif user.role == "employee":
         query = query.filter(LeaveRequest.employee_id == employee.id)
     elif user.role == "manager":
         team_ids = _team_employee_ids(employee)

@@ -3,6 +3,10 @@ import {
   getLeaveTypes, getMyBalances, createRequest, getMyRequests, cancelRequest,
   getPendingForMe, approveRequest, rejectRequest, getCalendar,
 } from '../services';
+import {
+  Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState,
+  FormField, Input, PageHeader, Select, Skeleton, TableSkeleton, Textarea,
+} from '../../../components/ui';
 
 /* ---------- Helpers ---------- */
 
@@ -22,16 +26,16 @@ function getCurrentUser() {
 }
 
 const STATUS_META = {
-  pending: { label: 'Chờ quản lý duyệt', cls: 'bg-amber-100 text-amber-700' },
-  manager_approved: { label: 'Chờ HR duyệt', cls: 'bg-sky-100 text-sky-700' },
-  approved: { label: 'Đã duyệt', cls: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: 'Đã từ chối', cls: 'bg-rose-100 text-rose-700' },
-  cancelled: { label: 'Đã huỷ', cls: 'bg-slate-200 text-slate-600' },
+  pending: { label: 'Chờ quản lý duyệt', tone: 'amber' },
+  manager_approved: { label: 'Chờ HR duyệt', tone: 'blue' },
+  approved: { label: 'Đã duyệt', tone: 'green' },
+  rejected: { label: 'Đã từ chối', tone: 'red' },
+  cancelled: { label: 'Đã huỷ', tone: 'slate' },
 };
 
 const StatusBadge = ({ status }) => {
-  const m = STATUS_META[status] || { label: status || '—', cls: 'bg-slate-100 text-slate-600' };
-  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>;
+  const m = STATUS_META[status] || { label: status || '—', tone: 'slate' };
+  return <Badge tone={m.tone} dot>{m.label}</Badge>;
 };
 
 const fmtDate = (d) => (d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('vi-VN') : '—');
@@ -60,9 +64,35 @@ function MonthNav({ cursor, onChange }) {
   };
   return (
     <div className="flex items-center gap-2">
-      <button type="button" onClick={() => shift(-1)} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-slate-50">←</button>
-      <span className="min-w-24 text-center font-semibold">Tháng {cursor.month}/{cursor.year}</span>
-      <button type="button" onClick={() => shift(1)} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-slate-50">→</button>
+      <Button type="button" variant="secondary" size="sm" onClick={() => shift(-1)} aria-label="Tháng trước">←</Button>
+      <span className="min-w-28 text-center text-sm font-bold text-slate-800">Tháng {cursor.month}/{cursor.year}</span>
+      <Button type="button" variant="secondary" size="sm" onClick={() => shift(1)} aria-label="Tháng sau">→</Button>
+    </div>
+  );
+}
+
+/* Thẻ số dư phép thu gọn: số ngày còn lại + thanh tiến độ đã dùng. */
+function BalanceCard({ balance: b }) {
+  const total = b.total_days ?? 0;
+  const used = b.used_days ?? 0;
+  const remaining = b.remaining_days ?? Math.max(total - used, 0);
+  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+  return (
+    <div className="ui-card ui-card-hover p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-[13px] font-semibold text-slate-500">{b.leave_type_name || b.name}</p>
+        <p className="text-xs font-medium text-slate-400">Đã dùng {used} ngày</p>
+      </div>
+      <p className="mt-1.5 text-[26px] font-extrabold leading-none tracking-[-0.02em] text-slate-900">
+        {remaining}
+        <span className="ml-1.5 text-[13px] font-semibold text-slate-400">/ {total} ngày còn lại</span>
+      </p>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-[width] duration-700 ease-spring"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -179,8 +209,9 @@ export default function LeavePage() {
     }
     setDecidingId(id); setError(''); setNotice('');
     try {
-      if (action === 'approve') await approveRequest(id);
-      else await rejectRequest(id, rejectReason.trim());
+      const itemStatus = pending.find((r) => r.id === id)?.status;
+      if (action === 'approve') await approveRequest(id, undefined, itemStatus);
+      else await rejectRequest(id, rejectReason.trim(), itemStatus);
       setNotice(action === 'approve' ? 'Đã duyệt đơn.' : 'Đã từ chối đơn.');
       setRejectingId(null); setRejectReason('');
       loadPending(); loadMine(); loadCalendar(); loadBalances();
@@ -208,114 +239,120 @@ export default function LeavePage() {
     return cells;
   }, [cursor, calendar]);
 
+  const todayISO = toISODate(new Date());
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-800">Nghỉ phép</h1>
-        <p className="text-sm text-slate-500">Đơn nghỉ được duyệt 2 cấp: Quản lý trực tiếp → HR. Số dư phép cập nhật ngay khi HR duyệt.</p>
-      </header>
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Quản lý thời gian"
+        title="Nghỉ phép"
+        subtitle="Đơn nghỉ được duyệt 2 cấp: Quản lý trực tiếp → HR. Số dư phép cập nhật ngay khi HR duyệt."
+      />
 
-      {error && <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
-      {notice && <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>}
+      {(error || notice) && (
+        <div className="mb-6 space-y-3">
+          {error && <Alert tone="error">{error}</Alert>}
+          {notice && <Alert tone="success">{notice}</Alert>}
+        </div>
+      )}
 
-      {/* === Số dư phép của tôi === */}
-      <section>
-        <h2 className="mb-3 font-semibold text-slate-800">Số dư phép năm {year} của tôi</h2>
-        {balances.length === 0 ? (
-          <p className="rounded-2xl bg-white p-5 text-sm text-slate-400 shadow-sm ring-1 ring-slate-100">Chưa có thông tin số dư phép.</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {balances.map((b) => {
-              const total = b.total_days ?? 0;
-              const used = b.used_days ?? 0;
-              const remaining = b.remaining_days ?? Math.max(total - used, 0);
-              const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
-              return (
-                <div key={b.leave_type_id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                  <p className="text-sm font-medium text-slate-600">{b.leave_type_name || b.name}</p>
-                  <p className="mt-1 text-2xl font-bold text-slate-800">{remaining}<span className="text-sm font-normal text-slate-400"> / {total} ngày còn lại</span></p>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">Đã dùng {used} ngày</p>
+      <div className="grid items-start gap-6 lg:grid-cols-5">
+        {/* === Cột trái: tạo đơn + số dư phép === */}
+        <div className="space-y-6 lg:col-span-2">
+          <Card className="animate-fade-up">
+            <CardHeader title="Tạo đơn nghỉ mới" subtitle="Điền thông tin bên dưới để gửi đơn xin nghỉ." />
+            <CardBody>
+              <form onSubmit={submit} className="space-y-4" noValidate>
+                <FormField
+                  label="Loại nghỉ"
+                  error={formErrors.leave_type_id}
+                  hint={selectedBalance ? `Số dư hiện tại: còn ${selectedBalance.remaining_days} ngày.` : undefined}
+                >
+                  <Select value={form.leave_type_id} onChange={(e) => setForm({ ...form, leave_type_id: e.target.value })}>
+                    <option value="">— Chọn loại nghỉ —</option>
+                    {types.map((t) => <option key={t.id} value={t.id}>{t.name}{t.paid ? '' : ' (không lương)'}</option>)}
+                  </Select>
+                </FormField>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Từ ngày" error={formErrors.from_date}>
+                    <Input type="date" value={form.from_date} onChange={(e) => setForm({ ...form, from_date: e.target.value })} />
+                  </FormField>
+                  <FormField label="Đến ngày" error={formErrors.to_date}>
+                    <Input type="date" value={form.to_date} onChange={(e) => setForm({ ...form, to_date: e.target.value })} />
+                  </FormField>
                 </div>
-              );
-            })}
+                {formDays > 0 && (
+                  <p className="animate-fade-in rounded-xl bg-brand-50 px-3.5 py-2.5 text-sm font-medium text-brand-700 ring-1 ring-inset ring-brand-100">
+                    Số ngày làm việc xin nghỉ: <b>{formDays}</b> ngày
+                  </p>
+                )}
+                <FormField label="Lý do" error={formErrors.reason}>
+                  <Textarea rows={3} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                    placeholder="Ví dụ: Nghỉ phép năm đi du lịch cùng gia đình" />
+                </FormField>
+                <Button type="submit" variant="primary" loading={submitting} className="w-full">
+                  {submitting ? 'Đang gửi…' : 'Gửi đơn nghỉ'}
+                </Button>
+                <p className="text-xs leading-relaxed text-slate-400">Đơn trùng ngày với đơn đang chờ/đã duyệt sẽ bị server từ chối.</p>
+              </form>
+            </CardBody>
+          </Card>
+
+          {/* === Số dư phép của tôi (StatCard thu gọn) === */}
+          <div className="animate-fade-up" style={{ animationDelay: '70ms' }}>
+            <h3 className="mb-3 text-sm font-bold tracking-[-0.01em] text-slate-800">Số dư phép năm {year} của tôi</h3>
+            {balances.length === 0 ? (
+              <div className="ui-card p-4 text-sm text-slate-400">Chưa có thông tin số dư phép.</div>
+            ) : (
+              <div className="space-y-3">
+                {balances.map((b) => <BalanceCard key={b.leave_type_id} balance={b} />)}
+              </div>
+            )}
           </div>
-        )}
-      </section>
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        {/* === Tạo đơn === */}
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 lg:col-span-2">
-          <h2 className="mb-4 font-semibold text-slate-800">Tạo đơn nghỉ mới</h2>
-          <form onSubmit={submit} className="space-y-3" noValidate>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Loại nghỉ</label>
-              <select value={form.leave_type_id} onChange={(e) => setForm({ ...form, leave_type_id: e.target.value })}
-                className="w-full rounded-lg border px-3 py-2 text-sm">
-                <option value="">— Chọn loại nghỉ —</option>
-                {types.map((t) => <option key={t.id} value={t.id}>{t.name}{t.paid ? '' : ' (không lương)'}</option>)}
-              </select>
-              {formErrors.leave_type_id && <p className="mt-1 text-xs text-rose-600">{formErrors.leave_type_id}</p>}
-              {selectedBalance && <p className="mt-1 text-xs text-slate-400">Số dư hiện tại: còn {selectedBalance.remaining_days} ngày.</p>}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Từ ngày</label>
-                <input type="date" value={form.from_date} onChange={(e) => setForm({ ...form, from_date: e.target.value })}
-                  className="w-full rounded-lg border px-3 py-2 text-sm" />
-                {formErrors.from_date && <p className="mt-1 text-xs text-rose-600">{formErrors.from_date}</p>}
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Đến ngày</label>
-                <input type="date" value={form.to_date} onChange={(e) => setForm({ ...form, to_date: e.target.value })}
-                  className="w-full rounded-lg border px-3 py-2 text-sm" />
-                {formErrors.to_date && <p className="mt-1 text-xs text-rose-600">{formErrors.to_date}</p>}
-              </div>
-            </div>
-            {formDays > 0 && <p className="text-sm text-slate-500">Số ngày làm việc xin nghỉ: <b>{formDays}</b> ngày</p>}
-            <div>
-              <label className="mb-1 block text-sm font-medium">Lý do</label>
-              <textarea rows={3} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                placeholder="Ví dụ: Nghỉ phép năm đi du lịch cùng gia đình" className="w-full rounded-lg border px-3 py-2 text-sm" />
-              {formErrors.reason && <p className="mt-1 text-xs text-rose-600">{formErrors.reason}</p>}
-            </div>
-            <button type="submit" disabled={submitting}
-              className="w-full rounded-xl bg-sky-600 px-4 py-2.5 font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50">
-              {submitting ? 'Đang gửi…' : 'Gửi đơn nghỉ'}
-            </button>
-            <p className="text-xs text-slate-400">Đơn trùng ngày với đơn đang chờ/đã duyệt sẽ bị server từ chối.</p>
-          </form>
-        </section>
-
-        {/* === Đơn của tôi === */}
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 lg:col-span-3">
-          <h2 className="mb-4 font-semibold text-slate-800">Đơn nghỉ của tôi</h2>
-          {myLoading ? <p className="py-4 text-center text-sm text-slate-400">Đang tải…</p>
-            : myRequests.length === 0 ? <p className="py-4 text-center text-sm text-slate-400">Bạn chưa có đơn nghỉ nào.</p> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead><tr className="border-b text-slate-500">
-                    <th className="py-2 pr-3">Loại nghỉ</th><th className="py-2 pr-3">Thời gian</th>
-                    <th className="py-2 pr-3 text-center">Số ngày</th><th className="py-2 pr-3">Trạng thái</th><th className="py-2" />
-                  </tr></thead>
+        {/* === Cột phải: đơn của tôi === */}
+        <Card className="animate-fade-up lg:col-span-3" style={{ animationDelay: '120ms' }}>
+          <CardHeader
+            title="Đơn nghỉ của tôi"
+            subtitle="Theo dõi trạng thái duyệt 2 cấp của các đơn đã gửi."
+            actions={myRequests.length > 0 ? <Badge tone="blue">{myRequests.length} đơn</Badge> : null}
+          />
+          {myLoading ? <TableSkeleton rows={4} cols={4} />
+            : myRequests.length === 0 ? (
+              <EmptyState title="Bạn chưa có đơn nghỉ nào." description="Tạo đơn nghỉ mới ở biểu mẫu bên trái, đơn sẽ được gửi tới quản lý trực tiếp của bạn." />
+            ) : (
+              <div className="overflow-x-auto nice-scroll">
+                <table className="ui-table min-w-[540px]">
+                  <thead>
+                    <tr>
+                      <th className="ui-th">Loại nghỉ</th>
+                      <th className="ui-th">Thời gian</th>
+                      <th className="ui-th text-center">Số ngày</th>
+                      <th className="ui-th">Trạng thái</th>
+                      <th className="ui-th" aria-label="Thao tác" />
+                    </tr>
+                  </thead>
                   <tbody>
                     {myRequests.map((r) => (
-                      <tr key={r.id} className="border-b align-top last:border-0 hover:bg-slate-50">
-                        <td className="py-2 pr-3 font-medium">{r.leave_type_name || r.leave_type?.name || '—'}</td>
-                        <td className="py-2 pr-3 whitespace-nowrap">{fmtDate(r.from_date)} → {fmtDate(r.to_date)}
-                          <p className="max-w-56 truncate text-xs text-slate-400" title={r.reason}>{r.reason}</p></td>
-                        <td className="py-2 pr-3 text-center">{r.days_count ?? '—'}</td>
-                        <td className="py-2 pr-3">
+                      <tr key={r.id} className="ui-tr">
+                        <td className="ui-td font-semibold text-slate-800">{r.leave_type_name || r.leave_type?.name || '—'}</td>
+                        <td className="ui-td whitespace-nowrap">
+                          {fmtDate(r.from_date)} → {fmtDate(r.to_date)}
+                          <p className="mt-0.5 max-w-56 truncate text-xs text-slate-400" title={r.reason}>{r.reason}</p>
+                        </td>
+                        <td className="ui-td text-center font-semibold text-slate-800">{r.days_count ?? '—'}</td>
+                        <td className="ui-td">
                           <StatusBadge status={r.status} />
                           {r.status === 'rejected' && (r.hr_decision || r.manager_decision) && (
-                            <p className="mt-1 text-xs text-rose-500">Lý do: {r.hr_decision || r.manager_decision}</p>)}
+                            <p className="mt-1.5 text-xs font-medium text-rose-500">Lý do: {r.hr_decision || r.manager_decision}</p>)}
                         </td>
-                        <td className="py-2 text-right">
+                        <td className="ui-td text-right">
                           {['pending', 'manager_approved'].includes(r.status) && (
-                            <button type="button" onClick={() => cancel(r.id)}
-                              className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50">Huỷ đơn</button>)}
+                            <Button type="button" variant="ghost" size="sm" onClick={() => cancel(r.id)}
+                              className="text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50 hover:text-rose-700">
+                              Huỷ đơn
+                            </Button>)}
                         </td>
                       </tr>
                     ))}
@@ -323,82 +360,112 @@ export default function LeavePage() {
                 </table>
               </div>
             )}
-        </section>
+        </Card>
       </div>
 
       {/* === Khu vực duyệt đơn === */}
       {isApprover && (
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-          <h2 className="mb-1 font-semibold text-slate-800">
-            Đơn chờ tôi duyệt {user?.role === 'manager' ? '(cấp quản lý — phòng của tôi)' : '(cấp HR — duyệt cuối)'}
-          </h2>
-          <p className="mb-4 text-xs text-slate-400">Danh sách do server lọc theo cấp duyệt và phạm vi phòng ban của bạn.</p>
-          {pendingLoading ? <p className="py-4 text-center text-sm text-slate-400">Đang tải…</p>
-            : pending.length === 0 ? <p className="py-4 text-center text-sm text-slate-400">Không có đơn nào đang chờ bạn duyệt. 🎉</p> : (
-              <div className="space-y-3">
-                {pending.map((r) => (
-                  <div key={r.id} className="rounded-xl border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{r.employee_name || r.employee?.full_name}
-                          <span className="ml-2 text-sm font-normal text-slate-400">{r.department_name || r.employee?.department_name || ''}</span></p>
-                        <p className="text-sm text-slate-600">
-                          {r.leave_type_name || ''} · {fmtDate(r.from_date)} → {fmtDate(r.to_date)} · {r.days_count ?? '—'} ngày
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">Lý do: {r.reason}</p>
-                        <div className="mt-1"><StatusBadge status={r.status} /></div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" disabled={decidingId === r.id} onClick={() => decide(r.id, 'approve')}
-                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Duyệt</button>
-                        <button type="button" disabled={decidingId === r.id}
-                          onClick={() => { setRejectingId(rejectingId === r.id ? null : r.id); setRejectReason(''); }}
-                          className="rounded-lg border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">Từ chối</button>
-                      </div>
+        <Card
+          className="mt-6 animate-fade-up border-amber-200/90 bg-gradient-to-b from-amber-50/70 via-white to-white"
+          style={{ animationDelay: '160ms' }}
+        >
+          <CardHeader
+            title={`Đơn chờ tôi duyệt ${user?.role === 'manager' ? '(cấp quản lý — phòng của tôi)' : '(cấp HR — duyệt cuối)'}`}
+            subtitle="Danh sách do server lọc theo cấp duyệt và phạm vi phòng ban của bạn."
+            actions={pending.length > 0 ? <Badge tone="amber" dot>{pending.length} đơn chờ</Badge> : null}
+          />
+          {pendingLoading ? (
+            <div className="space-y-3 p-5">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : pending.length === 0 ? (
+            <EmptyState title="Không có đơn nào đang chờ bạn duyệt. 🎉" description="Khi có đơn nghỉ mới thuộc phạm vi duyệt của bạn, đơn sẽ xuất hiện tại đây." />
+          ) : (
+            <CardBody className="space-y-3">
+              {pending.map((r) => (
+                <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-card transition duration-300 ease-spring hover:shadow-lift">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800">
+                        {r.employee_name || r.employee?.full_name}
+                        <span className="ml-2 text-sm font-normal text-slate-400">{r.department_name || r.employee?.department_name || ''}</span>
+                      </p>
+                      <p className="mt-0.5 text-sm text-slate-600">
+                        {r.leave_type_name || ''} · {fmtDate(r.from_date)} → {fmtDate(r.to_date)} · {r.days_count ?? '—'} ngày
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-500">Lý do: {r.reason}</p>
+                      <div className="mt-2"><StatusBadge status={r.status} /></div>
                     </div>
-                    {rejectingId === r.id && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
-                          placeholder="Nhập lý do từ chối (bắt buộc)" className="min-w-64 flex-1 rounded-lg border px-3 py-2 text-sm" />
-                        <button type="button" disabled={decidingId === r.id} onClick={() => decide(r.id, 'reject')}
-                          className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">Xác nhận từ chối</button>
-                      </div>
-                    )}
+                    <div className="flex shrink-0 gap-2">
+                      <Button type="button" variant="accent" size="sm" loading={decidingId === r.id} onClick={() => decide(r.id, 'approve')}>
+                        Duyệt
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" disabled={decidingId === r.id}
+                        onClick={() => { setRejectingId(rejectingId === r.id ? null : r.id); setRejectReason(''); }}
+                        className="text-rose-600 ring-1 ring-inset ring-rose-300/70 hover:bg-rose-50 hover:text-rose-700">
+                        Từ chối
+                      </Button>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-        </section>
+                  {rejectingId === r.id && (
+                    <div className="mt-3 flex animate-scale-in flex-wrap gap-2">
+                      <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Nhập lý do từ chối (bắt buộc)" className="min-w-64 flex-1" />
+                      <Button type="button" variant="danger" size="sm" loading={decidingId === r.id} onClick={() => decide(r.id, 'reject')}>
+                        Xác nhận từ chối
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardBody>
+          )}
+        </Card>
       )}
 
       {/* === Lịch nghỉ tháng === */}
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold text-slate-800">Lịch nghỉ đã duyệt trong tháng</h2>
-          <MonthNav cursor={cursor} onChange={setCursor} />
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
-          {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => <div key={d} className="py-1">{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {calendarCells.map((cell, i) => (
-            <div key={i} className={`min-h-20 rounded-lg p-1.5 text-left ${cell ? 'bg-slate-50' : 'bg-transparent'}`}>
-              {cell && (
-                <>
-                  <p className={`text-xs font-semibold ${cell.iso === toISODate(new Date()) ? 'text-sky-600' : 'text-slate-500'}`}>{cell.day}</p>
-                  <div className="mt-1 space-y-1">
-                    {cell.leaves.slice(0, 3).map((lv) => (
-                      <p key={lv.id} title={`${lv.employee_name} — ${lv.leave_type_name || ''}`}
-                        className="truncate rounded bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-700">{lv.employee_name}</p>
-                    ))}
-                    {cell.leaves.length > 3 && <p className="text-[11px] text-slate-400">+{cell.leaves.length - 3} người nữa</p>}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+      <Card className="mt-6 animate-fade-up" style={{ animationDelay: '200ms' }}>
+        <CardHeader
+          title="Lịch nghỉ đã duyệt trong tháng"
+          subtitle="Tổng quan ngày nghỉ đã duyệt của toàn công ty."
+          actions={<MonthNav cursor={cursor} onChange={setCursor} />}
+        />
+        <CardBody>
+          <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => <div key={d} className="py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {calendarCells.map((cell, i) => (
+              <div
+                key={i}
+                className={`min-h-[76px] rounded-xl p-1.5 text-left transition-colors duration-200 ${
+                  !cell
+                    ? 'bg-transparent'
+                    : cell.iso === todayISO
+                      ? 'border border-brand-300 bg-brand-50/70 ring-1 ring-brand-200'
+                      : 'border border-slate-100 bg-slate-50/60 hover:bg-slate-50'
+                }`}
+              >
+                {cell && (
+                  <>
+                    <p className={`text-xs font-bold ${cell.iso === todayISO ? 'text-brand-700' : 'text-slate-500'}`}>{cell.day}</p>
+                    <div className="mt-1 space-y-1">
+                      {cell.leaves.slice(0, 3).map((lv) => (
+                        <p key={lv.id} title={`${lv.employee_name} — ${lv.leave_type_name || ''}`}
+                          className="truncate rounded-md bg-accent-50 px-1.5 py-0.5 text-[11px] font-medium text-accent-700 ring-1 ring-inset ring-accent-600/15">
+                          {lv.employee_name}
+                        </p>
+                      ))}
+                      {cell.leaves.length > 3 && <p className="px-1 text-[11px] font-medium text-slate-400">+{cell.leaves.length - 3} người nữa</p>}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardBody>
+      </Card>
     </div>
   );
 }

@@ -1,8 +1,25 @@
 // Trang Phòng ban & Chức vụ — route /departments
 // Danh sách phòng ban (trưởng phòng, số nhân viên) và các chức vụ thuộc
 // từng phòng. CRUD chỉ hiển thị với admin / hr (server vẫn kiểm tra quyền).
+// Trình bày theo design system v2: .page-shell, PageHeader, Card, Badge,
+// bảng .ui-table và Modal/Button/FormField của UI kit (components/ui).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../app/AuthContext.jsx';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Badge,
+  Modal,
+  PageHeader,
+  EmptyState,
+  Alert,
+  FormField,
+  Input,
+  Select,
+  Skeleton,
+} from '../../../components/ui';
+import { IconBuilding, IconUser, IconEdit, IconTrash, IconBriefcase } from '../../../components/icons.jsx';
 import {
   getDepartments,
   createDepartment,
@@ -34,52 +51,38 @@ function getCurrentRole() {
   return null;
 }
 
-function Modal({ title, onClose, children }) {
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4" onClick={onClose}>
-      <div className="my-8 w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
-          <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Đóng">✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, error, required = false, children }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </span>
-      {children}
-      {error && <span className="mt-1 block text-sm text-red-600">{error}</span>}
-    </label>
-  );
-}
-
-const inputClass = (hasError) =>
-  `w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 ${
-    hasError ? 'border-red-400 focus:ring-red-200' : 'border-slate-300 focus:border-indigo-400 focus:ring-indigo-200'
-  }`;
+const errorInputClass = (hasError) =>
+  hasError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : '';
 
 function FormActions({ onCancel, submitting, submitLabel }) {
   return (
-    <div className="flex justify-end gap-2 pt-1">
-      <button type="button" onClick={onCancel} disabled={submitting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+    <div className="flex justify-end gap-2.5 pt-1">
+      <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
         Huỷ
-      </button>
-      <button type="submit" disabled={submitting} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60">
+      </Button>
+      <Button type="submit" loading={submitting} disabled={submitting}>
         {submitting ? 'Đang lưu...' : submitLabel}
-      </button>
+      </Button>
     </div>
+  );
+}
+
+// Nút thao tác dạng ghost chỉ có icon (Sửa / Xóa) dùng trong thẻ và bảng.
+function GhostIconButton({ label, tone = 'brand', onClick }) {
+  const tones = {
+    brand: 'text-slate-400 hover:bg-brand-50 hover:text-brand-600',
+    danger: 'text-slate-400 hover:bg-rose-50 hover:text-rose-600',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`rounded-lg p-2 transition duration-200 hover:scale-105 active:scale-95 ${tones[tone] || tones.brand}`}
+    >
+      {label === 'Sửa' ? <IconEdit size={16} /> : <IconTrash size={16} />}
+    </button>
   );
 }
 
@@ -114,18 +117,20 @@ function DepartmentForm({ initial, employees, onSubmit, onCancel, submitting }) 
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {formError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</div>}
-      <Field label="Tên phòng ban" required error={errors.name}>
-        <input
-          className={inputClass(errors.name)}
+      {formError && <Alert tone="error">{formError}</Alert>}
+      <FormField
+        label={<>Tên phòng ban <span className="text-rose-500">*</span></>}
+        error={errors.name}
+      >
+        <Input
+          className={errorInputClass(errors.name)}
           value={form.name}
           onChange={(e) => { setForm((f) => ({ ...f, name: e.target.value })); setErrors((p) => ({ ...p, name: undefined })); }}
           placeholder="VD: Phòng Kỹ thuật"
         />
-      </Field>
-      <Field label="Trưởng phòng">
-        <select
-          className={inputClass(false)}
+      </FormField>
+      <FormField label="Trưởng phòng">
+        <Select
           value={form.manager_id}
           onChange={(e) => setForm((f) => ({ ...f, manager_id: e.target.value }))}
         >
@@ -133,8 +138,8 @@ function DepartmentForm({ initial, employees, onSubmit, onCancel, submitting }) 
           {employees.map((emp) => (
             <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.code})</option>
           ))}
-        </select>
-      </Field>
+        </Select>
+      </FormField>
       <FormActions onCancel={onCancel} submitting={submitting} submitLabel={initial ? 'Lưu thay đổi' : 'Thêm phòng ban'} />
     </form>
   );
@@ -169,18 +174,24 @@ function PositionForm({ initial, departments, defaultDepartmentId, onSubmit, onC
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {formError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</div>}
-      <Field label="Tên chức vụ" required error={errors.title}>
-        <input
-          className={inputClass(errors.title)}
+      {formError && <Alert tone="error">{formError}</Alert>}
+      <FormField
+        label={<>Tên chức vụ <span className="text-rose-500">*</span></>}
+        error={errors.title}
+      >
+        <Input
+          className={errorInputClass(errors.title)}
           value={form.title}
           onChange={(e) => { setForm((f) => ({ ...f, title: e.target.value })); setErrors((p) => ({ ...p, title: undefined })); }}
           placeholder="VD: Lập trình viên"
         />
-      </Field>
-      <Field label="Phòng ban" required error={errors.department_id}>
-        <select
-          className={inputClass(errors.department_id)}
+      </FormField>
+      <FormField
+        label={<>Phòng ban <span className="text-rose-500">*</span></>}
+        error={errors.department_id}
+      >
+        <Select
+          className={errorInputClass(errors.department_id)}
           value={form.department_id}
           onChange={(e) => { setForm((f) => ({ ...f, department_id: e.target.value })); setErrors((p) => ({ ...p, department_id: undefined })); }}
         >
@@ -188,8 +199,8 @@ function PositionForm({ initial, departments, defaultDepartmentId, onSubmit, onC
           {departments.map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>
           ))}
-        </select>
-      </Field>
+        </Select>
+      </FormField>
       <FormActions onCancel={onCancel} submitting={submitting} submitLabel={initial ? 'Lưu thay đổi' : 'Thêm chức vụ'} />
     </form>
   );
@@ -250,6 +261,9 @@ export default function DepartmentListPage() {
     dept.manager?.full_name
     || employees.find((e) => e.id === dept.manager_id)?.full_name
     || 'Chưa gán';
+
+  const departmentName = (deptId) =>
+    departments.find((d) => d.id === deptId)?.name || '—';
 
   const positionsOf = (deptId) => positions.filter((p) => p.department_id === deptId);
 
@@ -321,121 +335,148 @@ export default function DepartmentListPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-4 sm:p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Phòng ban & Chức vụ</h1>
-          <p className="text-sm text-slate-500">Cơ cấu tổ chức công ty — {departments.length} phòng ban, {positions.length} chức vụ</p>
-        </div>
-        {canWrite && (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPosTarget({})}
-              className="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-            >
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Cơ cấu tổ chức"
+        title="Phòng ban & Chức vụ"
+        subtitle={`Cơ cấu tổ chức công ty — ${departments.length} phòng ban, ${positions.length} chức vụ`}
+        actions={canWrite && (
+          <>
+            <Button type="button" variant="secondary" onClick={() => setPosTarget({})}>
               + Thêm chức vụ
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeptTarget('create')}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
-            >
+            </Button>
+            <Button type="button" onClick={() => setDeptTarget('create')}>
               + Thêm phòng ban
-            </button>
-          </div>
+            </Button>
+          </>
         )}
-      </div>
+      />
 
       {notice && (
-        <div className="mb-4 flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+        <Alert tone="success" className="mb-5 flex items-center justify-between gap-3">
           <span>{notice}</span>
-          <button type="button" onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-700">✕</button>
-        </div>
+          <button type="button" onClick={() => setNotice('')} className="shrink-0 text-emerald-500 transition hover:text-emerald-700" aria-label="Đóng thông báo">✕</button>
+        </Alert>
       )}
       {error && (
-        <div className="mb-4 flex items-center justify-between rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+        <Alert tone="error" className="mb-5 flex items-center justify-between gap-3">
           <span>{error}</span>
-          <button type="button" onClick={() => setError('')} className="text-red-400 hover:text-red-600">✕</button>
-        </div>
+          <button type="button" onClick={() => setError('')} className="shrink-0 text-rose-400 transition hover:text-rose-600" aria-label="Đóng thông báo">✕</button>
+        </Alert>
       )}
 
       {loading ? (
-        <div className="rounded-2xl bg-white p-10 text-center text-slate-400 shadow-sm">Đang tải dữ liệu...</div>
-      ) : departments.length === 0 ? (
-        <div className="rounded-2xl bg-white p-10 text-center text-slate-400 shadow-sm">
-          Chưa có phòng ban nào. {canWrite && 'Hãy bấm "Thêm phòng ban" để tạo cơ cấu tổ chức.'}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 w-full" />
+          ))}
+          <span className="sr-only">Đang tải dữ liệu...</span>
         </div>
+      ) : departments.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<IconBuilding size={26} />}
+            title="Chưa có phòng ban nào."
+            description={canWrite ? 'Hãy bấm "Thêm phòng ban" để tạo cơ cấu tổ chức.' : undefined}
+          />
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {departments.map((dept) => (
-            <article key={dept.id} className="flex flex-col rounded-2xl bg-white p-5 shadow-sm transition hover:shadow-md">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-800">{dept.name}</h2>
-                  <p className="mt-0.5 text-sm text-slate-500">
-                    Trưởng phòng: <span className="font-medium text-slate-600">{managerName(dept)}</span>
-                  </p>
-                  <p className="text-sm text-slate-500">{employeeCount(dept)} nhân viên</p>
+        <>
+          <div className="stagger grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {departments.map((dept) => (
+              <Card key={dept.id} hover className="flex flex-col p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-start gap-3.5">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
+                      <IconBuilding size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-base font-bold tracking-[-0.01em] text-slate-900">{dept.name}</h2>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                        <IconUser size={14} className="shrink-0 text-slate-400" />
+                        <span className="truncate">
+                          Trưởng phòng: <span className="font-semibold text-slate-700">{managerName(dept)}</span>
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  {canWrite && (
+                    <div className="flex shrink-0 gap-0.5">
+                      <GhostIconButton label="Sửa" onClick={() => setDeptTarget(dept)} />
+                      <GhostIconButton label="Xóa" tone="danger" onClick={() => setDeleteDept(dept)} />
+                    </div>
+                  )}
                 </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Badge tone="blue" dot>{employeeCount(dept)} nhân viên</Badge>
+                  <Badge tone="slate">{positionsOf(dept.id).length} chức vụ</Badge>
+                </div>
+
                 {canWrite && (
-                  <div className="flex shrink-0 gap-1">
-                    <button type="button" onClick={() => setDeptTarget(dept)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50">
-                      Sửa
-                    </button>
-                    <button type="button" onClick={() => setDeleteDept(dept)} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                      Xóa
-                    </button>
+                  <div className="mt-auto pt-4">
+                    <div className="border-t border-slate-100 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setPosTarget({ departmentId: dept.id })}
+                        className="text-sm font-semibold text-brand-600 transition hover:text-brand-800"
+                      >
+                        + Thêm chức vụ vào phòng này
+                      </button>
+                    </div>
                   </div>
                 )}
-              </div>
+              </Card>
+            ))}
+          </div>
 
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Chức vụ trong phòng</p>
-                {positionsOf(dept.id).length === 0 ? (
-                  <p className="text-sm text-slate-400">Chưa có chức vụ nào.</p>
-                ) : (
-                  <ul className="flex flex-wrap gap-2">
-                    {positionsOf(dept.id).map((pos) => (
-                      <li key={pos.id} className="group inline-flex items-center gap-1 rounded-full bg-slate-100 py-1 pl-3 pr-2 text-sm text-slate-700">
-                        {pos.title}
+          <Card className="mt-6 animate-fade-up">
+            <CardHeader
+              title="Danh sách chức vụ"
+              subtitle={`${positions.length} chức vụ thuộc ${departments.length} phòng ban`}
+              actions={canWrite && (
+                <Button type="button" size="sm" variant="secondary" onClick={() => setPosTarget({})}>
+                  + Thêm chức vụ
+                </Button>
+              )}
+            />
+            {positions.length === 0 ? (
+              <EmptyState
+                icon={<IconBriefcase size={26} />}
+                title="Chưa có chức vụ nào."
+                description={canWrite ? 'Bấm "+ Thêm chức vụ" để tạo chức vụ đầu tiên cho phòng ban.' : undefined}
+              />
+            ) : (
+              <div className="nice-scroll overflow-x-auto">
+                <table className="ui-table">
+                  <thead>
+                    <tr>
+                      <th className="ui-th">Chức vụ</th>
+                      <th className="ui-th">Phòng ban</th>
+                      {canWrite && <th className="ui-th text-right">Thao tác</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positions.map((pos) => (
+                      <tr key={pos.id} className="ui-tr">
+                        <td className="ui-td font-semibold text-slate-800">{pos.title}</td>
+                        <td className="ui-td">{departmentName(pos.department_id)}</td>
                         {canWrite && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setPosTarget({ position: pos })}
-                              className="rounded-full px-1 text-xs text-indigo-500 opacity-0 transition group-hover:opacity-100 hover:text-indigo-700"
-                              title="Sửa chức vụ"
-                            >
-                              ✎
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeletePos(pos)}
-                              className="rounded-full px-1 text-xs text-red-500 opacity-0 transition group-hover:opacity-100 hover:text-red-700"
-                              title="Xóa chức vụ"
-                            >
-                              ✕
-                            </button>
-                          </>
+                          <td className="ui-td">
+                            <div className="flex items-center justify-end gap-0.5">
+                              <GhostIconButton label="Sửa" onClick={() => setPosTarget({ position: pos })} />
+                              <GhostIconButton label="Xóa" tone="danger" onClick={() => setDeletePos(pos)} />
+                            </div>
+                          </td>
                         )}
-                      </li>
+                      </tr>
                     ))}
-                  </ul>
-                )}
-                {canWrite && (
-                  <button
-                    type="button"
-                    onClick={() => setPosTarget({ departmentId: dept.id })}
-                    className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                  >
-                    + Thêm chức vụ vào phòng này
-                  </button>
-                )}
+                  </tbody>
+                </table>
               </div>
-            </article>
-          ))}
-        </div>
+            )}
+          </Card>
+        </>
       )}
 
       {/* Modal phòng ban */}
@@ -467,37 +508,47 @@ export default function DepartmentListPage() {
 
       {/* Modal xác nhận xóa phòng ban */}
       {deleteDept && (
-        <Modal title="Xóa phòng ban" onClose={() => !submitting && setDeleteDept(null)}>
-          <p className="text-sm text-slate-600">
+        <Modal
+          title="Xóa phòng ban"
+          onClose={() => !submitting && setDeleteDept(null)}
+          actions={(
+            <>
+              <Button type="button" variant="secondary" onClick={() => setDeleteDept(null)} disabled={submitting}>
+                Huỷ
+              </Button>
+              <Button type="button" variant="danger" onClick={handleDeleteDept} disabled={submitting} loading={submitting}>
+                {submitting ? 'Đang xóa...' : 'Xóa phòng ban'}
+              </Button>
+            </>
+          )}
+        >
+          <p className="text-sm leading-relaxed text-slate-600">
             Anh/chị có chắc muốn xóa <strong>{deleteDept.name}</strong>?
             Phòng ban đang có nhân viên hoặc chức vụ sẽ không xóa được — hệ thống sẽ yêu cầu chuyển nhân viên sang phòng khác trước.
           </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => setDeleteDept(null)} disabled={submitting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-              Huỷ
-            </button>
-            <button type="button" onClick={handleDeleteDept} disabled={submitting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60">
-              {submitting ? 'Đang xóa...' : 'Xóa phòng ban'}
-            </button>
-          </div>
         </Modal>
       )}
 
       {/* Modal xác nhận xóa chức vụ */}
       {deletePos && (
-        <Modal title="Xóa chức vụ" onClose={() => !submitting && setDeletePos(null)}>
-          <p className="text-sm text-slate-600">
+        <Modal
+          title="Xóa chức vụ"
+          onClose={() => !submitting && setDeletePos(null)}
+          actions={(
+            <>
+              <Button type="button" variant="secondary" onClick={() => setDeletePos(null)} disabled={submitting}>
+                Huỷ
+              </Button>
+              <Button type="button" variant="danger" onClick={handleDeletePos} disabled={submitting} loading={submitting}>
+                {submitting ? 'Đang xóa...' : 'Xóa chức vụ'}
+              </Button>
+            </>
+          )}
+        >
+          <p className="text-sm leading-relaxed text-slate-600">
             Anh/chị có chắc muốn xóa chức vụ <strong>{deletePos.title}</strong>?
             Nhân viên đang giữ chức vụ này sẽ cần được gán lại chức vụ khác.
           </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => setDeletePos(null)} disabled={submitting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
-              Huỷ
-            </button>
-            <button type="button" onClick={handleDeletePos} disabled={submitting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60">
-              {submitting ? 'Đang xóa...' : 'Xóa chức vụ'}
-            </button>
-          </div>
         </Modal>
       )}
     </div>

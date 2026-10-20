@@ -1,133 +1,182 @@
-# Design System — Web HRM tích hợp AI (Client)
+# Design System v2 (Enterprise) — Web HRM AI
 
-> Áp dụng nguyên tắc của **ui-ux-pro-max-skill** (nextlevelbuilder): design system nhất quán trước, component sau. Ngành: **B2B SaaS / HR Tech** — ưu tiên tin cậy, rõ ràng, mật độ thông tin vừa phải. Giao diện tiếng Việt, dùng bởi HR/Manager/Employee trên cả máy tính và điện thoại (chấm công ở 360–375px).
+Tài liệu này là **nguồn sự thật về giao diện** của `client/`. Mọi page/feature phải dùng token và component ở đây — **không tự chế màu, bóng đổ, bo góc hay animation riêng**. Nguồn token gốc: `tailwind.config.js` + `src/styles/tokens.css` (sửa màu phải sửa đồng bộ cả hai). Cấu trúc thư mục và quy ước code: xem [STRUCTURE.md](./STRUCTURE.md).
 
-Tài liệu này là "nguồn sự thật" về giao diện. Mọi page/feature mới phải dùng token + component ở đây, **không tự chế màu/kiểu riêng**.
+Phong cách: **B2B SaaS / HR Tech chuẩn doanh nghiệp** — tin cậy, sạch, mật độ thông tin vừa phải, phân cấp thị giác rõ. Tham chiếu tinh thần: Linear/Stripe Dashboard (tinh gọn, tương phản tốt) trên nền nhận diện xanh doanh nghiệp + navy.
 
-## 0. Cách dùng nhanh
+---
 
-```jsx
-// main.jsx — import đúng thứ tự này, MỘT lần duy nhất
-import "./styles/tokens.css";
-import "./styles/base.css";
-import "./styles/components.css";
-import "./styles/animations.css";
-```
+## 1. Bảng màu
 
-| File | Nội dung |
-|---|---|
-| `src/styles/tokens.css` | Toàn bộ CSS variables: màu, font, spacing, radius, shadow, motion |
-| `src/styles/base.css` | Reset, typography, focus-visible, layout khung app, responsive nền |
-| `src/styles/components.css` | Class component dùng chung (btn, card, table, badge, form, modal, sidebar, toast, skeleton...) |
-| `src/styles/animations.css` | Keyframes + class hiệu ứng, tất cả ≤ 300ms |
-| `src/components/icons.jsx` | Icon SVG inline (components + map `Icons` + `<Icon name="..."/>`) |
-| `src/components/ui.jsx` | `Button, Card, Badge, StatusBadge, Input, Select, DataTable, Modal, ConfirmModal, ToastProvider/useToast, StatCard, Skeleton, EmptyState, Spinner` |
+### 1.1 Brand — xanh doanh nghiệp (màu chính)
 
-## 1. Pattern đã chọn
-
-- **Kiểu ứng dụng:** Admin dashboard cổ điển — sidebar navy cố định bên trái (desktop) + topbar + vùng nội dung tối đa 1440px. Đây là pattern người dùng B2B quen thuộc, học 1 lần dùng mọi màn hình.
-- **Bố cục danh sách chuẩn (mọi trang CRUD):** tiêu đề trang (`.page-title` + `.page-subtitle`) → `.list-toolbar` (ô tìm kiếm + nút "Thêm mới") → `.table-wrap` (bảng + phân trang) → xác nhận xoá bằng `ConfirmModal` → phản hồi bằng Toast.
-- **Dashboard:** `.grid-stats` 4 cột (→ 2 cột ≤1024px → 1 cột ≤375px) `StatCard`, dưới là lưới `.grid-2` biểu đồ/bảng tóm tắt.
-- **Màu trạng thái nghiệp vụ thống nhất** qua `StatusBadge` + bảng `STATUS_BADGE` trong `ui.jsx` (đang làm/chờ duyệt/đã duyệt/từ chối/đi muộn...) — không tự đặt màu trạng thái ở từng trang.
-- **AI được nhận diện riêng nhưng không lòe loẹt:** icon `IconSparkles`, accent teal, thanh `.progress` cho điểm phù hợp CV 0–100, luôn kèm badge/chú thích "AI gợi ý — HR quyết định".
-
-## 2. Bảng màu (hex)
-
-### Brand — xanh dương tin cậy
 | Token | Hex | Dùng cho |
 |---|---|---|
-| `--color-primary-600` | `#2563EB` | Nút chính, sidebar active, trang đang chọn |
-| `--color-primary-700` | `#1D4ED8` | Hover nút chính, link |
-| `--color-primary-50/100` | `#EFF6FF` / `#DBEAFE` | Nền icon stat, hover ghost, vòng focus mềm |
-| `--color-primary-900` | `#1E3A8A` | Chữ nhấn mạnh trên nền sáng |
+| `brand-50` | `#EEF4FF` | Nền nhạt: ô icon, badge blue, vùng nhấn nhẹ |
+| `brand-100` | `#DCE7FD` | Viền/ring nhạt cho StatCard |
+| `brand-200` | `#C0D4FE` | Viền Alert info |
+| `brand-300` | `#94B8FD` | Điểm biểu đồ phụ, trạng thái nhẹ |
+| `brand-400` | `#6193FA` | Hover phụ, icon phụ |
+| `brand-500` | `#3D6EF5` | Spinner, điểm nhấn, `--chart-1` đi cùng tông 600 |
+| `brand-600` | `#274FEA` | **Màu chính**: nút primary, link, eyebrow, focus ring |
+| `brand-700` | `#1F3FD8` | Hover của primary, chữ badge blue |
+| `brand-800` | `#2134AE` | Active của primary |
+| `brand-900` | `#0F2160` | Chữ trên nền brand-50 (Alert info) |
+| `brand-950` | `#0A1638` | Điểm tối nhất của brand (hiếm dùng) |
 
-### Accent — teal (dùng tiết chế)
+### 1.2 Navy — vùng tối
+
 | Token | Hex | Dùng cho |
 |---|---|---|
-| `--color-accent-600` | `#0D9488` | Thanh progress điểm AI, điểm nhấn phụ |
-| `--color-accent-700` | `#0F766E` | Chữ/icon accent (stat card loại 2), badge accent |
-| `--color-accent-100` | `#CCFBF1` | Nền icon accent |
+| `navy-700` | `#1B3358` | Hover trong sidebar |
+| `navy-800` | `#14294B` | Nút `dark` active, lớp phủ sidebar |
+| `navy-900` | `#0E1F3C` | **Sidebar**, nút `dark` |
+| `navy-950` | `#0A1730` | Nền sâu nhất, lớp phủ modal (`navy-950/55`) |
 
-### Neutral & surface (slate)
-`#F8FAFC` nền app · `#FFFFFF` surface/card · `#F1F5F9` nền phụ/hover · viền `#E2E8F0` (mạnh: `#CBD5E1`) · chữ chính `#0F172A` · chữ phụ `#475569` · chữ mờ `#64748B` · sidebar navy đặc `#0F2440` (màu phẳng, không gradient).
+### 1.3 Accent — teal (điểm nhấn phụ, tính năng AI)
 
-### Semantic (chữ luôn dùng bản đậm để đạt tương phản)
-| Trạng thái | Chữ | Nền | Viền |
+| Token | Hex | Dùng cho |
+|---|---|---|
+| `accent-50` | `#EFFDF9` | Nền badge teal, ô icon |
+| `accent-100` | `#C9F7EA` | Ring StatCard teal |
+| `accent-300` | `#5FE3C3` | Điểm biểu đồ, trạng thái nhẹ |
+| `accent-400` | `#27CFA9` | Icon/điểm nhấn phụ |
+| `accent-500` | `#0DB795` | Nút `accent`, badge teal |
+| `accent-600` | `#02957B` | Hover của accent |
+| `accent-700` | `#017763` | Active của accent, chữ badge teal |
+
+### 1.4 Nền & trung tính
+
+- `canvas` `#F4F7FB` — nền toàn ứng dụng (body).
+- Thang `slate` của Tailwind cho chữ và viền: chữ chính `slate-900`, chữ phụ `slate-500`, chữ mờ `slate-400`, viền thẻ `slate-200`, đường kẻ trong thẻ `slate-100`, nền phụ `slate-50`.
+- Thẻ nội dung luôn **trắng** (`bg-white`) trên nền canvas — không đặt màu nền lạ cho card.
+
+### 1.5 Màu trạng thái (ngữ nghĩa — chỉ dùng qua Badge/Alert tones)
+
+| Nghĩa | Tông Tailwind | Hex đại diện | Ví dụ trạng thái HRM |
 |---|---|---|---|
-| Success | `#15803D` | `#F0FDF4` | `#BBF7D0` |
-| Warning | `#B45309` | `#FFFBEB` | `#FDE68A` |
-| Danger | `#B91C1C` (nút: `#DC2626`) | `#FEF2F2` | `#FECACA` |
-| Info | `#1D4ED8` | `#EFF6FF` | `#BFDBFE` |
+| Thành công / đã duyệt | emerald | `#059669` (600) trên nền `#ECFDF5` (50) | Đã duyệt, Đang làm việc, Kỳ lương đã chốt |
+| Chờ / cảnh báo | amber | `#D97706` (600) trên nền `#FFFBEB` (50) | Chờ quản lý duyệt, Chờ HR duyệt, Sắp hết hạn |
+| Lỗi / từ chối / nguy hiểm | rose | `#E11D48` (600) trên nền `#FFF1F2` (50) | Đã từ chối, nút xóa, thông báo lỗi |
+| Thông tin / đang xử lý | brand | `#274FEA` trên nền `#EEF4FF` | Mới nộp, Đang tuyển, Alert info |
+| Đặc biệt | violet | `#7C3AED` (600) trên nền `#F5F3FF` (50) | Nhóm trạng thái riêng cần tách biệt |
+| Trung tính | slate | `#475569` (600) trên nền `#F1F5F9` (100) | Nháp, Đã đóng, Đã huỷ |
 
-**Tương phản:** mọi cặp chữ/nền trên đều ≥ 4.5:1 cho chữ thường (primary `#2563EB` trên trắng = 5.2:1, chữ phụ `#475569` trên trắng = 7.5:1, danger `#B91C1C` trên `#FEF2F2` ≈ 5.9:1). Không dùng chữ gray-400 (`#94A3B8`) cho nội dung — chỉ dùng cho placeholder/icon trang trí.
+### 1.6 Màu biểu đồ (Recharts — biến CSS trong `tokens.css`)
 
-## 3. Typography
+`--chart-1` `#274FEA` · `--chart-2` `#0DB795` · `--chart-3` `#F59E0B` · `--chart-4` `#8B5CF6` · `--chart-5` `#EC4899` · lưới `--chart-grid` `#E6ECF5`. Chỉ dùng cho biểu đồ, không dùng cho chữ/nút.
 
-- **Font stack:** `"Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` — Inter hỗ trợ tiếng Việt tốt, hợp số liệu bảng lương. Mono: `"JetBrains Mono", Consolas, monospace` cho mã NV/mã đơn.
-- **Thang cỡ:** 12 / 14 / 16 / 18 / 20 / 24 / 30px (`--text-xs` → `--text-3xl`). Body 16px, nội dung bảng/form 14px, tiêu đề trang 24px bold.
-- **Weight:** 400 thường · 500 medium (nút, menu) · 600 semibold (tiêu đề, th bảng) · 700 bold (số liệu stat, tiêu đề trang).
-- Số tiền/số liệu dùng `font-variant-numeric: tabular-nums` (đã đặt ở `.cell-numeric`) để cột số thẳng hàng.
+## 2. Typography — Inter
 
-## 4. Spacing, radius, shadow
+- Font duy nhất: **Inter Variable / Inter** (đóng gói qua `@fontsource-variable/inter`, không phụ thuộc CDN), fallback `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`. Bật `antialiased` + `optimizeLegibility` ở `base.css`.
+- Thang cỡ chữ đang dùng trong kit:
 
-- Spacing thang 4px: `--space-1..12` (4 → 48px). Padding card 20px, trang 24px (16px mobile, 12px ở 375px).
-- Radius: 6px (chip, nút nhỏ) · 10px (nút, input) · 14px (card, modal) · full (badge, avatar).
-- Shadow: chỉ 3 mức `--shadow-sm/md/lg`, tông `rgba(15,23,42,...)` rất nhẹ — flat là chính, shadow chỉ để phân lớp (card nổi nhẹ, modal/toast nổi rõ).
-
-## 5. Motion
-
-- Mọi hiệu ứng **≤ 300ms**, chỉ animate `transform`/`opacity` (không animate width/height/top) để giữ 60fps và tải trang mượt.
-- Page mới: `.animate-page` (fade + trượt lên 8px, 300ms, ease-out) gắn ở container của route.
-- Modal: overlay fade 150ms + dialog scale 0.97→1 (200ms). Toast: trượt từ phải 200ms. Skeleton: shimmer 1.4s tuyến tính. Nút: `:active` lún 1px. Hover thẻ: nâng −2px + shadow-md (class `.card-hover`).
-- `prefers-reduced-motion: reduce` ⇒ tắt toàn bộ animation/transition (khai báo ở cả `base.css` và `animations.css`).
-
-## 6. Icon
-
-- 37 icon SVG stroke (1.8px, bo góc, `currentColor`) trong `icons.jsx`: `home, users, user, building, clock, calendar, money, briefcase, chat, bell, chart, logout, search, plus, edit, trash, check, x, chevronLeft/Right/Down, eye, download, upload, fileText, sparkles (AI), shield, settings (sliders), menu, filter, alert, info, arrowRight, mail, phone, send, lock, clipboard`.
-- Dùng: `import { IconUsers } from "../components/icons"` hoặc `<Icon name="users" size={18} />`. Kích thước chuẩn: 18–20px trong nút/menu, 22–24px ở stat card.
-- **Không dùng emoji làm icon**, không dùng icon font ngoài.
-
-## 7. Responsive
-
-| Breakpoint | Hành vi |
+| Vai trò | Cỡ / trọng lượng |
 |---|---|
-| 375px (mobile nhỏ) | Stats 1 cột, phân trang xếp dọc, nút footer modal full-width, padding trang 12px — luồng chấm công/xem phiếu lương dùng tốt bằng 1 tay |
-| 768px (tablet) | Sidebar ẩn (app shell dùng menu trượt riêng), `.grid-2` → 1 cột, padding 16px |
-| 1024px (laptop) | Stats 2 cột, padding 20px |
-| 1440px (desktop) | Nội dung khóa tối đa `--content-max: 1440px`, stats 4 cột |
+| Eyebrow (nhãn mục nhỏ) | 11px, bold, uppercase, tracking `0.14em`, `brand-600` |
+| Tiêu đề trang (PageHeader) | 26px (lg: 30px), extrabold (800), tracking `-0.02em` |
+| Tiêu đề thẻ (CardHeader) | 15px, bold (700) |
+| Tiêu đề modal | 18px, bold (700) |
+| Số liệu lớn (StatCard) | 26px, extrabold (800), tracking `-0.02em` |
+| Nhãn ô số liệu / nhãn phụ | 13px, semibold (600), `slate-500` |
+| Thân bài | 14px (text-sm), line-height relaxed |
+| Mô tả phụ | 13–14px, `slate-500` |
+| Chữ nhỏ/ghi chú | 12px, `slate-400` |
 
-Bảng luôn cuộn ngang trong `.table-wrap` thay vì vỡ layout.
+- Chỉ dùng trọng lượng 400/500/600/700/800. Tiêu đề luôn đậm hơn nội dung ít nhất 2 cấp thị giác (cỡ + trọng lượng).
 
-## 8. Anti-patterns ĐÃ TRÁNH (theo ui-ux-pro-max)
+## 3. Spacing, radius, shadow
 
-- ❌ Gradient tím–hồng/xanh–tím "AI style", màu neon, glassmorphism — ✅ màu phẳng, primary blue + 1 accent teal.
-- ❌ Emoji làm icon, icon không nhất quán độ dày nét — ✅ 1 bộ SVG stroke duy nhất.
-- ❌ Chữ xám nhạt trên nền sáng không đạt tương phản; trạng thái chỉ khác nhau bằng màu mà không có nhãn chữ — ✅ badge luôn có chữ, màu chữ semantic ≥ 4.5:1.
-- ❌ `outline: none` khi focus — ✅ `:focus-visible` có vòng focus 2px toàn cục + ring riêng cho input.
-- ❌ Animation dài > 400ms, animate layout, hiệu ứng lòe loẹt gây chậm — ✅ ≤ 300ms, transform/opacity, có reduced-motion.
-- ❌ Nút/link không có `cursor: pointer`, vùng bấm quá nhỏ — ✅ mọi `.btn`/`.btn-icon`/`.sidebar-link`/`.pagination-btn` đều có cursor pointer, chiều cao bấm tối thiểu 32–40px.
-- ❌ Mỗi trang tự chế bảng/form/nút — ✅ bắt buộc dùng component dùng chung ở `ui.jsx` + class ở `components.css`.
-- ❌ Shadow nặng, bo góc quá tròn kiểu "app giải trí" — ✅ shadow nhẹ, radius tối đa 14px cho khối lớn.
-- ❌ Loading trắng trang không phản hồi — ✅ `Skeleton` shimmer cho bảng/card, spinner trong nút khi submit, `EmptyState` có hướng dẫn khi chưa có dữ liệu.
+### 3.1 Spacing
 
-## 9. Checklist ui-ux-pro-max đã đạt
+Thang spacing Tailwind gốc **4px** (1 đơn vị = 0.25rem). Mật độ chuẩn enterprise:
 
-- [x] Có design token tập trung (màu/font/spacing/radius/shadow/motion) — không hardcode rải rác.
-- [x] Palette theo ngành B2B SaaS/HR: xanh dương tin cậy + neutral slate, 1 accent.
-- [x] Typography: 1 font chính hỗ trợ tiếng Việt, thang cỡ rõ ràng, phân cấp tiêu đề.
-- [x] Tương phản chữ/nền ≥ 4.5:1 cho mọi trạng thái.
-- [x] Focus visible trên mọi phần tử tương tác; điều hướng bàn phím dùng được (Modal đóng bằng Esc, nút đều là `<button>` thật).
-- [x] Icon SVG nhất quán, không emoji; icon kèm nhãn chữ ở menu/nút quan trọng.
-- [x] Cursor pointer + trạng thái hover/active/disabled cho mọi control; nút loading chặn double-submit.
-- [x] Motion ≤ 300ms, tôn trọng `prefers-reduced-motion`.
-- [x] Responsive kiểm theo 375 / 768 / 1024 / 1440px; bảng cuộn ngang an toàn.
-- [x] Trạng thái rỗng (EmptyState), đang tải (Skeleton/Spinner), lỗi form (chữ dưới field + `role="alert"`), thông báo kết quả (Toast có `aria-live`).
-- [x] Phân trang mặc định 20/trang phía server, Table hiển thị meta tổng bản ghi.
-- [x] Nhất quán trạng thái nghiệp vụ HRM qua `STATUS_BADGE` dùng chung toàn app.
+- Padding thẻ: `px-5 py-4` (CardHeader/CardBody); thẻ số liệu `p-5`.
+- Khoảng cách giữa các khối trong trang: `gap-4`/`gap-5`; khoảng dưới PageHeader: `mb-6`.
+- Form: label cách ô nhập `mb-1.5` (class `.ui-label`), các trường cách nhau theo lưới `gap-4`.
+- Nút trong cùng nhóm: `gap-2`–`gap-2.5`.
 
-## 10. Quy ước khi thêm component mới
+### 3.2 Radius (bo góc)
 
-1. Cần màu/spacing mới → thêm **token** vào `tokens.css` trước, không hardcode hex trong CSS component.
-2. Class mới đặt tên kebab-case theo khối (`.payroll-*` nếu đặc thù feature thì để ở CSS của feature, không đưa vào file dùng chung).
-3. Mọi hiệu ứng mới phải ≤ 300ms và tự tắt khi reduced-motion.
-4. Component React dùng chung đặt ở `src/components/`, nhận dữ liệu qua props, không tự gọi API.
+| Token/class | Giá trị | Dùng cho |
+|---|---|---|
+| `rounded-lg` | 8px | Nút nhỏ, phần tử nhỏ |
+| `rounded-xl` | 12px | Nút md/lg, ô nhập, Alert |
+| `rounded-2xl` | 16px | **Card** (`.ui-card`), `--radius-lg` |
+| `rounded-xl2` | 20px (1.25rem) | Khối nhấn lớn, `--radius-xl` |
+| `rounded-3xl` | 24px | Modal |
+| `rounded-full` | 999px | Badge, avatar, chấm trạng thái |
+
+### 3.3 Shadow (khai báo trong `tailwind.config.js`)
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `shadow-card` | `0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06)` | Card ở trạng thái thường |
+| `shadow-lift` | `0 8px 24px -8px rgba(16,24,40,.16), 0 4px 8px -4px rgba(16,24,40,.08)` | Card hover (`.ui-card-hover`), phần tử nổi nhẹ |
+| `shadow-pop` | `0 16px 40px -12px rgba(10,22,56,.25), 0 4px 12px -4px rgba(10,22,56,.12)` | Modal, popover |
+| `shadow-glow` | `0 0 0 4px rgba(39,79,234,.14)` | Vòng focus nhấn mạnh quanh phần tử brand |
+
+Không tự chế `box-shadow` inline — cần bóng đổ thì dùng 4 token trên.
+
+## 4. Component kit (`src/components/ui/`)
+
+Import qua barrel: `import { Button, Card, Badge } from '../../components/ui'`.
+
+### 4.1 Button
+
+- Variant: `primary` (brand-600, mặc định) · `accent` (teal) · `secondary` (trắng, viền slate) · `ghost` (trong suốt) · `danger` (rose-600) · `dark` (navy-900).
+- Size: `sm` (cao 36px) · `md` (42px, mặc định) · `lg` (48px).
+- Hành vi: hover nhấc `-1px`, active thu `scale .99`, focus ring 4px, `loading` hiện spinner và khóa nút, disabled mờ 55%.
+- Mỗi màn hình chỉ **một** nút `primary` cho hành động chính; hành động phụ dùng `secondary`/`ghost`; hành động phá hủy dùng `danger` và phải có bước xác nhận (Modal).
+
+### 4.2 Card / CardHeader / CardBody
+
+- `.ui-card`: trắng, viền `slate-200/90`, `rounded-2xl`, `shadow-card`. `hover` → `.ui-card-hover` (nhấc + `shadow-lift`).
+- `CardHeader`: tiêu đề 15px bold + subtitle 13px `slate-500` + `actions` bên phải, kẻ dưới `slate-100`.
+- Nội dung bảng/form đặt trong `CardBody` (`px-5 py-4`).
+
+### 4.3 Form (FormField, Input, Select, Textarea)
+
+- Dùng class `.ui-input/.ui-select/.ui-textarea` (đồng nhất chiều cao, viền, focus ring brand) và `.ui-label` cho nhãn.
+- `FormField` quản lý `label` + `hint` (12px, slate-400) + `error` (12px, rose-600, font-medium). Lỗi luôn hiển thị chữ, không chỉ đổi màu viền.
+
+### 4.4 Badge — ánh xạ trạng thái
+
+`tone`: `slate` (trung tính) · `blue` (thông tin) · `green` (thành công) · `amber` (chờ/cảnh báo) · `red` (lỗi/từ chối) · `violet` (đặc biệt) · `teal` (AI/nhấn phụ). Prop `dot` thêm chấm tròn cùng màu chữ.
+
+Ánh xạ chuẩn cho nghiệp vụ HRM (giữ nhất quán toàn hệ thống):
+
+| Trạng thái | Tone |
+|---|---|
+| Chờ quản lý duyệt / Chờ HR duyệt | `amber` |
+| Đã duyệt / Đã chốt kỳ lương / Đang làm việc | `green` |
+| Đã từ chối / Đã loại (ứng viên) | `red` |
+| Mới nộp / Đang tuyển / Chưa phân tích | `blue` |
+| Kết quả/gợi ý AI | `teal` |
+| Nháp / Đã đóng / Đã huỷ / Nghỉ việc | `slate` |
+
+### 4.5 Modal
+
+Nền `navy-950/55` + blur nhẹ, hộp thoại `rounded-3xl` + `shadow-pop`, mở bằng `animate-scale-in`. Có header (title/subtitle/nút X), vùng nội dung cuộn riêng, footer `actions` nền `slate-50/70`. Đóng bằng Esc/click nền/nút X. Độ rộng qua prop `width` (`max-w-lg` mặc định, `max-w-2xl`/`max-w-3xl` cho form dài).
+
+### 4.6 Feedback (Spinner, Skeleton, TableSkeleton, EmptyState, Alert)
+
+- Đang tải trang/bảng: `Skeleton`/`TableSkeleton` (hiệu ứng `shimmer`), không để màn hình trắng.
+- Không có dữ liệu: `EmptyState` — ô icon 56px nền brand-50, tiêu đề 15px bold, mô tả tối đa ~2 dòng, kèm một `action` duy nhất khi có hành động tiếp theo.
+- Thông báo kết quả: `Alert` tone `success` | `error` | `info` | `warning` (nền 50, viền 200, chữ 800 của tông tương ứng), xuất hiện bằng `animate-fade-in`.
+- `Spinner` dùng trong nút loading và vùng tải nhỏ.
+
+### 4.7 PageHeader & StatCard
+
+- `PageHeader`: eyebrow + title 26/30px + subtitle tối đa 2 dòng + `actions` phải. Mọi trang trong layout bắt đầu bằng component này.
+- `StatCard`: ô icon 44px bo 12px theo `tone` (`blue` mặc định, `teal`, `amber`, `violet`, `rose`, `slate`) + nhãn 13px + giá trị 26px extrabold + dòng phụ. Dùng cho hàng số liệu đầu dashboard.
+
+### 4.8 Bảng dữ liệu (class `.ui-*`)
+
+Bảng trong card dùng `.ui-table` với `.ui-th` (đầu bảng), `.ui-td`, `.ui-tr` (hàng, hover nền nhẹ). Đầu bảng chữ nhỏ semibold `slate-500`; cột số căn phải; trạng thái trong bảng luôn là `Badge`.
+
+## 5. Chuyển động (motion)
+
+- Keyframes chuẩn trong `tailwind.config.js`: `animate-fade-up` (0.45s — nội dung trang xuất hiện), `animate-fade-in` (0.3s), `animate-scale-in` (0.28s — modal), `animate-slide-in` (0.35s — panel từ phải), `animate-shimmer` (skeleton), `animate-pulse-soft` (chấm trạng thái tải). Easing chung: `ease-spring` = `cubic-bezier(.21,.9,.35,1)`.
+- Thời lượng tương tác nằm trong **150–450ms** (token `--motion-fast/base/slow` = 150/250/400ms). Danh sách dài dùng `.stagger` (mỗi phần tử trễ thêm 0.05s) ở `animations.css`; micro-interaction bổ sung ở `mot
+...[truncated 1270 chars]

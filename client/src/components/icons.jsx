@@ -1,6 +1,13 @@
 /* ============================================================
-   ICONS — bộ icon SVG inline (stroke, kiểu Lucide/Feather).
+   ICONS — bộ icon SVG inline dùng chung toàn app (kiểu Lucide/Feather).
    KHÔNG dùng emoji làm icon. Màu theo currentColor.
+
+   CHUẨN NÉT VẼ (mọi icon trong file này đều theo):
+     - viewBox "0 0 24 24"
+     - fill: none, stroke: currentColor
+     - strokeWidth mặc định 1.8 (ghi đè được qua prop)
+     - strokeLinecap / strokeLinejoin: round
+
    Cách dùng:
      import { IconHome, IconUsers } from "./icons";
      <IconHome size={20} />
@@ -84,6 +91,14 @@ export const IconMoney = createIcon(
   </>
 );
 
+export const IconWallet = createIcon(
+  <>
+    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+  </>
+);
+
 export const IconBriefcase = createIcon(
   <>
     <rect x="2" y="7" width="20" height="14" rx="2" />
@@ -93,6 +108,10 @@ export const IconBriefcase = createIcon(
 
 export const IconChat = createIcon(
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+);
+
+export const IconMessage = createIcon(
+  <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
 );
 
 export const IconBell = createIcon(
@@ -230,6 +249,14 @@ export const IconAlertTriangle = createIcon(
   </>
 );
 
+export const IconAlertCircle = createIcon(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 8v4" />
+    <path d="M12 16h.01" />
+  </>
+);
+
 export const IconInfo = createIcon(
   <>
     <circle cx="12" cy="12" r="10" />
@@ -277,7 +304,8 @@ export const IconClipboard = createIcon(
   </>
 );
 
-/* Map tra cứu theo tên (cho menu động / sidebar cấu hình) */
+/* Map tra cứu theo tên (cho menu động / sidebar cấu hình).
+   Có cả key camelCase (chuẩn trong code) và kebab-case (alias tiện dụng). */
 export const Icons = {
   home: IconHome,
   users: IconUsers,
@@ -286,8 +314,10 @@ export const Icons = {
   clock: IconClock,
   calendar: IconCalendar,
   money: IconMoney,
+  wallet: IconWallet,
   briefcase: IconBriefcase,
   chat: IconChat,
+  message: IconMessage,
   bell: IconBell,
   chart: IconChart,
   logout: IconLogout,
@@ -300,18 +330,25 @@ export const Icons = {
   chevronLeft: IconChevronLeft,
   chevronRight: IconChevronRight,
   chevronDown: IconChevronDown,
+  "chevron-left": IconChevronLeft,
+  "chevron-right": IconChevronRight,
+  "chevron-down": IconChevronDown,
   eye: IconEye,
   download: IconDownload,
   upload: IconUpload,
   fileText: IconFileText,
+  "file-text": IconFileText,
   sparkles: IconSparkles,
   shield: IconShield,
   settings: IconSliders,
   menu: IconMenu,
   filter: IconFilter,
   alert: IconAlertTriangle,
+  alertCircle: IconAlertCircle,
+  "alert-circle": IconAlertCircle,
   info: IconInfo,
   arrowRight: IconArrowRight,
+  "arrow-right": IconArrowRight,
   mail: IconMail,
   phone: IconPhone,
   send: IconSend,

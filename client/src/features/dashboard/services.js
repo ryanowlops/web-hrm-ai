@@ -63,7 +63,8 @@ function normalizeOverview(payload) {
     .filter((d) => d.value > 0);
 
   // --- Đơn nghỉ chờ duyệt ---
-  const pendingRaw = pick(body, ['pendingLeaveRequests', 'pendingLeaves', 'pending_leave_requests'], []);
+  const pendingRaw = pick(body, ['pendingLeaveRequests', 'pendingLeaves', 'pending_leave_requests'], null)
+    ?? pick(body?.leave || {}, ['items'], []);
   const pendingLeaves = (Array.isArray(pendingRaw) ? pendingRaw : []).map((item) => ({
     id: pick(item, ['id', 'requestId', 'request_id']),
     employeeName: pick(
@@ -80,10 +81,14 @@ function normalizeOverview(payload) {
   const pendingLeaveCount =
     typeof pendingRaw === 'number'
       ? pendingRaw
-      : toNumber(pick(body, ['pendingLeaveCount', 'pending_leave_count'], pendingLeaves.length));
+      : toNumber(
+          pick(body, ['pendingLeaveCount', 'pending_leave_count'], null)
+            ?? pick(body?.leave || {}, ['pendingApproval'], pendingLeaves.length),
+        );
 
   // --- Hợp đồng sắp hết hạn ---
-  const contractsRaw = pick(body, ['expiringContracts', 'contractsExpiringSoon', 'expiring_contracts'], []);
+  const contractsRaw = pick(body, ['expiringContracts', 'contractsExpiringSoon', 'expiring_contracts'], null)
+    ?? pick(body?.contracts || {}, ['items'], []);
   const expiringContracts = (Array.isArray(contractsRaw) ? contractsRaw : []).map((item) => {
     const endDate = pick(item, ['endDate', 'end_date', 'expiresAt', 'expires_at']);
     const remaining = pick(item, ['daysRemaining', 'days_remaining', 'daysLeft', 'days_left']);
@@ -118,7 +123,7 @@ function normalizeOverview(payload) {
     pendingLeaveCount,
     pendingLeaves,
     expiringContracts,
-    openJobs: pick(body, ['openJobs', 'open_jobs', 'activeJobs'], null),
+    openJobs: pick(body, ['openJobs', 'open_jobs', 'activeJobs', 'openJobPostings'], null),
     totalCandidates: pick(body, ['totalCandidates', 'total_candidates', 'newCandidates'], null),
     raw: body,
   };

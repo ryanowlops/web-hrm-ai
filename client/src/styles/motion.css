@@ -1,0 +1,170 @@
+/* ==========================================================================
+   motion.css — Lớp hiệu ứng chuyển động BỔ SUNG cho toàn app (worker 20).
+   Hiệu ứng nền tảng (keyframes dùng chung, page transition...) nằm ở
+   animations.css; file này chỉ thêm các hiệu ứng tương tác vi mô (micro-
+   interaction) gắn vào class tiện ích có tiền tố rõ ràng.
+
+   Quy ước:
+   - CSS thuần, KHÔNG dùng @apply (file không qua @tailwind layer).
+   - Màu/bóng đổ lấy từ biến tokens.css (--shadow-card, --shadow-lift, navy).
+   - Mọi hiệu ứng đều ≤ 300ms, dùng cubic-bezier "spring" mềm.
+   - prefers-reduced-motion: base.css đã tắt animation/transition toàn cục
+     bằng !important — file này KHÔNG ghi đè và không cần xử lý lại.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1) .hover-lift — Thẻ/khối nổi nhẹ khi hover (dùng cho card dashboard,
+      thẻ tin tuyển dụng, hàng danh sách dạng thẻ...)
+   -------------------------------------------------------------------------- */
+.hover-lift {
+  transition:
+    transform 250ms cubic-bezier(0.34, 1.4, 0.64, 1),
+    box-shadow 250ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  will-change: transform;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* --------------------------------------------------------------------------
+   2) .press — Hiệu ứng "lún" khi nhấn (nút phụ, thẻ bấm được, chip...)
+      Gắn kèm class nút có sẵn; chỉ xử lý trạng thái :active.
+   -------------------------------------------------------------------------- */
+.press {
+  transition: transform 120ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.press:active {
+  transform: scale(0.98);
+}
+
+/* --------------------------------------------------------------------------
+   3) .link-underline — Gạch chân chạy từ trái sang phải khi hover,
+      dùng cho link điều hướng phụ (breadcrumb, link trong footer/form).
+      Gạch chân vẽ bằng background gradient để không làm nhảy layout.
+   -------------------------------------------------------------------------- */
+.link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1.5px;
+  background-repeat: no-repeat;
+  background-position: left calc(100% - 1px);
+  transition: background-size 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  padding-bottom: 2px;
+}
+.link-underline:hover,
+.link-underline:focus-visible {
+  background-size: 100% 1.5px;
+}
+
+/* --------------------------------------------------------------------------
+   4) Keyframes xuất hiện cho menu thả xuống (.dropdown-in) và
+      thông báo (.toast-in): mờ dần + trượt nhẹ, transform-origin ở
+      cạnh neo để cảm giác "mọc" ra từ nút bấm / góc màn hình.
+   -------------------------------------------------------------------------- */
+@keyframes motion-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.dropdown-in {
+  transform-origin: top right;
+  animation: motion-dropdown-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes motion-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.toast-in {
+  animation: motion-toast-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --------------------------------------------------------------------------
+   5) .page-fade — Nội dung trang hiện mờ dần 300ms mỗi lần đổi route
+      (gắn vào wrapper nội dung chính; nhẹ, không trượt để tránh chóng mặt).
+   -------------------------------------------------------------------------- */
+@keyframes motion-page-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.page-fade {
+  animation: motion-page-fade 300ms ease-out both;
+}
+
+/* --------------------------------------------------------------------------
+   6) .chart-in — Vùng biểu đồ hiện dần + nhích lên nhẹ khi mount,
+      tạo cảm giác số liệu "đổ" vào trang (kết hợp animation sẵn có
+      của Recharts cho đường/cột bên trong).
+   -------------------------------------------------------------------------- */
+@keyframes motion-chart-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.chart-in {
+  animation: motion-chart-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --------------------------------------------------------------------------
+   7) .dark-scroll — Thanh cuộn mảnh tông navy cho vùng tối (sidebar).
+      Chỉ áp cho phần tử mang class này, không đổi thanh cuộn toàn trang.
+      Hỗ trợ cả WebKit (Chrome/Edge/Safari) và Firefox (scrollbar-*).
+   -------------------------------------------------------------------------- */
+.dark-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 178, 232, 0.35) transparent;
+}
+.dark-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.dark-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dark-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 178, 232, 0.35);
+  border-radius: 999px;
+}
+.dark-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 178, 232, 0.55);
+}
+
+/* --------------------------------------------------------------------------
+   8) .live-dot — Chấm trạng thái trực tuyến nhấp nháy nhẹ (pulse tỏa vòng)
+      Dùng cạnh tên người dùng/nhân viên đang online, trạng thái hệ thống.
+      Phần tử dùng class này nên là span tròn ~8px màu xanh lá.
+   -------------------------------------------------------------------------- */
+@keyframes motion-live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+.live-dot {
+  animation: motion-live-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

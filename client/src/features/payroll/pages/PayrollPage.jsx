@@ -7,6 +7,22 @@ import {
   getPeriodItems,
   getMyPayslip,
 } from '../services';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  FormField,
+  Input,
+  Modal,
+  PageHeader,
+  Select,
+  Skeleton,
+  TableSkeleton,
+} from '../../../components/ui';
 
 /* ================= Helpers ================= */
 
@@ -82,58 +98,6 @@ function resolveUser(propUser) {
     /* bỏ qua — coi như chưa rõ role */
   }
   return propUser || null;
-}
-
-/* ================= Styles (tự chứa — không phụ thuộc ui.jsx) ================= */
-
-const S = {
-  page: { padding: '24px', maxWidth: 1180, margin: '0 auto', fontFamily: 'inherit' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 },
-  title: { fontSize: 22, fontWeight: 700, margin: 0 },
-  subtitle: { color: '#64748b', fontSize: 13, marginTop: 4 },
-  card: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 16 },
-  cardTitle: { fontSize: 15, fontWeight: 600, margin: '0 0 12px' },
-  btn: { padding: '8px 14px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500 },
-  btnPrimary: { background: '#2563eb', borderColor: '#2563eb', color: '#fff' },
-  btnDanger: { background: '#dc2626', borderColor: '#dc2626', color: '#fff' },
-  btnSm: { padding: '5px 10px', fontSize: 12, borderRadius: 6 },
-  btnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { textAlign: 'left', padding: '8px 10px', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap' },
-  thNum: { textAlign: 'right' },
-  td: { padding: '8px 10px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
-  tdNum: { textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
-  badgeDraft: { display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: '#fef9c3', color: '#854d0e' },
-  badgeLocked: { display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: '#dcfce7', color: '#166534' },
-  alertErr: { background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 16 },
-  alertOk: { background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 16 },
-  empty: { textAlign: 'center', color: '#64748b', fontSize: 13, padding: '28px 12px' },
-  pagination: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 13, color: '#475569' },
-  fieldLabel: { display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: '#334155' },
-  input: { width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' },
-  select: { padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, background: '#fff' },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 },
-  modal: { background: '#fff', borderRadius: 12, padding: 20, width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' },
-  modalTitle: { fontSize: 16, fontWeight: 700, margin: '0 0 10px' },
-  modalActions: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 },
-  warnBox: { background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '10px 12px', fontSize: 13, lineHeight: 1.5 },
-  slipRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: '1px dashed #e2e8f0', fontSize: 14 },
-  slipTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '14px 0 2px', fontSize: 16, fontWeight: 700, color: '#166534' },
-  rowSelected: { background: '#eff6ff' },
-};
-
-/* ================= Modal dùng chung trong trang ================= */
-
-function Modal({ title, children, onClose, actions }) {
-  return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={S.modalTitle}>{title}</h3>
-        {children}
-        <div style={S.modalActions}>{actions}</div>
-      </div>
-    </div>
-  );
 }
 
 /* ================= Trang chính — route /payroll ================= */
@@ -286,81 +250,93 @@ function HrPayrollView() {
   const totalPages = itemsMeta?.totalPages || 1;
   const pageTotal = items.reduce((sum, it) => sum + Number(pick(it, 'total_salary', 'totalSalary') || 0), 0);
 
-  return (
-    <div style={S.page}>
-      <div style={S.header}>
-        <div>
-          <h1 style={S.title}>Bảng lương</h1>
-          <p style={S.subtitle}>Tạo kỳ lương, tính lương từ bảng công đã tổng hợp và chốt kỳ để nhân viên xem phiếu lương.</p>
-        </div>
-        <button style={{ ...S.btn, ...S.btnPrimary }} onClick={() => setShowCreate(true)}>
-          + Tạo kỳ lương
-        </button>
-      </div>
+  const itemsTitle = selectedPeriod
+    ? `Bảng lương tháng ${pick(selectedPeriod, 'month')}/${pick(selectedPeriod, 'year')}` +
+      (pick(selectedPeriod, 'status') === 'locked' ? ' — đã chốt' : ' — xem trước (bản nháp)')
+    : 'Bảng lương chi tiết';
 
-      {error && <div style={S.alertErr}>{error}</div>}
-      {notice && <div style={S.alertOk}>{notice}</div>}
+  return (
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Tài chính · Bảng lương"
+        title="Bảng lương"
+        subtitle="Tạo kỳ lương, tính lương từ bảng công đã tổng hợp và chốt kỳ để nhân viên xem phiếu lương."
+        actions={
+          <Button onClick={() => setShowCreate(true)}>
+            + Tạo kỳ lương
+          </Button>
+        }
+      />
+
+      <Alert tone="error" className="mb-4">{error}</Alert>
+      <Alert tone="success" className="mb-4">{notice}</Alert>
 
       {/* Danh sách kỳ lương */}
-      <div style={S.card}>
-        <h2 style={S.cardTitle}>Kỳ lương</h2>
+      <Card className="mb-6 animate-fade-up">
+        <CardHeader title="Kỳ lương" subtitle="Chọn một kỳ để xem bảng lương chi tiết bên dưới." />
         {loadingPeriods ? (
-          <div style={S.empty}>Đang tải danh sách kỳ lương…</div>
+          <TableSkeleton rows={3} cols={5} />
         ) : periods.length === 0 ? (
-          <div style={S.empty}>Chưa có kỳ lương nào. Bấm “Tạo kỳ lương” để bắt đầu.</div>
+          <EmptyState
+            title="Chưa có kỳ lương nào."
+            description="Bấm “Tạo kỳ lương” để bắt đầu."
+          />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={S.table}>
+          <div className="overflow-x-auto">
+            <table className="ui-table">
               <thead>
                 <tr>
-                  <th style={S.th}>Kỳ lương</th>
-                  <th style={{ ...S.th, ...S.thNum }}>Ngày công chuẩn</th>
-                  <th style={S.th}>Trạng thái</th>
-                  <th style={S.th}>Chốt lúc</th>
-                  <th style={{ ...S.th, ...S.thNum }}>Thao tác</th>
+                  <th className="ui-th">Kỳ lương</th>
+                  <th className="ui-th text-right">Ngày công chuẩn</th>
+                  <th className="ui-th">Trạng thái</th>
+                  <th className="ui-th">Chốt lúc</th>
+                  <th className="ui-th text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {periods.map((p) => {
                   const locked = pick(p, 'status') === 'locked';
                   const busy = String(busyId) === String(p.id);
+                  const selected = String(selectedId) === String(p.id);
                   return (
-                    <tr key={p.id} style={String(selectedId) === String(p.id) ? S.rowSelected : undefined}>
-                      <td style={S.td}>
-                        <strong>
+                    <tr key={p.id} className={`ui-tr ${selected ? 'bg-brand-50/70' : ''}`}>
+                      <td className="ui-td">
+                        <strong className="font-bold text-slate-900">
                           Tháng {pick(p, 'month')}/{pick(p, 'year')}
                         </strong>
                       </td>
-                      <td style={{ ...S.td, ...S.tdNum }}>{pick(p, 'standard_workdays', 'standardWorkdays') ?? '—'}</td>
-                      <td style={S.td}>
+                      <td className="ui-td text-right tabular-nums">{pick(p, 'standard_workdays', 'standardWorkdays') ?? '—'}</td>
+                      <td className="ui-td">
                         {locked ? (
-                          <span style={S.badgeLocked}>Đã chốt</span>
+                          <Badge tone="green" dot>Đã chốt</Badge>
                         ) : (
-                          <span style={S.badgeDraft}>Nháp</span>
+                          <Badge tone="amber" dot>Nháp</Badge>
                         )}
                       </td>
-                      <td style={S.td}>{formatDateTime(pick(p, 'locked_at', 'lockedAt'))}</td>
-                      <td style={{ ...S.td, ...S.tdNum }}>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          <button style={{ ...S.btn, ...S.btnSm }} onClick={() => selectPeriod(p.id)}>
+                      <td className="ui-td tabular-nums">{formatDateTime(pick(p, 'locked_at', 'lockedAt'))}</td>
+                      <td className="ui-td">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button variant="secondary" size="sm" onClick={() => selectPeriod(p.id)}>
                             Xem bảng lương
-                          </button>
+                          </Button>
                           {!locked && (
                             <>
-                              <button
-                                style={{ ...S.btn, ...S.btnSm, ...(busy ? S.btnDisabled : {}) }}
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 disabled={busy}
                                 onClick={() => handleCalculate(p)}
                               >
                                 {busy ? 'Đang xử lý…' : 'Tính lương'}
-                              </button>
-                              <button
-                                style={{ ...S.btn, ...S.btnSm, ...S.btnDanger, ...(busy ? S.btnDisabled : {}) }}
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
                                 disabled={busy}
                                 onClick={() => setLockTarget(p)}
                               >
                                 Chốt kỳ
-                              </button>
+                              </Button>
                             </>
                           )}
                         </div>
@@ -372,91 +348,89 @@ function HrPayrollView() {
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Bảng lương chi tiết của kỳ đang chọn */}
-      <div style={S.card}>
-        <h2 style={S.cardTitle}>
-          {selectedPeriod
-            ? `Bảng lương tháng ${pick(selectedPeriod, 'month')}/${pick(selectedPeriod, 'year')}` +
-              (pick(selectedPeriod, 'status') === 'locked' ? ' — đã chốt' : ' — xem trước (bản nháp)')
-            : 'Bảng lương chi tiết'}
-        </h2>
+      <Card className="animate-fade-up">
+        <CardHeader title={itemsTitle} />
         {!selectedPeriod ? (
-          <div style={S.empty}>Chọn một kỳ lương để xem chi tiết.</div>
+          <EmptyState title="Chọn một kỳ lương để xem chi tiết." />
         ) : loadingItems ? (
-          <div style={S.empty}>Đang tải bảng lương…</div>
+          <TableSkeleton rows={5} cols={6} />
         ) : items.length === 0 ? (
-          <div style={S.empty}>
-            Kỳ này chưa có dữ liệu lương. Bấm “Tính lương” ở kỳ tương ứng để hệ thống tính từ bảng công và đơn nghỉ đã duyệt.
-          </div>
+          <EmptyState
+            title="Kỳ này chưa có dữ liệu lương."
+            description="Bấm “Tính lương” ở kỳ tương ứng để hệ thống tính từ bảng công và đơn nghỉ đã duyệt."
+          />
         ) : (
           <>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={S.table}>
+            <div className="overflow-x-auto">
+              <table className="ui-table">
                 <thead>
                   <tr>
-                    <th style={S.th}>Mã NV</th>
-                    <th style={S.th}>Nhân viên</th>
-                    <th style={S.th}>Phòng ban</th>
-                    <th style={{ ...S.th, ...S.thNum }}>Ngày công hưởng lương</th>
-                    <th style={{ ...S.th, ...S.thNum }}>Lương cơ bản</th>
-                    <th style={{ ...S.th, ...S.thNum }}>Phụ cấp</th>
-                    <th style={{ ...S.th, ...S.thNum }}>Khấu trừ bảo hiểm</th>
-                    <th style={{ ...S.th, ...S.thNum }}>Khấu trừ khác</th>
-                    <th style={{ ...S.th, ...S.thNum }}>Tổng nhận</th>
+                    <th className="ui-th">Mã NV</th>
+                    <th className="ui-th">Nhân viên</th>
+                    <th className="ui-th">Phòng ban</th>
+                    <th className="ui-th text-right">Ngày công hưởng lương</th>
+                    <th className="ui-th text-right">Lương cơ bản</th>
+                    <th className="ui-th text-right">Phụ cấp</th>
+                    <th className="ui-th text-right">Khấu trừ bảo hiểm</th>
+                    <th className="ui-th text-right">Khấu trừ khác</th>
+                    <th className="ui-th text-right">Tổng nhận</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it) => {
                     const emp = it.employee || {};
                     return (
-                      <tr key={it.id}>
-                        <td style={S.td}>{pick(it, 'employee_code', 'employeeCode') || pick(emp, 'code') || '—'}</td>
-                        <td style={S.td}>{pick(it, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName') || '—'}</td>
-                        <td style={S.td}>
+                      <tr key={it.id} className="ui-tr">
+                        <td className="ui-td font-semibold text-slate-900">{pick(it, 'employee_code', 'employeeCode') || pick(emp, 'code') || '—'}</td>
+                        <td className="ui-td">{pick(it, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName') || '—'}</td>
+                        <td className="ui-td">
                           {pick(it, 'department_name', 'departmentName') || pick(emp, 'department_name', 'departmentName') || pick(emp.department || {}, 'name') || '—'}
                         </td>
-                        <td style={{ ...S.td, ...S.tdNum }}>{pick(it, 'workdays_paid', 'workdaysPaid') ?? '—'}</td>
-                        <td style={{ ...S.td, ...S.tdNum }}>{formatVND(pick(it, 'base_salary', 'baseSalary'))}</td>
-                        <td style={{ ...S.td, ...S.tdNum }}>{formatVND(pick(it, 'allowance'))}</td>
-                        <td style={{ ...S.td, ...S.tdNum }}>{formatVND(pick(it, 'insurance_deduction', 'insuranceDeduction'))}</td>
-                        <td style={{ ...S.td, ...S.tdNum }}>{formatVND(pick(it, 'other_deduction', 'otherDeduction'))}</td>
-                        <td style={{ ...S.td, ...S.tdNum, fontWeight: 700 }}>{formatVND(pick(it, 'total_salary', 'totalSalary'))}</td>
+                        <td className="ui-td text-right tabular-nums">{pick(it, 'workdays_paid', 'workdaysPaid') ?? '—'}</td>
+                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'base_salary', 'baseSalary'))}</td>
+                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'allowance'))}</td>
+                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'insurance_deduction', 'insuranceDeduction'))}</td>
+                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'other_deduction', 'otherDeduction'))}</td>
+                        <td className="ui-td text-right font-bold tabular-nums text-slate-900">{formatVND(pick(it, 'total_salary', 'totalSalary'))}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <div style={S.pagination}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
               <span>
-                Tổng chi trang này: <strong>{formatVND(pageTotal)}</strong>
+                Tổng chi trang này: <strong className="font-bold tabular-nums text-slate-900">{formatVND(pageTotal)}</strong>
                 {itemsMeta?.totalItems ? ` · ${itemsMeta.totalItems} nhân viên trong kỳ` : ''}
               </span>
-              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <button
-                  style={{ ...S.btn, ...S.btnSm, ...(itemsPage <= 1 ? S.btnDisabled : {}) }}
+              <span className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={itemsPage <= 1}
                   onClick={() => setItemsPage((p) => Math.max(1, p - 1))}
                 >
                   ← Trước
-                </button>
-                <span>
+                </Button>
+                <span className="tabular-nums">
                   Trang {itemsPage}/{totalPages}
                 </span>
-                <button
-                  style={{ ...S.btn, ...S.btnSm, ...(itemsPage >= totalPages ? S.btnDisabled : {}) }}
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={itemsPage >= totalPages}
                   onClick={() => setItemsPage((p) => Math.min(totalPages, p + 1))}
                 >
                   Sau →
-                </button>
+                </Button>
               </span>
             </div>
           </>
         )}
-      </div>
+      </Card>
 
       {/* Modal tạo kỳ lương */}
       {showCreate && (
@@ -465,56 +439,45 @@ function HrPayrollView() {
           onClose={() => setShowCreate(false)}
           actions={
             <>
-              <button style={S.btn} onClick={() => setShowCreate(false)}>
+              <Button variant="secondary" onClick={() => setShowCreate(false)}>
                 Huỷ
-              </button>
-              <button
-                style={{ ...S.btn, ...S.btnPrimary, ...(creating ? S.btnDisabled : {}) }}
-                disabled={creating}
-                onClick={handleCreate}
-              >
+              </Button>
+              <Button disabled={creating} onClick={handleCreate}>
                 {creating ? 'Đang tạo…' : 'Tạo kỳ'}
-              </button>
+              </Button>
             </>
           }
         >
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div>
-              <label style={S.fieldLabel}>Tháng</label>
-              <input
-                style={S.input}
+          <div className="grid gap-4">
+            <FormField label="Tháng">
+              <Input
                 type="number"
                 min="1"
                 max="12"
                 value={createForm.month}
                 onChange={(e) => setCreateForm((f) => ({ ...f, month: e.target.value }))}
               />
-            </div>
-            <div>
-              <label style={S.fieldLabel}>Năm</label>
-              <input
-                style={S.input}
+            </FormField>
+            <FormField label="Năm">
+              <Input
                 type="number"
                 min="2000"
                 value={createForm.year}
                 onChange={(e) => setCreateForm((f) => ({ ...f, year: e.target.value }))}
               />
-            </div>
-            <div>
-              <label style={S.fieldLabel}>Ngày công chuẩn của tháng</label>
-              <input
-                style={S.input}
+            </FormField>
+            <FormField
+              label="Ngày công chuẩn của tháng"
+              hint="Mặc định là số ngày làm việc thứ 2–thứ 6 trong tháng. Lương được tính theo tỷ lệ ngày công hưởng lương / ngày công chuẩn."
+            >
+              <Input
                 type="number"
                 min="1"
                 step="0.5"
                 value={createForm.standardWorkdays}
                 onChange={(e) => setCreateForm((f) => ({ ...f, standardWorkdays: e.target.value }))}
               />
-              <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0' }}>
-                Mặc định là số ngày làm việc thứ 2–thứ 6 trong tháng. Lương được tính theo tỷ lệ
-                ngày công hưởng lương / ngày công chuẩn.
-              </p>
-            </div>
+            </FormField>
           </div>
         </Modal>
       )}
@@ -526,20 +489,16 @@ function HrPayrollView() {
           onClose={() => setLockTarget(null)}
           actions={
             <>
-              <button style={S.btn} onClick={() => setLockTarget(null)}>
+              <Button variant="secondary" onClick={() => setLockTarget(null)}>
                 Huỷ
-              </button>
-              <button
-                style={{ ...S.btn, ...S.btnDanger, ...(busyId ? S.btnDisabled : {}) }}
-                disabled={!!busyId}
-                onClick={handleLock}
-              >
+              </Button>
+              <Button variant="danger" disabled={!!busyId} onClick={handleLock}>
                 {busyId ? 'Đang chốt…' : 'Chốt kỳ lương'}
-              </button>
+              </Button>
             </>
           }
         >
-          <div style={S.warnBox}>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-800">
             ⚠️ Sau khi chốt kỳ lương tháng {pick(lockTarget, 'month')}/{pick(lockTarget, 'year')},{' '}
             <strong>bảng lương sẽ bị khoá và không thể sửa hay tính lại trực tiếp</strong>. Nhân viên
             sẽ xem được phiếu lương của mình ngay sau khi chốt.
@@ -634,107 +593,141 @@ function MyPayslipView() {
           })()
         : '';
 
-  return (
-    <div style={S.page}>
-      <div style={S.header}>
-        <div>
-          <h1 style={S.title}>Phiếu lương của tôi</h1>
-          <p style={S.subtitle}>Phiếu lương chỉ hiển thị sau khi HR đã chốt kỳ lương.</p>
-        </div>
-        {lockedPeriods.length > 1 && (
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
-            Kỳ lương:
-            <select
-              style={S.select}
-              value={periodId}
-              onChange={(e) => setPeriodId(e.target.value)}
-            >
-              {lockedPeriods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  Tháng {pick(p, 'month')}/{pick(p, 'year')}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+  const empName = pick(slip, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName');
+  const empCode = pick(slip, 'employee_code', 'employeeCode') || pick(emp, 'code');
 
-      {error && <div style={S.alertErr}>{error}</div>}
+  const slipRow = 'flex items-baseline justify-between gap-4 border-b border-dashed border-slate-200 py-3 text-sm last:border-0';
+  const slipLabel = 'text-slate-500';
+  const slipValue = 'font-semibold tabular-nums text-slate-800';
+
+  return (
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Tài chính · Bảng lương"
+        title="Phiếu lương của tôi"
+        subtitle="Phiếu lương chỉ hiển thị sau khi HR đã chốt kỳ lương."
+        actions={
+          lockedPeriods.length > 1 ? (
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+              Kỳ lương:
+              <Select
+                className="w-auto"
+                value={periodId}
+                onChange={(e) => setPeriodId(e.target.value)}
+              >
+                {lockedPeriods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    Tháng {pick(p, 'month')}/{pick(p, 'year')}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null
+        }
+      />
+
+      <Alert tone="error" className="mb-4">{error}</Alert>
 
       {loading ? (
-        <div style={S.card}>
-          <div style={S.empty}>Đang tải phiếu lương…</div>
-        </div>
+        <Card className="mx-auto max-w-2xl">
+          <CardBody className="space-y-3 px-6 py-6">
+            <Skeleton className="mx-auto h-6 w-2/3" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </CardBody>
+        </Card>
       ) : notFound || !slip ? (
-        <div style={S.card}>
-          <div style={S.empty}>
-            Chưa có phiếu lương {periodLabel ? `cho ${periodLabel}` : ''}. Kỳ lương có thể chưa
-            được HR chốt — vui lòng kiểm tra lại sau hoặc liên hệ phòng nhân sự.
-          </div>
-        </div>
+        <Card className="mx-auto max-w-2xl">
+          <EmptyState
+            title={`Chưa có phiếu lương${periodLabel ? ` cho ${periodLabel}` : ''}.`}
+            description="Kỳ lương có thể chưa được HR chốt — vui lòng kiểm tra lại sau hoặc liên hệ phòng nhân sự."
+          />
+        </Card>
       ) : (
-        <div style={{ ...S.card, maxWidth: 640, margin: '0 auto' }}>
-          <h2 style={{ ...S.cardTitle, textAlign: 'center', fontSize: 17 }}>
-            PHIẾU LƯƠNG {periodLabel ? periodLabel.toUpperCase() : ''}
-          </h2>
-          {(pick(emp, 'full_name', 'fullName') || pick(slip, 'employee_name', 'employeeName')) && (
-            <p style={{ textAlign: 'center', color: '#475569', fontSize: 13, margin: '0 0 14px' }}>
-              {pick(slip, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName')}
-              {pick(emp, 'code') || pick(slip, 'employee_code', 'employeeCode')
-                ? ` · Mã NV: ${pick(slip, 'employee_code', 'employeeCode') || pick(emp, 'code')}`
-                : ''}
+        <Card className="mx-auto max-w-2xl animate-scale-in overflow-hidden">
+          {/* Dải tiêu đề phiếu lương */}
+          <div className="bg-navy-900 px-6 py-5 text-white">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-brand-300">
+                  Web HRM AI · Phiếu lương
+                </p>
+                <h2 className="mt-1.5 text-xl font-extrabold tracking-[-0.01em]">
+                  PHIẾU LƯƠNG {periodLabel ? periodLabel.toUpperCase() : ''}
+                </h2>
+                {(empName || empCode) && (
+                  <p className="mt-1 text-[13px] text-slate-300">
+                    {empName}
+                    {empCode ? ` · Mã NV: ${empCode}` : ''}
+                  </p>
+                )}
+              </div>
+              <Badge tone="green" dot className="bg-emerald-400/15 text-emerald-300 ring-emerald-300/30">
+                Kỳ đã chốt
+              </Badge>
+            </div>
+          </div>
+
+          <CardBody className="px-6 py-5">
+            <div className={slipRow}>
+              <span className={slipLabel}>Lương cơ bản (theo hợp đồng)</span>
+              <strong className={slipValue}>{formatVND(baseSalary)}</strong>
+            </div>
+            <div className={slipRow}>
+              <span className={slipLabel}>
+                Ngày công hưởng lương
+                {standardWorkdays ? ` / ngày công chuẩn` : ''}
+              </span>
+              <strong className={slipValue}>
+                {workdaysPaid ?? '—'}
+                {standardWorkdays ? ` / ${standardWorkdays} ngày` : ' ngày'}
+              </strong>
+            </div>
+            {salaryByWorkdays !== undefined && (
+              <div className={slipRow}>
+                <span className={slipLabel}>Lương theo ngày công</span>
+                <strong className={slipValue}>{formatVND(salaryByWorkdays)}</strong>
+              </div>
+            )}
+            <div className={slipRow}>
+              <span className={slipLabel}>Phụ cấp</span>
+              <strong className={`${slipValue} text-emerald-600`}>+ {formatVND(allowance)}</strong>
+            </div>
+            <div className={slipRow}>
+              <span className={slipLabel}>
+                Khấu trừ bảo hiểm (BHXH/BHYT/BHTN)
+                {insuranceRate ? ` — tỷ lệ ${insuranceRate}% trên lương cơ bản` : ''}
+              </span>
+              <strong className={`${slipValue} text-rose-600`}>− {formatVND(insuranceDeduction)}</strong>
+            </div>
+            {Number(otherDeduction || 0) > 0 && (
+              <div className={slipRow}>
+                <span className={slipLabel}>Khấu trừ khác</span>
+                <strong className={`${slipValue} text-rose-600`}>− {formatVND(otherDeduction)}</strong>
+              </div>
+            )}
+
+            {/* Tổng thực nhận nổi bật */}
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-50 px-5 py-4 ring-1 ring-inset ring-brand-100">
+              <span className="text-sm font-extrabold uppercase tracking-[0.08em] text-brand-900">
+                Tổng thực nhận
+              </span>
+              <span className="text-2xl font-extrabold tabular-nums tracking-[-0.01em] text-brand-700">
+                {formatVND(totalSalary)}
+              </span>
+            </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-slate-400">
+              Ghi chú: lương được tính từ bảng công và các đơn nghỉ đã duyệt trong kỳ theo công thức:
+              lương cơ bản × (ngày công hưởng lương / ngày công chuẩn) + phụ cấp − khấu trừ bảo hiểm −
+              khấu trừ khác. Đây là mô hình tính lương đơn giản hoá; nếu thấy sai lệch, vui lòng liên
+              hệ phòng nhân sự để đối chiếu.
             </p>
-          )}
-
-          <div style={S.slipRow}>
-            <span>Lương cơ bản (theo hợp đồng)</span>
-            <strong>{formatVND(baseSalary)}</strong>
-          </div>
-          <div style={S.slipRow}>
-            <span>
-              Ngày công hưởng lương
-              {standardWorkdays ? ` / ngày công chuẩn` : ''}
-            </span>
-            <strong>
-              {workdaysPaid ?? '—'}
-              {standardWorkdays ? ` / ${standardWorkdays} ngày` : ' ngày'}
-            </strong>
-          </div>
-          {salaryByWorkdays !== undefined && (
-            <div style={S.slipRow}>
-              <span>Lương theo ngày công</span>
-              <strong>{formatVND(salaryByWorkdays)}</strong>
-            </div>
-          )}
-          <div style={S.slipRow}>
-            <span>Phụ cấp</span>
-            <strong style={{ color: '#166534' }}>+ {formatVND(allowance)}</strong>
-          </div>
-          <div style={S.slipRow}>
-            <span>
-              Khấu trừ bảo hiểm (BHXH/BHYT/BHTN)
-              {insuranceRate ? ` — tỷ lệ ${insuranceRate}% trên lương cơ bản` : ''}
-            </span>
-            <strong style={{ color: '#b91c1c' }}>− {formatVND(insuranceDeduction)}</strong>
-          </div>
-          {Number(otherDeduction || 0) > 0 && (
-            <div style={S.slipRow}>
-              <span>Khấu trừ khác</span>
-              <strong style={{ color: '#b91c1c' }}>− {formatVND(otherDeduction)}</strong>
-            </div>
-          )}
-          <div style={S.slipTotal}>
-            <span>TỔNG THỰC NHẬN</span>
-            <span>{formatVND(totalSalary)}</span>
-          </div>
-
-          <p style={{ fontSize: 12, color: '#64748b', marginTop: 14, lineHeight: 1.5 }}>
-            Ghi chú: lương được tính từ bảng công và các đơn nghỉ đã duyệt trong kỳ theo công thức:
-            lương cơ bản × (ngày công hưởng lương / ngày công chuẩn) + phụ cấp − khấu trừ bảo hiểm −
-            khấu trừ khác. Đây là mô hình tính lương đơn giản hoá; nếu thấy sai lệch, vui lòng liên
-            hệ phòng nhân sự để đối chiếu.
-          </p>
-        </div>
+          </CardBody>
+        </Card>
       )}
     </div>
   );

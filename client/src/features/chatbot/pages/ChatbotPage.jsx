@@ -7,6 +7,25 @@ import {
   deleteKbDocument,
   friendlyError,
 } from '../services';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  Input,
+  PageHeader,
+  Skeleton,
+  Textarea,
+} from '../../../components/ui';
+import {
+  IconFileText,
+  IconSend,
+  IconSparkles,
+  IconTrash,
+} from '../../../components/icons.jsx';
 
 /**
  * Trang Chatbot HR (FR-10, route /chatbot).
@@ -74,198 +93,6 @@ function formatDateTime(iso) {
         minute: '2-digit',
       });
 }
-
-/* ------------------------------- Icons (SVG nội bộ) ---------------------- */
-
-const IconBot = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <rect x="3" y="7" width="18" height="12" rx="3" stroke="currentColor" strokeWidth="1.8" />
-    <path d="M12 7V4M12 4h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <circle cx="8.5" cy="13" r="1.3" fill="currentColor" />
-    <circle cx="15.5" cy="13" r="1.3" fill="currentColor" />
-    <path d="M9 16.5h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-  </svg>
-);
-
-const IconSend = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M4.5 12 20 4.5 13.5 20l-2.2-6.3L4.5 12Z"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-    />
-    <path d="M11.3 13.7 20 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-  </svg>
-);
-
-const IconDoc = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M6 2.5h8L19 7.5v14H6v-19Z"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinejoin="round"
-    />
-    <path d="M13.5 2.5v5.5H19" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-  </svg>
-);
-
-const IconTrash = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M4 6.5h16M9.5 6V4h5v2M6.5 6.5l1 14h9l1-14M10 10.5v6M14 10.5v6"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-/* --------------------------------- Style --------------------------------- */
-
-const STYLE = `
-.cb-layout { display: flex; gap: var(--space-6); align-items: flex-start; }
-.cb-main { flex: 1; min-width: 0; }
-.cb-card {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.cb-scroll {
-  height: min(58vh, 560px); overflow-y: auto; padding: var(--space-5);
-  display: flex; flex-direction: column; gap: var(--space-4);
-  background: var(--color-gray-50);
-}
-.cb-row { display: flex; gap: var(--space-3); animation: cbFadeUp var(--duration-slow) var(--ease-out) both; }
-.cb-row.user { flex-direction: row-reverse; }
-.cb-avatar {
-  flex: 0 0 34px; width: 34px; height: 34px; border-radius: var(--radius-full);
-  display: flex; align-items: center; justify-content: center;
-  background: var(--color-accent-100); color: var(--color-accent-700);
-  font-weight: var(--weight-semibold); font-size: var(--text-sm);
-}
-.cb-avatar.user { background: var(--color-primary-100); color: var(--color-primary-700); }
-.cb-bubble {
-  max-width: 78%; padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg); font-size: var(--text-sm);
-  line-height: var(--leading-relaxed); white-space: pre-wrap; word-break: break-word;
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-top-left-radius: var(--radius-sm);
-}
-.cb-bubble.user {
-  background: var(--color-primary-600); color: var(--color-text-on-primary);
-  border-color: var(--color-primary-600); border-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-sm);
-}
-.cb-bubble.error { background: var(--color-danger-bg); border-color: var(--color-danger-border); color: var(--color-danger); }
-.cb-time { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--color-text-muted); }
-.cb-row.user .cb-time { text-align: right; }
-.cb-sources { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px dashed var(--color-border); }
-.cb-sources-title { font-size: var(--text-xs); font-weight: var(--weight-semibold); color: var(--color-text-secondary); margin-bottom: var(--space-2); }
-.cb-source-chip {
-  display: inline-flex; align-items: center; gap: var(--space-1);
-  margin: 0 var(--space-2) var(--space-2) 0; padding: 2px var(--space-2);
-  border-radius: var(--radius-full); background: var(--color-info-bg);
-  border: 1px solid var(--color-info-border); color: var(--color-info);
-  font-size: var(--text-xs); font-weight: var(--weight-medium);
-}
-.cb-typing { display: inline-flex; gap: 5px; align-items: center; padding: var(--space-1) 0; }
-.cb-typing span {
-  width: 7px; height: 7px; border-radius: var(--radius-full);
-  background: var(--color-gray-400); animation: cbBounce 1s infinite ease-in-out;
-}
-.cb-typing span:nth-child(2) { animation-delay: 0.15s; }
-.cb-typing span:nth-child(3) { animation-delay: 0.3s; }
-.cb-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cb-chip {
-  padding: var(--space-2) var(--space-3); border-radius: var(--radius-full);
-  border: 1px solid var(--color-border-strong); background: var(--color-surface);
-  font-size: var(--text-sm); color: var(--color-primary-700);
-  transition: border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
-}
-.cb-chip:hover { border-color: var(--color-primary-400); background: var(--color-primary-50); }
-.cb-inputbar {
-  display: flex; gap: var(--space-3); align-items: flex-end;
-  padding: var(--space-4); border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
-}
-.cb-textarea {
-  flex: 1; resize: none; max-height: 120px; padding: var(--space-3);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
-  font-size: var(--text-sm); line-height: var(--leading-normal);
-}
-.cb-textarea:focus { border-color: var(--color-primary-500); outline: 2px solid var(--color-primary-100); }
-.cb-send {
-  flex: 0 0 auto; width: 42px; height: 42px; border-radius: var(--radius-md);
-  display: flex; align-items: center; justify-content: center;
-  background: var(--color-primary-600); color: var(--color-text-on-primary);
-  transition: background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
-}
-.cb-send:hover:not(:disabled) { background: var(--color-primary-700); }
-.cb-send:active:not(:disabled) { transform: scale(0.96); }
-.cb-send:disabled { opacity: 0.5; cursor: not-allowed; }
-.cb-side { flex: 0 0 330px; width: 330px; }
-.cb-kb-card {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-5);
-  animation: cbFadeUp var(--duration-slow) var(--ease-out) both;
-}
-.cb-kb-title { font-size: var(--text-base); font-weight: var(--weight-semibold); margin-bottom: var(--space-1); }
-.cb-field { margin-bottom: var(--space-3); }
-.cb-label { display: block; font-size: var(--text-sm); font-weight: var(--weight-medium); margin-bottom: var(--space-1); }
-.cb-input {
-  width: 100%; padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); font-size: var(--text-sm);
-}
-.cb-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  padding: var(--space-2) var(--space-4); border-radius: var(--radius-md);
-  background: var(--color-primary-600); color: var(--color-text-on-primary);
-  font-size: var(--text-sm); font-weight: var(--weight-medium);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.cb-btn:hover:not(:disabled) { background: var(--color-primary-700); }
-.cb-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.cb-btn.block { width: 100%; }
-.cb-doc {
-  display: flex; gap: var(--space-3); align-items: flex-start;
-  padding: var(--space-3) 0; border-top: 1px solid var(--color-border);
-}
-.cb-doc:first-of-type { border-top: none; }
-.cb-doc-info { flex: 1; min-width: 0; }
-.cb-doc-name { font-size: var(--text-sm); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
-.cb-doc-meta { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; }
-.cb-badge {
-  display: inline-block; padding: 1px var(--space-2); border-radius: var(--radius-full);
-  font-size: var(--text-xs); font-weight: var(--weight-medium); border: 1px solid transparent;
-}
-.cb-badge.ready { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success-border); }
-.cb-badge.processing { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning-border); }
-.cb-badge.failed { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger-border); }
-.cb-icon-btn {
-  flex: 0 0 auto; width: 30px; height: 30px; border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center; color: var(--color-text-muted);
-  transition: color var(--duration-fast), background var(--duration-fast);
-}
-.cb-icon-btn:hover { color: var(--color-danger); background: var(--color-danger-bg); }
-.cb-alert {
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-  font-size: var(--text-sm); margin-bottom: var(--space-4); border: 1px solid transparent;
-  animation: cbFadeUp var(--duration-base) var(--ease-out) both;
-}
-.cb-alert.error { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger-border); }
-.cb-alert.success { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success-border); }
-.cb-empty { text-align: center; color: var(--color-text-secondary); padding: var(--space-8) var(--space-4); }
-@keyframes cbFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes cbBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
-@media (max-width: 1024px) {
-  .cb-layout { flex-direction: column; }
-  .cb-side { flex: none; width: 100%; }
-  .cb-bubble { max-width: 88%; }
-}
-`;
 
 /* --------------------------------- Trang --------------------------------- */
 
@@ -459,95 +286,170 @@ export default function ChatbotPage() {
   }
 
   const kbStatusLabel = { processing: 'Đang xử lý', ready: 'Sẵn sàng', failed: 'Lỗi xử lý' };
+  const kbStatusTone = { processing: 'amber', ready: 'green', failed: 'red' };
 
   return (
-    <div>
-      <style>{STYLE}</style>
-      <h1 className="page-title">Chatbot HR</h1>
-      <p className="page-subtitle">
-        Hỏi đáp quy chế nội bộ công ty. Chatbot chỉ trả lời dựa trên tài liệu quy chế do HR cung
-        cấp và luôn kèm nguồn trích dẫn — nếu tài liệu chưa có thông tin, chatbot sẽ báo rõ thay
-        vì tự suy đoán.
-      </p>
+    <div className="page-shell">
+      <PageHeader
+        title="Chatbot HR"
+        subtitle="Hỏi đáp quy chế nội bộ công ty. Chatbot chỉ trả lời dựa trên tài liệu quy chế do HR cung cấp và luôn kèm nguồn trích dẫn — nếu tài liệu chưa có thông tin, chatbot sẽ báo rõ thay vì tự suy đoán."
+      />
 
-      <div className="cb-layout" style={{ marginTop: 'var(--space-6)' }}>
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         {/* ------------------------------ Khung chat ------------------------------ */}
-        <div className="cb-main">
-          <div className="cb-card">
-            <div className="cb-scroll" ref={scrollRef} aria-live="polite">
-              {historyLoading && <div className="cb-empty">Đang tải lịch sử trò chuyện…</div>}
+        <div className="min-w-0 flex-1">
+          <Card className="flex flex-col overflow-hidden">
+            {/* Header khung chat */}
+            <div className="flex items-center gap-3.5 border-b border-slate-100 bg-white px-5 py-4">
+              <div className="relative shrink-0">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-500 text-white shadow-[0_8px_16px_-6px_rgba(13,183,149,.6)] ring-4 ring-accent-50">
+                  <IconSparkles size={22} />
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="truncate text-[15px] font-bold tracking-[-0.01em] text-slate-900">
+                  Chatbot HR
+                </h2>
+                <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <span className="h-2 w-2 animate-pulse-soft rounded-full bg-emerald-500" aria-hidden="true" />
+                  Sẵn sàng
+                </p>
+              </div>
+            </div>
 
-              {!historyLoading && messages.length === 0 && (
-                <div className="cb-empty">
-                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-3)', color: 'var(--color-accent-700)' }}>
-                    <IconBot />
+            {/* Vùng tin nhắn */}
+            <div
+              className="nice-scroll flex h-[clamp(400px,58vh,600px)] flex-col gap-4 overflow-y-auto bg-slate-50/70 px-5 py-5"
+              ref={scrollRef}
+              aria-live="polite"
+            >
+              {historyLoading && (
+                <div className="space-y-4" aria-label="Đang tải lịch sử trò chuyện…">
+                  <div className="flex gap-3">
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+                    <Skeleton className="h-16 w-2/3 rounded-2xl" />
                   </div>
-                  <p style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text)', marginBottom: 'var(--space-2)' }}>
-                    Xin chào! Bạn muốn hỏi gì về quy chế công ty?
-                  </p>
-                  <p style={{ marginBottom: 'var(--space-4)' }}>Thử một câu hỏi mẫu:</p>
-                  <div className="cb-chips" style={{ justifyContent: 'center' }}>
-                    {SUGGESTIONS.map((s) => (
-                      <button key={s} type="button" className="cb-chip" onClick={() => sendQuestion(s)}>
-                        {s}
-                      </button>
-                    ))}
+                  <div className="flex flex-row-reverse gap-3">
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+                    <Skeleton className="h-12 w-1/2 rounded-2xl" />
+                  </div>
+                  <div className="flex gap-3">
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+                    <Skeleton className="h-20 w-3/5 rounded-2xl" />
                   </div>
                 </div>
               )}
 
+              {!historyLoading && messages.length === 0 && (
+                <EmptyState
+                  icon={<IconSparkles size={26} />}
+                  title="Xin chào! Bạn muốn hỏi gì về quy chế công ty?"
+                  description="Thử một câu hỏi mẫu:"
+                  action={
+                    <div className="flex max-w-xl flex-wrap justify-center gap-2">
+                      {SUGGESTIONS.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className="rounded-full border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-brand-700 shadow-sm transition-all duration-200 ease-spring hover:-translate-y-px hover:border-brand-400 hover:bg-brand-50 hover:shadow-lift active:translate-y-0 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25"
+                          onClick={() => sendQuestion(s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              )}
+
               {messages.map((m) =>
                 m.role === 'user' ? (
-                  <div key={m.id} className="cb-row user">
-                    <div className="cb-avatar user" aria-hidden="true">{myInitial}</div>
-                    <div>
-                      <div className="cb-bubble user">{m.text}</div>
-                      <div className="cb-time">{formatTime(m.createdAt)}</div>
+                  <div key={m.id} className="msg-in flex flex-row-reverse gap-3">
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-200/60"
+                      aria-hidden="true"
+                    >
+                      {myInitial}
+                    </div>
+                    <div className="min-w-0 max-w-[85%] sm:max-w-[78%]">
+                      <div className="whitespace-pre-wrap break-words rounded-2xl rounded-tr-md bg-brand-600 px-4 py-3 text-sm leading-relaxed text-white shadow-[0_6px_16px_-8px_rgba(39,79,234,.55)]">
+                        {m.text}
+                      </div>
+                      <div className="mt-1 text-right text-[11px] font-medium text-slate-400">
+                        {formatTime(m.createdAt)}
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div key={m.id} className="cb-row">
-                    <div className="cb-avatar" aria-hidden="true"><IconBot /></div>
-                    <div>
-                      <div className={`cb-bubble${m.error ? ' error' : ''}`}>
+                  <div key={m.id} className="msg-in flex gap-3">
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-500 text-white shadow-[0_6px_14px_-6px_rgba(13,183,149,.6)]"
+                      aria-hidden="true"
+                    >
+                      <IconSparkles size={18} />
+                    </div>
+                    <div className="min-w-0 max-w-[85%] sm:max-w-[78%]">
+                      <div
+                        className={`whitespace-pre-wrap break-words rounded-2xl rounded-tl-md px-4 py-3 text-sm leading-relaxed shadow-card ${
+                          m.error
+                            ? 'border border-rose-200 bg-rose-50 text-rose-700'
+                            : 'border border-slate-200/90 bg-white text-slate-800'
+                        }`}
+                      >
                         {m.typing ? (
-                          <span className="cb-typing" role="status" aria-label="Chatbot đang trả lời">
-                            <span /><span /><span />
+                          <span className="inline-flex items-center gap-1.5 py-1" role="status" aria-label="Chatbot đang trả lời">
+                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-slate-400" />
+                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-slate-400" />
+                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-slate-400" />
                           </span>
                         ) : (
                           m.text
                         )}
                         {!m.typing && m.sources && m.sources.length > 0 && (
-                          <div className="cb-sources">
-                            <div className="cb-sources-title">Nguồn trích dẫn</div>
-                            {m.sources.map((s) => (
-                              <span key={s.key} className="cb-source-chip" title={s.excerpt || undefined}>
-                                <IconDoc />
-                                {s.title}
-                                {s.page != null && s.page !== '' ? ` · trang ${s.page}` : ''}
-                              </span>
-                            ))}
+                          <div className="mt-3 border-t border-dashed border-slate-200 pt-3">
+                            <div className="mb-2 text-xs font-semibold text-slate-500">
+                              Nguồn trích dẫn
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {m.sources.map((s) => (
+                                <span
+                                  key={s.key}
+                                  className="ui-badge bg-accent-50 text-accent-700 ring-accent-600/20"
+                                  title={s.excerpt || undefined}
+                                >
+                                  <IconFileText size={12} />
+                                  {s.title}
+                                  {s.page != null && s.page !== '' ? ` · trang ${s.page}` : ''}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
-                      {!m.typing && <div className="cb-time">{formatTime(m.createdAt)}</div>}
+                      {!m.typing && (
+                        <div className="mt-1 text-[11px] font-medium text-slate-400">
+                          {formatTime(m.createdAt)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ),
               )}
             </div>
 
+            {/* Thanh nhập cố định ở đáy khung chat */}
             <form
-              className="cb-inputbar"
+              className="flex items-end gap-3 border-t border-slate-100 bg-white px-4 py-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 sendQuestion();
               }}
             >
               <label className="sr-only" htmlFor="cb-question">Nhập câu hỏi về quy chế</label>
-              <textarea
+              <Textarea
                 id="cb-question"
-                className="cb-textarea"
+                className="max-h-[120px] flex-1 resize-none"
                 rows={2}
                 placeholder="Nhập câu hỏi về quy chế, nghỉ phép, phúc lợi… (Enter để gửi, Shift+Enter để xuống dòng)"
                 value={input}
@@ -555,106 +457,118 @@ export default function ChatbotPage() {
                 onKeyDown={handleKeyDown}
                 disabled={sending}
               />
-              <button
+              <Button
                 type="submit"
-                className="cb-send"
+                variant="primary"
+                className="h-[42px] w-[42px] shrink-0 rounded-full px-0"
                 disabled={sending || !input.trim()}
                 aria-label="Gửi câu hỏi"
                 title="Gửi câu hỏi"
               >
-                <IconSend />
-              </button>
+                <IconSend size={18} />
+              </Button>
             </form>
-          </div>
+          </Card>
         </div>
 
         {/* --------------------------- Panel tài liệu KB --------------------------- */}
         {kbVisible && (
-          <aside className="cb-side" aria-label="Quản lý tài liệu quy chế">
-            <div className="cb-kb-card">
-              <div className="cb-kb-title">Tài liệu quy chế (KB)</div>
-              <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-4)' }}>
-                Chỉ HR/Admin quản lý khu vực này. Tài liệu tải lên là nguồn duy nhất để chatbot
-                trả lời — hãy giữ tài liệu luôn cập nhật.
-              </p>
+          <aside className="w-full shrink-0 xl:w-[340px]" aria-label="Quản lý tài liệu quy chế">
+            <Card className="animate-fade-up">
+              <CardHeader
+                title="Tài liệu quy chế (KB)"
+                subtitle="Chỉ HR/Admin quản lý khu vực này. Tài liệu tải lên là nguồn duy nhất để chatbot trả lời — hãy giữ tài liệu luôn cập nhật."
+              />
+              <CardBody>
+                {kbError && (
+                  <Alert tone="error" className="mb-4">{kbError}</Alert>
+                )}
+                {kbNotice && (
+                  <Alert tone="success" className="mb-4">{kbNotice}</Alert>
+                )}
 
-              {kbError && <div className="cb-alert error" role="alert">{kbError}</div>}
-              {kbNotice && <div className="cb-alert success" role="status">{kbNotice}</div>}
+                <form onSubmit={handleKbUpload} className="space-y-4">
+                  <div>
+                    <label className="ui-label" htmlFor="kb-title">Tên tài liệu (không bắt buộc)</label>
+                    <Input
+                      id="kb-title"
+                      type="text"
+                      placeholder="VD: Quy chế nghỉ phép 2026"
+                      value={kbTitle}
+                      onChange={(e) => setKbTitle(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="ui-label" htmlFor="kb-file">File tài liệu (PDF/TXT, tối đa {KB_MAX_SIZE_MB} MB)</label>
+                    <input
+                      id="kb-file"
+                      ref={fileInputRef}
+                      className="ui-input"
+                      type="file"
+                      accept=".pdf,.txt,application/pdf,text/plain"
+                      onChange={(e) => setKbFile(e.target.files?.[0] || null)}
+                    />
+                    {kbFile && (
+                      <div className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                        Đã chọn: {kbFile.name} ({(kbFile.size / 1024).toFixed(0)} KB)
+                      </div>
+                    )}
+                  </div>
+                  <Button type="submit" variant="primary" className="w-full" loading={kbUploading}>
+                    {kbUploading ? 'Đang tải lên…' : 'Tải tài liệu lên'}
+                  </Button>
+                </form>
 
-              <form onSubmit={handleKbUpload}>
-                <div className="cb-field">
-                  <label className="cb-label" htmlFor="kb-title">Tên tài liệu (không bắt buộc)</label>
-                  <input
-                    id="kb-title"
-                    className="cb-input"
-                    type="text"
-                    placeholder="VD: Quy chế nghỉ phép 2026"
-                    value={kbTitle}
-                    onChange={(e) => setKbTitle(e.target.value)}
-                  />
-                </div>
-                <div className="cb-field">
-                  <label className="cb-label" htmlFor="kb-file">File tài liệu (PDF/TXT, tối đa {KB_MAX_SIZE_MB} MB)</label>
-                  <input
-                    id="kb-file"
-                    ref={fileInputRef}
-                    className="cb-input"
-                    type="file"
-                    accept=".pdf,.txt,application/pdf,text/plain"
-                    onChange={(e) => setKbFile(e.target.files?.[0] || null)}
-                  />
-                  {kbFile && (
-                    <div className="text-xs text-muted" style={{ marginTop: 'var(--space-1)' }}>
-                      Đã chọn: {kbFile.name} ({(kbFile.size / 1024).toFixed(0)} KB)
+                <div className="mt-6">
+                  <div className="ui-label mb-2">
+                    Tài liệu đã có ({kbDocs.length})
+                  </div>
+                  {kbLoading && kbDocs.length === 0 && (
+                    <div className="space-y-2.5" aria-hidden="true">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
                     </div>
                   )}
-                </div>
-                <button type="submit" className="cb-btn block" disabled={kbUploading}>
-                  {kbUploading ? 'Đang tải lên…' : 'Tải tài liệu lên'}
-                </button>
-              </form>
-
-              <div style={{ marginTop: 'var(--space-5)' }}>
-                <div className="cb-label" style={{ marginBottom: 'var(--space-2)' }}>
-                  Tài liệu đã có ({kbDocs.length})
-                </div>
-                {kbLoading && kbDocs.length === 0 && (
-                  <p className="text-sm text-muted">Đang tải danh sách…</p>
-                )}
-                {!kbLoading && kbDocs.length === 0 && (
-                  <p className="text-sm text-muted">
-                    Chưa có tài liệu nào. Tải quy chế nội bộ lên để chatbot bắt đầu trả lời được.
-                  </p>
-                )}
-                {kbDocs.map((doc) => (
-                  <div key={doc.id} className="cb-doc">
-                    <div className="cb-doc-info">
-                      <div className="cb-doc-name">{doc.title || 'Tài liệu không tên'}</div>
-                      <div className="cb-doc-meta">
-                        <span className={`cb-badge ${doc.status || 'processing'}`}>
-                          {kbStatusLabel[doc.status] || 'Đang xử lý'}
-                        </span>{' '}
-                        · {formatDateTime(doc.created_at)}
+                  {!kbLoading && kbDocs.length === 0 && (
+                    <p className="text-sm leading-relaxed text-slate-400">
+                      Chưa có tài liệu nào. Tải quy chế nội bộ lên để chatbot bắt đầu trả lời được.
+                    </p>
+                  )}
+                  {kbDocs.map((doc) => (
+                    <div key={doc.id} className="flex items-start gap-3 border-t border-slate-100 py-3 first:border-t-0">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-50 text-accent-600 ring-1 ring-inset ring-accent-100">
+                        <IconFileText size={16} />
                       </div>
-                      {doc.status === 'failed' && (
-                        <div className="text-xs" style={{ color: 'var(--color-danger)', marginTop: 2 }}>
-                          Không trích xuất được nội dung — kiểm tra lại file hoặc xoá và tải bản khác.
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">
+                          {doc.title || 'Tài liệu không tên'}
                         </div>
-                      )}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                          <Badge tone={kbStatusTone[doc.status] || 'amber'} dot>
+                            {kbStatusLabel[doc.status] || 'Đang xử lý'}
+                          </Badge>
+                          <span>{formatDateTime(doc.created_at)}</span>
+                        </div>
+                        {doc.status === 'failed' && (
+                          <div className="mt-1.5 text-xs leading-relaxed text-rose-600">
+                            Không trích xuất được nội dung — kiểm tra lại file hoặc xoá và tải bản khác.
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition duration-200 hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/25"
+                        onClick={() => handleKbDelete(doc)}
+                        aria-label={`Xoá tài liệu ${doc.title || ''}`}
+                        title="Xoá tài liệu"
+                      >
+                        <IconTrash size={16} />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="cb-icon-btn"
-                      onClick={() => handleKbDelete(doc)}
-                      aria-label={`Xoá tài liệu ${doc.title || ''}`}
-                      title="Xoá tài liệu"
-                    >
-                      <IconTrash />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
           </aside>
         )}
       </div>

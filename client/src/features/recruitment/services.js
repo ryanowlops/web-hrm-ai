@@ -13,9 +13,11 @@ const unwrap = (res) => res.data;
 
 /* ---------------------------------- Jobs --------------------------------- */
 
-/** Danh sách tin tuyển dụng (phía HR). params: { page, limit, search, status, department_id } */
+/** Danh sách tin tuyển dụng (phía HR). params: { page, limit, search, status, department_id }
+ *  Trả nguyên body { data, meta } để trang dùng được meta phân trang
+ *  (interceptor của axiosClient đã bóc response.data một lần). */
 export async function listJobs(params = {}) {
-  return unwrap(await api.get('/jobs', { params }));
+  return api.get('/jobs', { params });
 }
 
 /** Chi tiết 1 tin tuyển dụng (kèm JD đầy đủ). */
@@ -56,7 +58,8 @@ export async function deleteJob(jobId) {
  * Mỗi ứng viên có thể kèm match_score / latest_analysis (bản phân tích AI mới nhất) từ backend.
  */
 export async function listCandidates(params = {}) {
-  return unwrap(await api.get('/candidates', { params }));
+  // Trả nguyên body { data, meta } như listJobs (giữ meta phân trang).
+  return api.get('/candidates', { params });
 }
 
 /** Chi tiết 1 ứng viên (kèm link CV gốc + ghi chú HR). */

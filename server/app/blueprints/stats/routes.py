@@ -47,6 +47,14 @@ def _manager_department_id(user) -> int | None:
     return employee.department_id
 
 
+def _today():
+    """Ngay hien tai theo mui gio nghiep vu Asia/Ho_Chi_Minh."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+
+
 def _scope_department_id(user) -> int | None:
     """Phạm vi dữ liệu: None = toàn công ty (admin/hr); số = 1 phòng ban."""
     if user.role in ("admin", "hr"):
@@ -83,6 +91,7 @@ def _employees_overview(department_id: int | None) -> dict:
         dept_rows = [row for row in dept_rows if row[0] == department_id]
     return {
         "totalEmployees": active.count(),
+        "totalDepartments": len(dept_rows),
         "byStatus": {status: count for status, count in by_status_rows},
         "byDepartment": [
             {"departmentId": dept_id, "departmentName": name, "employeeCount": count}
@@ -92,7 +101,7 @@ def _employees_overview(department_id: int | None) -> dict:
 
 
 def _attendance_overview(department_id: int | None) -> dict:
-    today = date.today()
+    today = _today()
     month_start = today.replace(day=1)
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     query = (db.session.query(Attendance.status, db.func.count(Attendance.id))
@@ -123,15 +132,46 @@ def _pending_leave_overview(department_id: int | None) -> dict:
     if department_id is not None:
         query = query.filter(Employee.department_id == department_id)
     counts = dict(query.group_by(LeaveRequest.status).all())
+    items_query = (LeaveRequest.query
+                   .join(Employee, LeaveRequest.employee_id == Employee.id)
+                   .filter(LeaveRequest.status.in_(waiting)))
+    if department_id is not None:
+        items_query = items_query.filter(Employee.department_id == department_id)
+    items = items_query.order_by(LeaveRequest.id.desc()).limit(10).all()
     return {
         "pendingApproval": sum(counts.values()),
         "waitingManager": counts.get(LeaveRequest.STATUS_PENDING, 0),
         "waitingHr": counts.get(LeaveRequest.STATUS_MANAGER_APPROVED, 0),
+        "items": [{
+            "id": r.id,
+            "employeeName": r.employee.full_name if r.employee else None,
+            "leaveType": r.leave_type.name if r.leave_type else None,
+            "fromDate": r.from_date.isoformat() if r.from_date else None,
+            "toDate": r.to_date.isoformat() if r.to_date else None,
+            "daysCount": r.days_count,
+            "status": r.status,
+        } for r in items],
+    }
+
+
+def _attendance_today_overview(department_id: int | None) -> dict:
+    today = _today()
+    query = (db.session.query(Attendance.status, db.func.count(Attendance.id))
+             .join(Employee, Attendance.employee_id == Employee.id)
+             .filter(Attendance.work_date == today))
+    if department_id is not None:
+        query = query.filter(Employee.department_id == department_id)
+    counts = dict(query.group_by(Attendance.status).all())
+    return {
+        "present": counts.get(Attendance.STATUS_PRESENT, 0),
+        "late": counts.get(Attendance.STATUS_LATE, 0),
+        "absent": counts.get(Attendance.STATUS_ABSENT, 0),
+        "onLeave": counts.get(Attendance.STATUS_ON_LEAVE, 0),
     }
 
 
 def _expiring_contracts_overview(department_id: int | None) -> dict:
-    today = date.today()
+    today = _today()
     horizon = today + timedelta(days=CONTRACT_EXPIRY_DAYS)
     query = (Contract.query
              .join(Employee, Contract.employee_id == Employee.id)
@@ -174,6 +214,7 @@ def overview():
     }
     result.update(_employees_overview(department_id))
     result["attendanceThisMonth"] = _attendance_overview(department_id)
+    result["attendanceToday"] = _attendance_today_overview(department_id)
     result["leave"] = _pending_leave_overview(department_id)
     result["contracts"] = _expiring_contracts_overview(department_id)
     result.update(_recruitment_overview(department_id))

@@ -1,12 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listUsers, updateUserRole, setUserActive, friendlyError } from '../services';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  Input,
+  Modal,
+  PageHeader,
+  Select,
+  TableSkeleton,
+} from '../../../components/ui';
 
 /**
  * Trang Quản trị tài khoản (FR-01, route /admin).
  * - Admin: xem danh sách tài khoản, đổi vai trò (role), khoá/mở khoá tài khoản.
  * - HR: chỉ xem được trong giới hạn backend trả về — mọi thao tác sửa đều do
  *   backend kiểm tra quyền lại; nếu backend từ chối (403), trang báo rõ.
- * Mọi thay đổi đều hỏi xác nhận trước và hiển thị kết quả thành công/lỗi.
+ * Mọi thay đổi đều hỏi xác nhận trước (hộp thoại xác nhận) và hiển thị kết quả
+ * thành công/lỗi. Trình bày theo design system v2 (UI kit dùng chung).
  */
 
 const ROLES = [
@@ -17,85 +32,40 @@ const ROLES = [
 ];
 const roleLabel = (value) => ROLES.find((r) => r.value === value)?.label || value || '—';
 
-const STYLE = `
-.adm-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4); }
-.adm-search {
-  flex: 1 1 260px; display: flex; align-items: center; gap: var(--space-2);
-  padding: 0 var(--space-3); background: var(--color-surface);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+// Màu huy hiệu theo vai trò: admin=violet, hr=blue, manager=amber, employee=slate.
+const ROLE_TONES = { admin: 'violet', hr: 'blue', manager: 'amber', employee: 'slate' };
+const roleTone = (value) => ROLE_TONES[value] || 'slate';
+
+// Chữ viết tắt hiển thị trong vòng tròn đại diện (chỉ phục vụ trình bày).
+function initialsOf(user) {
+  const name = (user.full_name || user.email || '').trim();
+  if (!name) return '?';
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-.adm-search input { flex: 1; border: none; padding: var(--space-2) 0; font-size: var(--text-sm); background: transparent; }
-.adm-search input:focus { outline: none; }
-.adm-search:focus-within { border-color: var(--color-primary-500); outline: 2px solid var(--color-primary-100); }
-.adm-select {
-  padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md); background: var(--color-surface); font-size: var(--text-sm);
-}
-.adm-card {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden;
-  animation: admFadeUp var(--duration-slow) var(--ease-out) both;
-}
-.adm-tablewrap { overflow-x: auto; }
-.adm-table { width: 100%; border-collapse: collapse; min-width: 720px; }
-.adm-table th, .adm-table td {
-  padding: var(--space-3) var(--space-4); text-align: left; vertical-align: middle;
-  border-bottom: 1px solid var(--color-border); font-size: var(--text-sm);
-}
-.adm-table th {
-  background: var(--color-gray-50); color: var(--color-text-secondary);
-  font-weight: var(--weight-semibold); font-size: var(--text-xs);
-  text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
-}
-.adm-table tbody tr { transition: background var(--duration-fast) var(--ease-out); }
-.adm-table tbody tr:hover { background: var(--color-gray-50); }
-.adm-table tbody tr.locked { opacity: 0.62; }
-.adm-user-name { font-weight: var(--weight-medium); }
-.adm-role-select {
-  padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--text-sm);
-}
-.adm-role-select:disabled { opacity: 0.6; }
-.adm-badge {
-  display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-full);
-  font-size: var(--text-xs); font-weight: var(--weight-medium); border: 1px solid transparent; white-space: nowrap;
-}
-.adm-badge.active { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success-border); }
-.adm-badge.locked { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger-border); }
-.adm-btn {
-  display: inline-flex; align-items: center; gap: var(--space-1);
-  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
-  font-size: var(--text-sm); font-weight: var(--weight-medium);
-  border: 1px solid var(--color-border-strong); background: var(--color-surface);
-  color: var(--color-text); white-space: nowrap;
-  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
-}
-.adm-btn:hover:not(:disabled) { background: var(--color-gray-100); }
-.adm-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.adm-btn.danger { color: var(--color-danger); border-color: var(--color-danger-border); }
-.adm-btn.danger:hover:not(:disabled) { background: var(--color-danger-bg); }
-.adm-btn.success { color: var(--color-success); border-color: var(--color-success-border); }
-.adm-btn.success:hover:not(:disabled) { background: var(--color-success-bg); }
-.adm-alert {
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-  font-size: var(--text-sm); margin-bottom: var(--space-4); border: 1px solid transparent;
-  animation: admFadeUp var(--duration-base) var(--ease-out) both;
-}
-.adm-alert.error { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger-border); }
-.adm-alert.success { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success-border); }
-.adm-pagination {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4); background: var(--color-surface);
-}
-.adm-empty { text-align: center; color: var(--color-text-secondary); padding: var(--space-10) var(--space-4); }
-.adm-skeleton {
-  height: 52px; margin: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-  background: linear-gradient(90deg, var(--color-gray-100) 25%, var(--color-gray-200) 50%, var(--color-gray-100) 75%);
-  background-size: 200% 100%; animation: admShimmer 1.2s infinite;
-}
-@keyframes admFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes admShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-`;
+
+const SearchIcon = (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+    <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const LockIcon = (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <rect x="4.5" y="10.5" width="15" height="9.5" rx="2" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="12" cy="15.2" r="1.6" fill="currentColor" />
+  </svg>
+);
+
+const UploadIcon = (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M12 16V5m0 0-4 4m4-4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
 
 export default function AdminPage() {
   const [users, setUsers] = useState([]);
@@ -109,6 +79,9 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState(null);
+  // Hộp thoại xác nhận thay cho window.confirm: { kind: 'role' | 'toggle', user, nextRole?, nextActive? }
+  const [confirm, setConfirm] = useState(null);
+  const [kbNote, setKbNote] = useState('');
   const searchTimer = useRef(null);
 
   const limit = 20;
@@ -157,17 +130,15 @@ export default function AdminPage() {
   }, [loadUsers]);
 
   /* -------------------------------- Thao tác ------------------------------- */
-  async function handleRoleChange(user, nextRole) {
+  // Mở hộp thoại xác nhận trước khi đổi vai trò (giữ nguyên điều kiện bỏ qua
+  // khi vai trò không thay đổi).
+  function requestRoleChange(user, nextRole) {
     if (nextRole === user.role) return;
+    setConfirm({ kind: 'role', user, nextRole });
+  }
+
+  async function handleRoleChange(user, nextRole) {
     const name = user.full_name || user.email;
-    if (
-      !window.confirm(
-        `Đổi vai trò của "${name}" từ ${roleLabel(user.role)} thành ${roleLabel(nextRole)}?\n` +
-          'Vai trò mới có hiệu lực ngay từ phiên đăng nhập tiếp theo của tài khoản này.',
-      )
-    ) {
-      return;
-    }
     setBusyId(user.id);
     setError('');
     setNotice('');
@@ -183,13 +154,15 @@ export default function AdminPage() {
     }
   }
 
+  // Mở hộp thoại xác nhận trước khi khoá/mở khoá tài khoản.
+  function requestToggleActive(user) {
+    const nextActive = !(user.is_active !== false);
+    setConfirm({ kind: 'toggle', user, nextActive });
+  }
+
   async function handleToggleActive(user) {
     const nextActive = !(user.is_active !== false);
     const name = user.full_name || user.email;
-    const promptText = nextActive
-      ? `Mở khoá tài khoản "${name}"? Tài khoản sẽ đăng nhập lại được ngay.`
-      : `Khoá tài khoản "${name}"? Tài khoản sẽ không đăng nhập được nữa cho tới khi được mở khoá. Dữ liệu nghiệp vụ liên quan vẫn được giữ nguyên.`;
-    if (!window.confirm(promptText)) return;
     setBusyId(user.id);
     setError('');
     setNotice('');
@@ -209,61 +182,79 @@ export default function AdminPage() {
     }
   }
 
+  function executeConfirm() {
+    if (!confirm) return;
+    const current = confirm;
+    setConfirm(null);
+    if (current.kind === 'role') {
+      handleRoleChange(current.user, current.nextRole);
+    } else {
+      handleToggleActive(current.user);
+    }
+  }
+
+  const confirmName = confirm ? confirm.user.full_name || confirm.user.email : '';
+
   return (
-    <div>
-      <style>{STYLE}</style>
-      <h1 className="page-title">Quản trị tài khoản</h1>
-      <p className="page-subtitle">
-        Quản lý tài khoản đăng nhập hệ thống: đổi vai trò và khoá/mở khoá tài khoản. Phân quyền
-        được kiểm tra ở máy chủ — quản trị viên (Admin) thao tác được toàn bộ, HR chỉ xem trong
-        giới hạn được cấp.
-      </p>
+    <div className="page-shell">
+      <PageHeader
+        eyebrow="Hệ thống"
+        title="Quản trị tài khoản"
+        subtitle="Quản lý tài khoản đăng nhập hệ thống: đổi vai trò và khoá/mở khoá tài khoản. Phân quyền được kiểm tra ở máy chủ — quản trị viên (Admin) thao tác được toàn bộ, HR chỉ xem trong giới hạn được cấp."
+      />
 
-      <div style={{ marginTop: 'var(--space-6)' }}>
-        {error && (
-          <div className="adm-alert error" role="alert">
-            {error}
-          </div>
-        )}
-        {notice && (
-          <div className="adm-alert success" role="status">
-            {notice}
-          </div>
-        )}
+      {(error || notice) && (
+        <div className="mb-5 space-y-3">
+          {error && <Alert tone="error">{error}</Alert>}
+          {notice && <Alert tone="success">{notice}</Alert>}
+        </div>
+      )}
 
-        {forbidden ? (
-          <div className="adm-card">
-            <div className="adm-empty">
-              <p style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text)', marginBottom: 'var(--space-2)' }}>
-                Bạn không có quyền xem danh sách tài khoản
-              </p>
-              <p>
-                Khu vực này chỉ dành cho quản trị viên (Admin). Nếu bạn cần đổi vai trò hoặc
-                khoá/mở tài khoản, vui lòng liên hệ Admin của hệ thống.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="adm-toolbar">
-              <div className="adm-search">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-                  <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                <label className="sr-only" htmlFor="adm-search">Tìm tài khoản theo tên hoặc email</label>
-                <input
+      {forbidden ? (
+        <Card className="animate-fade-up">
+          <EmptyState
+            icon={LockIcon}
+            title="Bạn không có quyền xem danh sách tài khoản"
+            description="Khu vực này chỉ dành cho quản trị viên (Admin). Nếu bạn cần đổi vai trò hoặc khoá/mở tài khoản, vui lòng liên hệ Admin của hệ thống."
+          />
+        </Card>
+      ) : (
+        <>
+          <Card className="animate-fade-up overflow-hidden">
+            <CardHeader
+              title="Tài khoản người dùng"
+              subtitle="Đổi vai trò và khoá/mở khoá tài khoản trực tiếp trong bảng dưới đây."
+              actions={
+                <Badge tone="blue" dot>
+                  Tổng cộng {totalItems} tài khoản
+                </Badge>
+              }
+            />
+
+            {/* Thanh công cụ: tìm kiếm + lọc vai trò */}
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
+              <div className="relative min-w-[240px] flex-1">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 [&>svg]:h-[18px] [&>svg]:w-[18px]">
+                  {SearchIcon}
+                </span>
+                <label className="sr-only" htmlFor="adm-search">
+                  Tìm tài khoản theo tên hoặc email
+                </label>
+                <Input
                   id="adm-search"
                   type="search"
+                  className="pl-10"
                   placeholder="Tìm theo tên hoặc email…"
                   value={search}
                   onChange={handleSearchChange}
                 />
               </div>
-              <label className="sr-only" htmlFor="adm-role-filter">Lọc theo vai trò</label>
-              <select
+              <label className="sr-only" htmlFor="adm-role-filter">
+                Lọc theo vai trò
+              </label>
+              <Select
                 id="adm-role-filter"
-                className="adm-select"
+                className="w-auto min-w-[180px]"
                 value={roleFilter}
                 onChange={(e) => {
                   setRoleFilter(e.target.value);
@@ -276,121 +267,231 @@ export default function AdminPage() {
                     {r.label}
                   </option>
                 ))}
-              </select>
-              <span className="text-sm text-secondary">
-                Tổng cộng <strong>{totalItems}</strong> tài khoản
+              </Select>
+              <span className="text-sm text-slate-500">
+                Tổng cộng <strong className="font-semibold text-slate-700">{totalItems}</strong> tài khoản
               </span>
             </div>
 
-            <div className="adm-card">
-              <div className="adm-tablewrap">
-                {loading && users.length === 0 ? (
-                  <div aria-label="Đang tải danh sách tài khoản">
-                    <div className="adm-skeleton" />
-                    <div className="adm-skeleton" />
-                    <div className="adm-skeleton" />
-                  </div>
-                ) : users.length === 0 ? (
-                  <div className="adm-empty">
-                    <p style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text)', marginBottom: 'var(--space-2)' }}>
-                      Không tìm thấy tài khoản nào
-                    </p>
-                    <p>Thử đổi từ khoá tìm kiếm hoặc bỏ bộ lọc vai trò.</p>
-                  </div>
-                ) : (
-                  <table className="adm-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Họ tên</th>
-                        <th scope="col">Email</th>
-                        <th scope="col">Vai trò</th>
-                        <th scope="col">Trạng thái</th>
-                        <th scope="col">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((u) => {
-                        const active = u.is_active !== false;
-                        const busy = busyId === u.id;
-                        return (
-                          <tr key={u.id} className={active ? undefined : 'locked'}>
-                            <td>
-                              <div className="adm-user-name">{u.full_name || '—'}</div>
-                              <div className="text-xs text-muted">
-                                {u.employee_id ? `Liên kết hồ sơ NV #${u.employee_id}` : 'Chưa liên kết hồ sơ nhân viên'}
+            <div className="overflow-x-auto">
+              {loading && users.length === 0 ? (
+                <div aria-label="Đang tải danh sách tài khoản">
+                  <TableSkeleton rows={5} cols={5} />
+                </div>
+              ) : users.length === 0 ? (
+                <EmptyState
+                  icon={SearchIcon}
+                  title="Không tìm thấy tài khoản nào"
+                  description="Thử đổi từ khoá tìm kiếm hoặc bỏ bộ lọc vai trò."
+                />
+              ) : (
+                <table className="ui-table min-w-[760px]">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="ui-th">Họ tên</th>
+                      <th scope="col" className="ui-th">Email</th>
+                      <th scope="col" className="ui-th">Vai trò</th>
+                      <th scope="col" className="ui-th">Trạng thái</th>
+                      <th scope="col" className="ui-th">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => {
+                      const active = u.is_active !== false;
+                      const busy = busyId === u.id;
+                      return (
+                        <tr key={u.id} className={`ui-tr ${active ? '' : 'opacity-60'}`}>
+                          <td className="ui-td">
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-[13px] font-bold text-brand-700 ring-1 ring-inset ring-brand-600/15">
+                                {initialsOf(u)}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-slate-800">{u.full_name || '—'}</div>
+                                <div className="text-xs text-slate-400">
+                                  {u.employee_id ? `Liên kết hồ sơ NV #${u.employee_id}` : 'Chưa liên kết hồ sơ nhân viên'}
+                                </div>
                               </div>
-                            </td>
-                            <td>{u.email}</td>
-                            <td>
+                            </div>
+                          </td>
+                          <td className="ui-td">{u.email}</td>
+                          <td className="ui-td">
+                            <div className="flex min-w-[190px] flex-col items-start gap-1.5">
+                              <Badge tone={roleTone(u.role)} dot>
+                                {roleLabel(u.role)}
+                              </Badge>
                               <label className="sr-only" htmlFor={`role-${u.id}`}>
                                 Vai trò của {u.full_name || u.email}
                               </label>
-                              <select
+                              <Select
                                 id={`role-${u.id}`}
-                                className="adm-role-select"
+                                className="w-auto min-w-[180px]"
                                 value={u.role || 'employee'}
                                 disabled={busy}
-                                onChange={(e) => handleRoleChange(u, e.target.value)}
+                                onChange={(e) => requestRoleChange(u, e.target.value)}
                               >
                                 {ROLES.map((r) => (
                                   <option key={r.value} value={r.value}>
                                     {r.label}
                                   </option>
                                 ))}
-                              </select>
-                            </td>
-                            <td>
-                              <span className={`adm-badge ${active ? 'active' : 'locked'}`}>
-                                {active ? 'Đang hoạt động' : 'Đã khoá'}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className={`adm-btn ${active ? 'danger' : 'success'}`}
-                                disabled={busy}
-                                onClick={() => handleToggleActive(u)}
-                              >
-                                {busy ? 'Đang xử lý…' : active ? 'Khoá tài khoản' : 'Mở khoá'}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              {users.length > 0 && (
-                <div className="adm-pagination">
-                  <span className="text-sm text-secondary">
-                    Trang {page} / {totalPages}
-                  </span>
-                  <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <button
-                      type="button"
-                      className="adm-btn"
-                      disabled={page <= 1 || loading}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      ← Trước
-                    </button>
-                    <button
-                      type="button"
-                      className="adm-btn"
-                      disabled={page >= totalPages || loading}
-                      onClick={() => setPage((p) => p + 1)}
-                    >
-                      Sau →
-                    </button>
-                  </div>
-                </div>
+                              </Select>
+                            </div>
+                          </td>
+                          <td className="ui-td">
+                            <Badge tone={active ? 'green' : 'red'} dot>
+                              {active ? 'Đang hoạt động' : 'Đã khoá'}
+                            </Badge>
+                          </td>
+                          <td className="ui-td">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              loading={busy}
+                              className={
+                                active
+                                  ? 'border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50'
+                                  : 'border-emerald-200 text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50'
+                              }
+                              onClick={() => requestToggleActive(u)}
+                            >
+                              {busy ? 'Đang xử lý…' : active ? 'Khoá tài khoản' : 'Mở khoá'}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
             </div>
-          </>
-        )}
-      </div>
+
+            {users.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3.5">
+                <span className="text-sm text-slate-500">
+                  Trang {page} / {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    ← Trước
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={page >= totalPages || loading}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Sau →
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* Tài liệu tri thức (KB) — khu vực tải tài liệu dạng dropzone.
+              Việc quản lý tài liệu KB đầy đủ nằm ở khu vực chatbot HR; hộp thả
+              tệp ở đây là lối tắt giao diện trong trang quản trị. */}
+          <Card className="animate-fade-up mt-6 overflow-hidden">
+            <CardHeader
+              title="Tài liệu tri thức (KB)"
+              subtitle="Tài liệu quy chế, nội quy nội bộ để chatbot HR tra cứu và trích dẫn khi trả lời nhân viên."
+            />
+            <CardBody>
+              <label
+                htmlFor="adm-kb-upload"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 px-6 py-9 text-center transition duration-200 ease-spring hover:border-brand-400 hover:bg-brand-50/50"
+              >
+                <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-brand-500 shadow-card ring-1 ring-inset ring-slate-200">
+                  {UploadIcon}
+                </span>
+                <span className="text-sm font-semibold text-slate-700">
+                  Kéo thả tài liệu vào đây hoặc bấm để chọn tệp
+                </span>
+                <span className="mt-1 text-xs leading-relaxed text-slate-400">
+                  Hỗ trợ tài liệu văn bản nội bộ (quy chế, nội quy, chính sách) dùng cho chatbot HR.
+                </span>
+              </label>
+              <input
+                id="adm-kb-upload"
+                type="file"
+                className="sr-only"
+                onChange={(e) => {
+                  setKbNote(
+                    'Đã nhận tệp. Việc quản lý, lập chỉ mục tài liệu tri thức được thực hiện tại khu vực Chatbot HR — vui lòng hoàn tất tải lên ở đó.',
+                  );
+                  e.target.value = '';
+                }}
+              />
+              {kbNote && (
+                <Alert tone="info" className="mt-4">
+                  {kbNote}
+                </Alert>
+              )}
+            </CardBody>
+          </Card>
+        </>
+      )}
+
+      {/* Hộp thoại xác nhận thao tác quản trị (thay cho window.confirm) */}
+      {confirm && (
+        <Modal
+          open
+          title={
+            confirm.kind === 'role'
+              ? 'Đổi vai trò tài khoản'
+              : confirm.nextActive
+                ? 'Mở khoá tài khoản'
+                : 'Khoá tài khoản'
+          }
+          subtitle={
+            confirm.kind === 'role'
+              ? 'Thay đổi vai trò có hiệu lực ngay từ phiên đăng nhập tiếp theo của tài khoản này.'
+              : undefined
+          }
+          onClose={() => setConfirm(null)}
+          actions={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setConfirm(null)}>
+                Huỷ
+              </Button>
+              <Button
+                type="button"
+                variant={confirm.kind === 'toggle' && !confirm.nextActive ? 'danger' : 'primary'}
+                onClick={executeConfirm}
+              >
+                {confirm.kind === 'role'
+                  ? 'Đổi vai trò'
+                  : confirm.nextActive
+                    ? 'Mở khoá'
+                    : 'Khoá tài khoản'}
+              </Button>
+            </>
+          }
+        >
+          {confirm.kind === 'role' ? (
+            <p className="text-sm leading-relaxed text-slate-600">
+              Đổi vai trò của “{confirmName}” từ{' '}
+              <strong className="font-semibold text-slate-800">{roleLabel(confirm.user.role)}</strong>{' '}
+              thành{' '}
+              <strong className="font-semibold text-slate-800">{roleLabel(confirm.nextRole)}</strong>?
+            </p>
+          ) : (
+            <p className="text-sm leading-relaxed text-slate-600">
+              {confirm.nextActive
+                ? `Mở khoá tài khoản "${confirmName}"? Tài khoản sẽ đăng nhập lại được ngay.`
+                : `Khoá tài khoản "${confirmName}"? Tài khoản sẽ không đăng nhập được nữa cho tới khi được mở khoá. Dữ liệu nghiệp vụ liên quan vẫn được giữ nguyên.`}
+            </p>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

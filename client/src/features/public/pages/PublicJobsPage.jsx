@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listOpenJobs, getPublicJob, applyToJob, friendlyError } from '../services';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  Input,
+  Modal,
+  Skeleton,
+} from '../../../components/ui';
 
 /**
  * Trang Tuyển dụng CÔNG KHAI (route /jobs) — khách chưa đăng nhập (FR-08).
@@ -8,159 +19,12 @@ import { listOpenJobs, getPublicJob, applyToJob, friendlyError } from '../servic
  * - Form nộp CV: họ tên, email, số điện thoại, file CV PDF tối đa 5 MB —
  *   validate kỹ tại client và hiển thị lỗi theo từng trường; backend vẫn
  *   kiểm tra lại độc lập. Kết quả thành công/lỗi đều thông báo rõ ràng.
+ *
+ * Trình bày: design system v2 (Tailwind + UI kit) — hero navy, thẻ vị trí
+ * dùng Card/Badge, chi tiết + form ứng tuyển trong Modal/Card chuẩn.
  */
 
 const CV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-
-const STYLE = `
-.pj-wrap { min-height: 100vh; background: var(--color-bg); }
-.pj-topbar {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--color-surface); border-bottom: 1px solid var(--color-border);
-}
-.pj-topbar-in {
-  max-width: 1200px; margin: 0 auto; padding: var(--space-3) var(--space-6);
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-}
-.pj-logo { display: flex; align-items: center; gap: var(--space-3); font-weight: var(--weight-bold); font-size: var(--text-lg); color: var(--color-text); }
-.pj-logo-mark {
-  width: 36px; height: 36px; border-radius: var(--radius-md);
-  background: var(--color-primary-600); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: var(--text-base);
-}
-.pj-login-link { font-size: var(--text-sm); font-weight: var(--weight-medium); }
-.pj-hero {
-  background: var(--color-sidebar-bg); color: #fff;
-  padding: var(--space-12) var(--space-6) var(--space-10);
-}
-.pj-hero-in { max-width: 1200px; margin: 0 auto; animation: pjFadeUp var(--duration-slow) var(--ease-out) both; }
-.pj-hero h1 { color: #fff; font-size: var(--text-3xl); margin-bottom: var(--space-3); }
-.pj-hero p { color: var(--color-sidebar-text); max-width: 640px; line-height: var(--leading-relaxed); }
-.pj-search {
-  margin-top: var(--space-6); max-width: 560px; display: flex; align-items: center; gap: var(--space-2);
-  background: #fff; border-radius: var(--radius-md); padding: 0 var(--space-4);
-  box-shadow: var(--shadow-md);
-}
-.pj-search input { flex: 1; border: none; padding: var(--space-3) 0; font-size: var(--text-base); background: transparent; color: var(--color-text); }
-.pj-search input:focus { outline: none; }
-.pj-search:focus-within { outline: 2px solid var(--color-primary-300); }
-.pj-main { max-width: 1200px; margin: 0 auto; padding: var(--space-8) var(--space-6) var(--space-12); }
-.pj-count { font-size: var(--text-sm); color: var(--color-text-secondary); margin-bottom: var(--space-4); }
-.pj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-5); }
-.pj-job {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); padding: var(--space-5);
-  display: flex; flex-direction: column; gap: var(--space-3);
-  box-shadow: var(--shadow-sm); cursor: pointer;
-  transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out);
-  animation: pjFadeUp var(--duration-slow) var(--ease-out) both;
-}
-.pj-job:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--color-primary-300); }
-.pj-job-title { font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--color-text); }
-.pj-job-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.pj-chip {
-  display: inline-flex; align-items: center; gap: var(--space-1);
-  padding: 2px var(--space-2); border-radius: var(--radius-full);
-  background: var(--color-gray-100); color: var(--color-gray-700);
-  font-size: var(--text-xs); font-weight: var(--weight-medium);
-}
-.pj-chip.deadline { background: var(--color-info-bg); color: var(--color-info); }
-.pj-chip.expired { background: var(--color-danger-bg); color: var(--color-danger); }
-.pj-job-desc {
-  font-size: var(--text-sm); color: var(--color-text-secondary); line-height: var(--leading-relaxed);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
-.pj-job-cta { margin-top: auto; font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--color-primary-700); }
-.pj-empty {
-  text-align: center; color: var(--color-text-secondary);
-  padding: var(--space-12) var(--space-4); background: var(--color-surface);
-  border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg);
-}
-.pj-skeleton {
-  height: 190px; border-radius: var(--radius-lg);
-  background: linear-gradient(90deg, var(--color-gray-100) 25%, var(--color-gray-200) 50%, var(--color-gray-100) 75%);
-  background-size: 200% 100%; animation: pjShimmer 1.2s infinite;
-}
-.pj-alert {
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-  font-size: var(--text-sm); border: 1px solid transparent; margin-bottom: var(--space-5);
-  animation: pjFadeUp var(--duration-base) var(--ease-out) both;
-}
-.pj-alert.error { background: var(--color-danger-bg); color: var(--color-danger); border-color: var(--color-danger-border); }
-.pj-overlay {
-  position: fixed; inset: 0; z-index: 50; background: var(--color-overlay);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding: var(--space-6) var(--space-4); overflow-y: auto;
-  animation: pjFadeIn var(--duration-base) var(--ease-out) both;
-}
-.pj-modal {
-  background: var(--color-surface); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg); width: 100%; max-width: 760px;
-  padding: var(--space-6); margin: auto 0;
-  animation: pjScaleIn var(--duration-slow) var(--ease-out) both;
-}
-.pj-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
-.pj-close {
-  flex: 0 0 auto; width: 34px; height: 34px; border-radius: var(--radius-full);
-  display: flex; align-items: center; justify-content: center; color: var(--color-text-muted);
-}
-.pj-close:hover { background: var(--color-gray-100); color: var(--color-text); }
-.pj-section-title { font-size: var(--text-base); font-weight: var(--weight-semibold); margin: var(--space-5) 0 var(--space-2); }
-.pj-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); line-height: var(--leading-relaxed); color: var(--color-gray-700); }
-.pj-form { border-top: 1px solid var(--color-border); margin-top: var(--space-6); padding-top: var(--space-5); }
-.pj-field { margin-bottom: var(--space-4); }
-.pj-label { display: block; font-size: var(--text-sm); font-weight: var(--weight-medium); margin-bottom: var(--space-1); }
-.pj-label .req { color: var(--color-danger); }
-.pj-input {
-  width: 100%; padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
-  font-size: var(--text-sm); background: var(--color-surface);
-}
-.pj-input:focus { border-color: var(--color-primary-500); outline: 2px solid var(--color-primary-100); }
-.pj-input.invalid { border-color: var(--color-danger-600); }
-.pj-field-error { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--color-danger); }
-.pj-file-name { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--color-text-secondary); }
-.pj-submit {
-  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-  background: var(--color-primary-600); color: var(--color-text-on-primary);
-  font-size: var(--text-base); font-weight: var(--weight-semibold);
-  transition: background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
-}
-.pj-submit:hover:not(:disabled) { background: var(--color-primary-700); }
-.pj-submit:active:not(:disabled) { transform: scale(0.99); }
-.pj-submit:disabled { opacity: 0.55; cursor: not-allowed; }
-.pj-success {
-  text-align: center; padding: var(--space-8) var(--space-4);
-  background: var(--color-success-bg); border: 1px solid var(--color-success-border);
-  border-radius: var(--radius-lg); animation: pjScaleIn var(--duration-slow) var(--ease-out) both;
-}
-.pj-success-icon {
-  width: 54px; height: 54px; margin: 0 auto var(--space-3); border-radius: var(--radius-full);
-  background: var(--color-success); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-}
-.pj-ghost-btn {
-  display: inline-flex; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-strong); background: var(--color-surface);
-  font-size: var(--text-sm); font-weight: var(--weight-medium);
-}
-.pj-footer {
-  border-top: 1px solid var(--color-border); padding: var(--space-5) var(--space-6);
-  text-align: center; font-size: var(--text-xs); color: var(--color-text-muted);
-}
-@keyframes pjFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes pjFadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes pjScaleIn { from { opacity: 0; transform: scale(0.97) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-@keyframes pjShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-@media (max-width: 768px) {
-  .pj-hero { padding: var(--space-8) var(--space-4) var(--space-6); }
-  .pj-hero h1 { font-size: var(--text-2xl); }
-  .pj-main, .pj-topbar-in { padding-left: var(--space-4); padding-right: var(--space-4); }
-  .pj-grid { grid-template-columns: 1fr; }
-  .pj-modal { padding: var(--space-5) var(--space-4); }
-}
-`;
 
 function formatDate(iso) {
   if (!iso) return 'Không giới hạn';
@@ -184,6 +48,25 @@ function departmentName(job) {
 
 const emptyForm = { fullName: '', email: '', phone: '' };
 
+/* ------------------------------- Icon dùng chung ------------------------------ */
+function BriefcaseIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="7.5" width="18" height="12" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3 12.5h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function PublicJobsPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -199,6 +82,7 @@ export default function PublicJobsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   /* ------------------------------ Tải danh sách ----------------------------- */
@@ -240,6 +124,7 @@ export default function PublicJobsPage() {
     setFieldErrors({});
     setSubmitError('');
     setSubmitted(false);
+    setDragOver(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
     // Lấy JD đầy đủ từ server (danh sách có thể chỉ có mô tả rút gọn).
     setDetailLoading(true);
@@ -271,6 +156,14 @@ export default function PublicJobsPage() {
   /* ------------------------- Validate + nộp hồ sơ --------------------------- */
   function handleFileChange(e) {
     const file = e.target.files?.[0] || null;
+    setCvFile(file);
+    setFieldErrors((prev) => ({ ...prev, cv: validateCv(file) || undefined }));
+  }
+
+  function handleFileDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0] || null;
     setCvFile(file);
     setFieldErrors((prev) => ({ ...prev, cv: validateCv(file) || undefined }));
   }
@@ -320,87 +213,116 @@ export default function PublicJobsPage() {
   }
 
   const selectedExpired = selected ? isExpired(selected) : false;
+  const cvInvalid = Boolean(fieldErrors.cv);
 
   return (
-    <div className="pj-wrap">
-      <style>{STYLE}</style>
-
-      <header className="pj-topbar">
-        <div className="pj-topbar-in">
-          <div className="pj-logo">
-            <span className="pj-logo-mark" aria-hidden="true">HR</span>
-            <span>HRM AI · Tuyển dụng</span>
+    <div className="min-h-screen bg-canvas font-sans text-slate-800 antialiased">
+      {/* ------------------------------- Topbar ------------------------------- */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-5 py-3 lg:px-8">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-sm font-extrabold tracking-wide text-white shadow-lift"
+            >
+              HR
+            </span>
+            <span className="text-[17px] font-bold tracking-[-0.01em] text-slate-900">
+              HRM AI <span className="font-medium text-slate-400">· Tuyển dụng</span>
+            </span>
           </div>
-          <a className="pj-login-link" href="/login">Đăng nhập nội bộ</a>
+          <a
+            href="/login"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-800"
+          >
+            Đăng nhập nội bộ
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
         </div>
       </header>
 
-      <section className="pj-hero">
-        <div className="pj-hero-in">
-          <h1>Cơ hội nghề nghiệp đang mở</h1>
-          <p>
-            Xem các vị trí đang tuyển và nộp CV trực tiếp tại đây. Hồ sơ của bạn sẽ được đội ngũ
-            HR xem xét — hệ thống có hỗ trợ AI phân tích mức phù hợp, nhưng quyết định cuối cùng
-            luôn do con người đưa ra.
-          </p>
-          <div className="pj-search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ color: 'var(--color-gray-400)', flex: '0 0 auto' }}>
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-              <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-            <label className="sr-only" htmlFor="pj-keyword">Tìm vị trí tuyển dụng</label>
-            <input
-              id="pj-keyword"
-              type="search"
-              placeholder="Tìm theo tên vị trí, phòng ban…"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-            />
+      {/* -------------------------------- Hero -------------------------------- */}
+      <section className="relative overflow-hidden bg-navy-950">
+        <div className="absolute inset-0 bg-gradient-to-br from-navy-950 via-navy-900 to-brand-900" aria-hidden="true" />
+        <div className="absolute -right-28 -top-28 h-80 w-80 rounded-full bg-brand-500/25 blur-3xl" aria-hidden="true" />
+        <div className="absolute -bottom-36 -left-20 h-72 w-72 rounded-full bg-accent-500/20 blur-3xl" aria-hidden="true" />
+        <div
+          className="absolute right-[16%] top-10 hidden h-40 w-40 rounded-full border border-white/10 lg:block"
+          aria-hidden="true"
+        />
+        <div className="relative mx-auto w-full max-w-[1200px] px-5 pb-14 pt-14 lg:px-8 lg:pb-16 lg:pt-[4.5rem]">
+          <div className="animate-fade-up">
+            <Badge tone="teal" dot className="bg-white/10 text-accent-300 ring-white/20">
+              Đang tuyển dụng
+            </Badge>
+            <h1 className="mt-5 max-w-2xl text-4xl font-extrabold leading-[1.12] tracking-[-0.02em] text-white lg:text-[2.75rem]">
+              Cơ hội nghề nghiệp đang mở
+            </h1>
+            <p className="mt-4 max-w-2xl leading-relaxed text-slate-300">
+              Xem các vị trí đang tuyển và nộp CV trực tiếp tại đây. Hồ sơ của bạn sẽ được đội ngũ
+              HR xem xét — hệ thống có hỗ trợ AI phân tích mức phù hợp, nhưng quyết định cuối cùng
+              luôn do con người đưa ra.
+            </p>
+            <div className="mt-8 flex max-w-xl items-center gap-2 rounded-2xl bg-white p-2 pl-4 shadow-pop ring-1 ring-white/40 transition focus-within:ring-4 focus-within:ring-accent-400/50">
+              <SearchIcon className="h-5 w-5 shrink-0 text-slate-400" />
+              <label className="sr-only" htmlFor="pj-keyword">Tìm vị trí tuyển dụng</label>
+              <input
+                id="pj-keyword"
+                type="search"
+                placeholder="Tìm theo tên vị trí, phòng ban…"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="w-full min-w-0 bg-transparent py-2 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      <main className="pj-main">
+      {/* ------------------------------ Danh sách ------------------------------ */}
+      <main className="mx-auto w-full max-w-[1200px] px-5 py-10 lg:px-8 lg:py-12">
         {loadError && (
-          <div className="pj-alert error" role="alert">
+          <Alert tone="error" className="mb-6">
             {loadError}
-          </div>
+          </Alert>
         )}
 
         {!loading && !loadError && (
-          <div className="pj-count" role="status">
+          <p className="mb-5 text-sm font-medium text-slate-500" role="status">
             {visibleJobs.length > 0
               ? `Đang hiển thị ${visibleJobs.length} vị trí đang tuyển`
               : 'Không có vị trí nào khớp với tìm kiếm'}
-          </div>
+          </p>
         )}
 
         {loading ? (
-          <div className="pj-grid" aria-label="Đang tải danh sách tuyển dụng">
-            <div className="pj-skeleton" />
-            <div className="pj-skeleton" />
-            <div className="pj-skeleton" />
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-label="Đang tải danh sách tuyển dụng">
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
           </div>
         ) : visibleJobs.length === 0 && !loadError ? (
-          <div className="pj-empty">
-            <p style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text)', marginBottom: 'var(--space-2)' }}>
-              {keyword ? 'Không tìm thấy vị trí phù hợp' : 'Hiện chưa có vị trí nào đang tuyển'}
-            </p>
-            <p>
-              {keyword
-                ? 'Thử đổi từ khoá ngắn hơn, ví dụ "kế toán", "kỹ thuật", "kinh doanh".'
-                : 'Vui lòng quay lại sau — các vị trí mới sẽ được cập nhật tại trang này.'}
-            </p>
-          </div>
+          <Card>
+            <EmptyState
+              icon={<BriefcaseIcon className="h-6 w-6" />}
+              title={keyword ? 'Không tìm thấy vị trí phù hợp' : 'Hiện chưa có vị trí nào đang tuyển'}
+              description={
+                keyword
+                  ? 'Thử đổi từ khoá ngắn hơn, ví dụ "kế toán", "kỹ thuật", "kinh doanh".'
+                  : 'Vui lòng quay lại sau — các vị trí mới sẽ được cập nhật tại trang này.'
+              }
+            />
+          </Card>
         ) : (
-          <div className="pj-grid">
-            {visibleJobs.map((job, idx) => {
+          <div className="stagger grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {visibleJobs.map((job) => {
               const expired = isExpired(job);
               return (
-                <article
+                <Card
                   key={job.id}
-                  className="pj-job"
-                  style={{ animationDelay: `${Math.min(idx, 8) * 60}ms` }}
+                  hover
                   onClick={() => openJob(job)}
                   tabIndex={0}
                   role="button"
@@ -411,184 +333,233 @@ export default function PublicJobsPage() {
                       openJob(job);
                     }
                   }}
+                  className="group flex cursor-pointer flex-col gap-3.5 p-5 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/30 sm:p-6"
                 >
-                  <div className="pj-job-title">{job.title}</div>
-                  <div className="pj-job-meta">
-                    <span className="pj-chip">{departmentName(job)}</span>
-                    {job.quantity ? <span className="pj-chip">Tuyển {job.quantity} người</span> : null}
-                    <span className={`pj-chip ${expired ? 'expired' : 'deadline'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100 transition group-hover:bg-brand-100">
+                      <BriefcaseIcon />
+                    </span>
+                    <Badge tone={expired ? 'red' : 'green'} dot>
                       {expired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(job.deadline)}`}
+                    </Badge>
+                  </div>
+                  <h2 className="text-lg font-bold leading-snug tracking-[-0.01em] text-slate-900 transition-colors group-hover:text-brand-700">
+                    {job.title}
+                  </h2>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge tone="slate">{departmentName(job)}</Badge>
+                    {job.quantity ? <Badge tone="blue">Tuyển {job.quantity} người</Badge> : null}
+                  </div>
+                  {job.description && (
+                    <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{job.description}</p>
+                  )}
+                  <div className="mt-auto inline-flex items-center gap-1.5 pt-1 text-sm font-bold text-brand-700">
+                    Xem chi tiết & ứng tuyển
+                    <span aria-hidden="true" className="inline-block transition-transform duration-200 group-hover:translate-x-1">
+                      →
                     </span>
                   </div>
-                  {job.description && <p className="pj-job-desc">{job.description}</p>}
-                  <div className="pj-job-cta">Xem chi tiết & ứng tuyển →</div>
-                </article>
+                </Card>
               );
             })}
           </div>
         )}
       </main>
 
-      <footer className="pj-footer">
+      <footer className="border-t border-slate-200/80 px-6 py-6 text-center text-xs leading-relaxed text-slate-400">
         Mọi hồ sơ ứng tuyển được bảo mật và chỉ dùng cho mục đích tuyển dụng của công ty.
       </footer>
 
       {/* --------------------------- Modal chi tiết + ứng tuyển --------------------------- */}
       {selected && (
-        <div
-          className="pj-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Chi tiết vị trí ${selected.title || ''}`}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeJob();
-          }}
-        >
-          <div className="pj-modal">
-            <div className="pj-modal-head">
-              <div>
-                <h2 style={{ fontSize: 'var(--text-2xl)' }}>{selected.title}</h2>
-                <div className="pj-job-meta" style={{ marginTop: 'var(--space-2)' }}>
-                  <span className="pj-chip">{departmentName(selected)}</span>
-                  {selected.quantity ? <span className="pj-chip">Tuyển {selected.quantity} người</span> : null}
-                  <span className={`pj-chip ${selectedExpired ? 'expired' : 'deadline'}`}>
-                    {selectedExpired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(selected.deadline)}`}
-                  </span>
-                </div>
-              </div>
-              <button type="button" className="pj-close" onClick={closeJob} aria-label="Đóng chi tiết">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5 5l14 14M19 5 5 19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <Modal open title={selected.title} onClose={closeJob} width="max-w-3xl">
+          <div className="flex flex-wrap gap-1.5">
+            <Badge tone="slate">{departmentName(selected)}</Badge>
+            {selected.quantity ? <Badge tone="blue">Tuyển {selected.quantity} người</Badge> : null}
+            <Badge tone={selectedExpired ? 'red' : 'green'} dot>
+              {selectedExpired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(selected.deadline)}`}
+            </Badge>
+          </div>
+
+          {detailLoading && (
+            <p className="mt-4 text-sm text-slate-400">Đang tải mô tả đầy đủ…</p>
+          )}
+
+          {selected.description && (
+            <>
+              <h3 className="mb-2 mt-6 text-[15px] font-bold text-slate-900">Mô tả công việc</h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere]">
+                {selected.description}
+              </p>
+            </>
+          )}
+          {selected.requirements && (
+            <>
+              <h3 className="mb-2 mt-6 text-[15px] font-bold text-slate-900">Yêu cầu ứng viên</h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere]">
+                {selected.requirements}
+              </p>
+            </>
+          )}
+
+          {submitted ? (
+            <Alert tone="success" className="mt-8 px-6 py-8 text-center">
+              <div
+                aria-hidden="true"
+                className="mx-auto mb-4 flex h-16 w-16 animate-scale-in items-center justify-center rounded-full bg-emerald-500 text-white shadow-lift"
+              >
+                <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none">
+                  <path d="m4.5 12.5 5 5 10-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </button>
-            </div>
-
-            {detailLoading && <p className="text-sm text-muted" style={{ marginTop: 'var(--space-3)' }}>Đang tải mô tả đầy đủ…</p>}
-
-            {selected.description && (
-              <>
-                <h3 className="pj-section-title">Mô tả công việc</h3>
-                <p className="pj-pre">{selected.description}</p>
-              </>
-            )}
-            {selected.requirements && (
-              <>
-                <h3 className="pj-section-title">Yêu cầu ứng viên</h3>
-                <p className="pj-pre">{selected.requirements}</p>
-              </>
-            )}
-
-            {submitted ? (
-              <div className="pj-form">
-                <div className="pj-success" role="status">
-                  <div className="pj-success-icon" aria-hidden="true">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                      <path d="m4.5 12.5 5 5 10-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <h3 style={{ marginBottom: 'var(--space-2)' }}>Nộp hồ sơ thành công!</h3>
-                  <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-4)' }}>
-                    Cảm ơn bạn đã ứng tuyển vị trí <strong>{selected.title}</strong>. Đội ngũ HR sẽ
-                    xem xét hồ sơ và liên hệ qua email/số điện thoại bạn đã cung cấp nếu phù hợp.
-                  </p>
-                  <button type="button" className="pj-ghost-btn" onClick={closeJob}>
-                    Xem các vị trí khác
-                  </button>
-                </div>
               </div>
-            ) : (
-              <form className="pj-form" onSubmit={handleSubmit} noValidate>
-                <h3 className="pj-section-title" style={{ marginTop: 0 }}>Ứng tuyển vị trí này</h3>
+              <h3 className="text-lg font-bold text-emerald-900">Nộp hồ sơ thành công!</h3>
+              <p className="mx-auto mb-5 mt-2 max-w-md text-sm font-normal leading-relaxed text-emerald-800/80">
+                Cảm ơn bạn đã ứng tuyển vị trí <strong>{selected.title}</strong>. Đội ngũ HR sẽ
+                xem xét hồ sơ và liên hệ qua email/số điện thoại bạn đã cung cấp nếu phù hợp.
+              </p>
+              <Button type="button" variant="secondary" onClick={closeJob}>
+                Xem các vị trí khác
+              </Button>
+            </Alert>
+          ) : (
+            <Card className="mt-8 bg-slate-50/70 p-5 shadow-none sm:p-6">
+              <form onSubmit={handleSubmit} noValidate>
+                <h3 className="mb-5 text-base font-bold text-slate-900">Ứng tuyển vị trí này</h3>
 
                 {submitError && (
-                  <div className="pj-alert error" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+                  <Alert tone="error" className="mb-4">
                     {submitError}
-                  </div>
+                  </Alert>
                 )}
 
-                <div className="pj-field">
-                  <label className="pj-label" htmlFor="pj-fullname">
-                    Họ và tên <span className="req">*</span>
-                  </label>
-                  <input
-                    id="pj-fullname"
-                    className={`pj-input${fieldErrors.fullName ? ' invalid' : ''}`}
-                    type="text"
-                    autoComplete="name"
-                    placeholder="VD: Nguyễn Văn A"
-                    value={form.fullName}
-                    onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-                  />
-                  {fieldErrors.fullName && <div className="pj-field-error">{fieldErrors.fullName}</div>}
+                <div className="space-y-4">
+                  <FormField
+                    label={<>Họ và tên <span className="text-rose-500">*</span></>}
+                    error={fieldErrors.fullName}
+                  >
+                    <Input
+                      id="pj-fullname"
+                      type="text"
+                      autoComplete="name"
+                      placeholder="VD: Nguyễn Văn A"
+                      value={form.fullName}
+                      onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                      className={fieldErrors.fullName ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label={<>Email liên hệ <span className="text-rose-500">*</span></>}
+                    error={fieldErrors.email}
+                  >
+                    <Input
+                      id="pj-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="VD: ten.ban@email.com"
+                      value={form.email}
+                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                      className={fieldErrors.email ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label={<>Số điện thoại <span className="text-rose-500">*</span></>}
+                    error={fieldErrors.phone}
+                  >
+                    <Input
+                      id="pj-phone"
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="VD: 0901 234 567"
+                      value={form.phone}
+                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                      className={fieldErrors.phone ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label={<>File CV (PDF, tối đa 5 MB) <span className="text-rose-500">*</span></>}
+                    error={fieldErrors.cv}
+                    hint={
+                      cvFile && !cvInvalid
+                        ? `Đã chọn: ${cvFile.name} (${(cvFile.size / 1024).toFixed(0)} KB)`
+                        : undefined
+                    }
+                  >
+                    <label
+                      htmlFor="pj-cv"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver(true);
+                      }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={handleFileDrop}
+                      className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition duration-200 ${
+                        cvInvalid
+                          ? 'border-rose-300 bg-rose-50/60 hover:border-rose-400'
+                          : dragOver
+                            ? 'border-brand-500 bg-brand-50 shadow-glow'
+                            : 'border-slate-300 bg-white hover:border-brand-400 hover:bg-brand-50/60'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-11 w-11 items-center justify-center rounded-full ring-1 ring-inset transition ${
+                          cvInvalid
+                            ? 'bg-rose-100 text-rose-500 ring-rose-200'
+                            : 'bg-brand-50 text-brand-600 ring-brand-100'
+                        }`}
+                      >
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M12 16V5m0 0 4 4m-4-4L8 9M4 19h16"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            transform="translate(0 -1)"
+                          />
+                        </svg>
+                      </span>
+                      <span className="max-w-full truncate text-sm font-semibold text-slate-700">
+                        {cvFile ? cvFile.name : 'Kéo thả file CV vào đây hoặc bấm để chọn file'}
+                      </span>
+                      <span className="text-xs text-slate-400">Chỉ nhận file PDF, dung lượng tối đa 5 MB</span>
+                    </label>
+                    <input
+                      id="pj-cv"
+                      ref={fileInputRef}
+                      className="sr-only"
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handleFileChange}
+                    />
+                  </FormField>
                 </div>
 
-                <div className="pj-field">
-                  <label className="pj-label" htmlFor="pj-email">
-                    Email liên hệ <span className="req">*</span>
-                  </label>
-                  <input
-                    id="pj-email"
-                    className={`pj-input${fieldErrors.email ? ' invalid' : ''}`}
-                    type="email"
-                    autoComplete="email"
-                    placeholder="VD: ten.ban@email.com"
-                    value={form.email}
-                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  />
-                  {fieldErrors.email && <div className="pj-field-error">{fieldErrors.email}</div>}
-                </div>
-
-                <div className="pj-field">
-                  <label className="pj-label" htmlFor="pj-phone">
-                    Số điện thoại <span className="req">*</span>
-                  </label>
-                  <input
-                    id="pj-phone"
-                    className={`pj-input${fieldErrors.phone ? ' invalid' : ''}`}
-                    type="tel"
-                    autoComplete="tel"
-                    placeholder="VD: 0901 234 567"
-                    value={form.phone}
-                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  />
-                  {fieldErrors.phone && <div className="pj-field-error">{fieldErrors.phone}</div>}
-                </div>
-
-                <div className="pj-field">
-                  <label className="pj-label" htmlFor="pj-cv">
-                    File CV (PDF, tối đa 5 MB) <span className="req">*</span>
-                  </label>
-                  <input
-                    id="pj-cv"
-                    ref={fileInputRef}
-                    className={`pj-input${fieldErrors.cv ? ' invalid' : ''}`}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={handleFileChange}
-                  />
-                  {cvFile && !fieldErrors.cv && (
-                    <div className="pj-file-name">
-                      Đã chọn: {cvFile.name} ({(cvFile.size / 1024).toFixed(0)} KB)
-                    </div>
-                  )}
-                  {fieldErrors.cv && <div className="pj-field-error">{fieldErrors.cv}</div>}
-                </div>
-
-                <button type="submit" className="pj-submit" disabled={submitting || selectedExpired}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  loading={submitting}
+                  disabled={submitting || selectedExpired}
+                  className="mt-6 w-full"
+                >
                   {selectedExpired
                     ? 'Vị trí đã hết hạn nộp hồ sơ'
                     : submitting
                       ? 'Đang gửi hồ sơ…'
                       : 'Nộp hồ sơ ứng tuyển'}
-                </button>
-                <p className="text-xs text-muted" style={{ marginTop: 'var(--space-3)', textAlign: 'center' }}>
+                </Button>
+                <p className="mt-3 text-center text-xs leading-relaxed text-slate-400">
                   Bằng việc nộp hồ sơ, bạn đồng ý để công ty lưu trữ và xử lý thông tin cho mục
                   đích tuyển dụng vị trí này.
                 </p>
               </form>
-            )}
-          </div>
-        </div>
+            </Card>
+          )}
+        </Modal>
       )}
     </div>
   );

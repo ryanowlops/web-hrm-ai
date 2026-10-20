@@ -46,6 +46,11 @@ def item_to_dict(item):
         "employee_id": item.employee_id,
         "employee_code": getattr(employee, "code", None) if employee else None,
         "employee_name": getattr(employee, "full_name", None) if employee else None,
+        "department_name": (
+            getattr(employee.department, "name", None)
+            if employee is not None and getattr(employee, "department", None) is not None
+            else None
+        ),
         "workdays_paid": item.workdays_paid,
         "base_salary": item.base_salary,
         "allowance": item.allowance,
