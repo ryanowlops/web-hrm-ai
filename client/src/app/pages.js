@@ -33,6 +33,13 @@ const importAnnouncementsPage = () =>
 const importNotificationsPage = () =>
   import('../features/notifications/pages/NotificationsPage.jsx');
 const importReportsPage = () => import('../features/reports/pages/ReportsPage.jsx');
+const importShiftsPage = () => import('../features/shifts/pages/ShiftsPage.jsx');
+const importDocumentsPage = () => import('../features/documents/pages/DocumentsPage.jsx');
+const importOffboardingPage = () =>
+  import('../features/offboarding/pages/OffboardingPage.jsx');
+const importKudosPage = () => import('../features/kudos/pages/KudosPage.jsx');
+const importSurveysPage = () => import('../features/surveys/pages/SurveysPage.jsx');
+const importAttritionPage = () => import('../features/attrition/pages/AttritionPage.jsx');
 
 export const LoginPage = lazy(importLoginPage);
 export const PublicJobsPage = lazy(importPublicJobsPage);
@@ -56,6 +63,12 @@ export const TrainingPage = lazy(importTrainingPage);
 export const AnnouncementsPage = lazy(importAnnouncementsPage);
 export const NotificationsPage = lazy(importNotificationsPage);
 export const ReportsPage = lazy(importReportsPage);
+export const ShiftsPage = lazy(importShiftsPage);
+export const DocumentsPage = lazy(importDocumentsPage);
+export const OffboardingPage = lazy(importOffboardingPage);
+export const KudosPage = lazy(importKudosPage);
+export const SurveysPage = lazy(importSurveysPage);
+export const AttritionPage = lazy(importAttritionPage);
 
 // Map đường dẫn menu → các chunk cần tải trước khi điều hướng tới.
 const ROUTE_PREFETCHERS = {
@@ -76,6 +89,12 @@ const ROUTE_PREFETCHERS = {
   '/announcements': [importAnnouncementsPage],
   '/notifications': [importNotificationsPage],
   '/reports': [importReportsPage],
+  '/shifts': [importShiftsPage],
+  '/documents': [importDocumentsPage],
+  '/offboarding': [importOffboardingPage],
+  '/kudos': [importKudosPage],
+  '/surveys': [importSurveysPage],
+  '/attrition-risk': [importAttritionPage],
   '/admin': [importAdminPage],
   '/jobs': [importPublicJobsPage],
   '/login': [importLoginPage],

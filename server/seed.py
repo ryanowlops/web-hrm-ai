@@ -530,8 +530,22 @@ def main() -> None:
                 )
             )
 
+        db.session.flush()
+
+        # Dữ liệu demo mở rộng v3 — mỗi module tự seed idempotent (không tự
+        # commit; chạy sau khi đã có nhân viên + tài khoản demo ở trên).
+        from app.blueprints.documents.seed_demo import seed_demo as seed_documents
+        from app.blueprints.engagement.seed_demo import seed_demo as seed_engagement
+        from app.blueprints.offboarding.seed_demo import seed_demo as seed_offboarding
+        from app.blueprints.shifts.seed_demo import seed_demo as seed_shifts
+
+        seed_shifts()
+        seed_documents()
+        seed_engagement()
+        seed_offboarding()
+
         db.session.commit()
-        print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2.")
+        print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2 + v3.")
         print("Đăng nhập mẫu: admin@hrm.local / Admin@123")
 
 

@@ -217,6 +217,67 @@ const ICONS = {
       }
     />
   ),
+  shifts: (
+    <Icon
+      paths={
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </>
+      }
+    />
+  ),
+  documents: (
+    <Icon
+      paths={
+        <>
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+        </>
+      }
+    />
+  ),
+  offboarding: (
+    <Icon
+      paths={
+        <>
+          <circle cx="10" cy="8" r="3.5" />
+          <path d="M3.5 20c.8-3.4 3.2-5.2 6.5-5.2 1.3 0 2.5.3 3.5.8" />
+          <path d="M15.5 17.5h6" />
+        </>
+      }
+    />
+  ),
+  kudos: (
+    <Icon
+      paths={
+        <>
+          <circle cx="12" cy="9" r="6" />
+          <path d="M8.6 13.8 7 22l5-2.9L17 22l-1.6-8.2" />
+        </>
+      }
+    />
+  ),
+  surveys: (
+    <Icon
+      paths={
+        <>
+          <rect x="5.5" y="4.5" width="13" height="17" rx="2" />
+          <path d="M9.5 4.5a2.5 2.5 0 0 1 5 0" />
+          <path d="M9 11h6M9 15h6" />
+        </>
+      }
+    />
+  ),
+  attrition: (
+    <Icon
+      paths={
+        <>
+          <path d="m3 7 6 6 4-4 8 8" />
+          <path d="M15 17h6v-6" />
+        </>
+      }
+    />
+  ),
   admin: (
     <Icon
       paths={
@@ -285,8 +346,11 @@ const NAV_ITEMS = [
   { to: '/payroll', label: 'Bảng lương', icon: ICONS.payroll },
   { to: '/performance', label: 'Hiệu suất', icon: ICONS.performance },
   { to: '/onboarding', label: 'Hội nhập', icon: ICONS.onboarding },
+  { to: '/shifts', label: 'Ca làm', icon: ICONS.shifts },
+  { to: '/documents', label: 'Hồ sơ & giấy tờ', icon: ICONS.documents },
   { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: ICONS.orgChart },
   { to: '/team-calendar', label: 'Lịch team', icon: ICONS.teamCalendar },
+  { to: '/offboarding', label: 'Nghỉ việc', icon: ICONS.offboarding },
   { to: '/assets', label: 'Tài sản', icon: ICONS.assets },
   { to: '/training', label: 'Đào tạo', icon: ICONS.training },
   {
@@ -296,7 +360,15 @@ const NAV_ITEMS = [
     roles: ['admin', 'hr', 'manager'],
   },
   { to: '/chatbot', label: 'Chatbot HR', icon: ICONS.chatbot },
+  {
+    to: '/attrition-risk',
+    label: 'Nguy cơ nghỉ việc',
+    icon: ICONS.attrition,
+    roles: ['admin', 'hr', 'manager'],
+  },
   { to: '/announcements', label: 'Thông báo', icon: ICONS.announcements },
+  { to: '/kudos', label: 'Vinh danh', icon: ICONS.kudos },
+  { to: '/surveys', label: 'Khảo sát', icon: ICONS.surveys },
   { to: '/reports', label: 'Báo cáo', icon: ICONS.reports },
   { to: '/admin', label: 'Quản trị', icon: ICONS.admin, roles: ['admin'] },
 ];
@@ -306,12 +378,12 @@ const NAV_GROUPS = [
   { label: 'Menu chính', paths: ['/'] },
   {
     label: 'Quản lý',
-    paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll', '/performance', '/onboarding'],
+    paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
   },
-  { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar'] },
+  { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding'] },
   { label: 'Vận hành', paths: ['/assets', '/training'] },
-  { label: 'Tuyển dụng & AI', paths: ['/recruitment', '/chatbot'] },
-  { label: 'Truyền thông', paths: ['/announcements', '/reports'] },
+  { label: 'Tuyển dụng & AI', paths: ['/recruitment', '/chatbot', '/attrition-risk'] },
+  { label: 'Truyền thông', paths: ['/announcements', '/reports', '/kudos', '/surveys'] },
   { label: 'Hệ thống', paths: ['/admin'] },
 ];
 

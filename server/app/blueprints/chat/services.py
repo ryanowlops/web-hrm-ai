@@ -39,6 +39,7 @@ import unicodedata
 
 from flask import current_app
 
+from app.blueprints.chat import tools as chat_tools
 from app.blueprints.kb import services as kb_services
 from app.extensions import db
 from app.models import ChatLog, KbChunk, KbDocument
@@ -395,15 +396,35 @@ def _sources_of(contexts: list[dict]) -> list[dict]:
 # Nghiệp vụ chính
 # ---------------------------------------------------------------------------
 
-def ask_question(user_id: int, question: str) -> dict:
-    """Trả lời 1 câu hỏi + lưu ChatLog. Trả {"answer", "sources", "mode"}.
+def ask_question(user, question: str) -> dict:
+    """Trả lời 1 câu hỏi + lưu ChatLog.
 
-    "mode" là chế độ truy hồi đã dùng (hybrid_rerank/hybrid/embedding/
-    keyword/none) — chỉ trả về trong response cho frontend hiển thị nhãn;
-    ChatLog không có cột riêng cho mode nên không lưu (sources đã kèm
-    điểm liên quan của từng trích dẫn).
+    Luồng 2 tầng (feature-expansion-v3 mục 5.1):
+      1) Tool layer (chat/tools.py): câu hỏi về dữ liệu cá nhân/quản lý
+         ("còn bao nhiêu ngày phép", "phiếu lương tháng này"...) -> tra
+         DỮ LIỆU THẬT theo đúng quyền của người hỏi, mode = "live_data",
+         sources rỗng, retrieval_mode = None.
+      2) Ngoài phạm vi tool -> luồng RAG tài liệu như cũ, mode = "rag",
+         retrieval_mode là chế độ truy hồi chi tiết (hybrid_rerank/
+         hybrid/embedding/keyword/none) như trước đây.
+
+    ChatLog không có cột mode riêng: với câu trả lời live_data, gắn thêm
+    phần tử đánh dấu {"_meta": {"mode": "live_data"}} vào cuối cột
+    sources (JSON) — get_history bóc phần tử này ra và trả mode riêng,
+    không để lọt vào danh sách trích dẫn hiển thị.
     """
-    contexts, mode = retrieve_contexts(question)
+    live_answer = chat_tools.try_answer(user, question)
+    if live_answer is not None:
+        log = ChatLog(
+            user_id=user.id, question=question, answer=live_answer,
+            sources=[{"_meta": {"mode": "live_data"}}],
+        )
+        db.session.add(log)
+        db.session.commit()
+        return {"answer": live_answer, "sources": [],
+                "mode": "live_data", "retrieval_mode": None}
+
+    contexts, retrieval_mode = retrieve_contexts(question)
     if contexts:
         sources = _sources_of(contexts)
         answer = _ask_ai(question, contexts) or _extractive_answer(contexts)
@@ -411,11 +432,12 @@ def ask_question(user_id: int, question: str) -> dict:
         sources = []
         answer = NO_INFO_ANSWER
 
-    log = ChatLog(user_id=user_id, question=question,
+    log = ChatLog(user_id=user.id, question=question,
                   answer=answer, sources=sources)
     db.session.add(log)
     db.session.commit()
-    return {"answer": answer, "sources": sources, "mode": mode}
+    return {"answer": answer, "sources": sources,
+            "mode": "rag", "retrieval_mode": retrieval_mode}
 
 
 def get_history(user_id: int, page: int = 1, limit: int = 20) -> dict:
@@ -426,12 +448,25 @@ def get_history(user_id: int, page: int = 1, limit: int = 20) -> dict:
              .order_by(ChatLog.created_at.desc(), ChatLog.id.desc()))
     total = query.count()
     rows = query.offset((page - 1) * limit).limit(limit).all()
+
+    def _split_sources(row):
+        """Tách phần tử đánh dấu {"_meta": ...} khỏi trích dẫn hiển thị."""
+        mode = "rag"
+        visible = []
+        for item in row.sources or []:
+            if isinstance(item, dict) and "_meta" in item:
+                mode = (item.get("_meta") or {}).get("mode", mode)
+            else:
+                visible.append(item)
+        return visible, mode
+
     return {
         "data": [{
             "id": row.id,
             "question": row.question,
             "answer": row.answer,
-            "sources": row.sources or [],
+            "sources": _split_sources(row)[0],
+            "mode": _split_sources(row)[1],
             "createdAt": row.created_at.isoformat() if row.created_at else None,
         } for row in rows],
         "meta": {

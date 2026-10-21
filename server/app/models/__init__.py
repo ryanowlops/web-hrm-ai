@@ -28,6 +28,20 @@ from app.models.onboarding import (
 from app.models.assets import Asset, AssetAssignment
 from app.models.training import Course, CourseEnrollment
 from app.models.announcements import Announcement
+from app.models.shifts import (
+    AttendanceCorrection,
+    OvertimeRequest,
+    ShiftAssignment,
+    ShiftDefinition,
+)
+from app.models.documents import CertificateRequest, EmployeeDocument
+from app.models.offboarding import OffboardingProcess, OffboardingTask
+from app.models.engagement import (
+    Kudo,
+    Survey,
+    SurveyParticipation,
+    SurveyResponse,
+)
 
 __all__ = [
     # users / org
@@ -73,6 +87,22 @@ __all__ = [
     "CourseEnrollment",
     # announcements
     "Announcement",
+    # shifts (ca làm / tăng ca / giải trình) — v3
+    "ShiftDefinition",
+    "ShiftAssignment",
+    "OvertimeRequest",
+    "AttendanceCorrection",
+    # documents (hồ sơ điện tử / giấy xác nhận) — v3
+    "EmployeeDocument",
+    "CertificateRequest",
+    # offboarding — v3
+    "OffboardingProcess",
+    "OffboardingTask",
+    # engagement (kudos / khảo sát) — v3
+    "Kudo",
+    "Survey",
+    "SurveyResponse",
+    "SurveyParticipation",
     # misc
     "Notification",
     "Setting",

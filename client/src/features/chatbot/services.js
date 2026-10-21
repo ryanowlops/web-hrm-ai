@@ -28,20 +28,34 @@ function toList(res) {
 /* --------------------------------- Chat ---------------------------------- */
 
 /**
- * Hỏi chatbot quy chế nội bộ (RAG).
+ * Hỏi chatbot HR (RAG + tool layer tra dữ liệu thật, mục 5.1).
  * POST /chat/ask { question }
- * -> { answer, sources: [ { document_title|title, page_no|page, chunk_text|excerpt } ], mode }
- * mode là chế độ truy hồi backend đã dùng: hybrid_rerank | hybrid |
- * embedding | keyword | none — trang hiển thị nhãn nhỏ dưới câu trả lời.
+ * -> { answer, sources: [ { document_title|title, page_no|page, chunk_text|excerpt } ],
+ *      mode, retrieval_mode }
+ * mode: 'live_data' khi chatbot tra DỮ LIỆU THẬT theo quyền người hỏi qua
+ * tool layer (ngày phép, phiếu lương, chấm công... — sources rỗng, trang
+ * gắn badge "Dữ liệu trực tiếp"); 'rag' khi trả lời từ tài liệu quy chế.
+ * retrieval_mode: chế độ truy hồi chi tiết của luồng RAG (hybrid_rerank |
+ * hybrid | embedding | keyword | none) — trang hiển thị nhãn "Truy hồi".
  * Nếu tài liệu không có thông tin, backend trả câu từ chối mẫu kèm sources rỗng.
  */
+const RETRIEVAL_MODES = ['hybrid_rerank', 'hybrid', 'embedding', 'keyword', 'none'];
+
 export async function askChatbot(question) {
   const body = bodyOf(await api.post('/chat/ask', { question }));
   const payload = body?.data ?? body ?? {};
+  let mode = payload.mode || 'rag';
+  let retrievalMode = payload.retrieval_mode || null;
+  // Tương thích ngược: response cũ trả mode là chính chế độ truy hồi.
+  if (RETRIEVAL_MODES.includes(mode)) {
+    retrievalMode = retrievalMode || mode;
+    mode = 'rag';
+  }
   return {
     answer: payload.answer || '',
     sources: Array.isArray(payload.sources) ? payload.sources : [],
-    mode: payload.mode || null,
+    mode,
+    retrievalMode,
   };
 }
 

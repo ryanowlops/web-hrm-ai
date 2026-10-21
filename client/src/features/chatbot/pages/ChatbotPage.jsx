@@ -47,6 +47,15 @@ const SUGGESTIONS = [
   'Quy định về giờ làm việc và đi muộn?',
 ];
 
+/** Câu hỏi tra DỮ LIỆU THẬT (tool layer, mục 5.1) — chips cố định trên ô nhập,
+ * bấm là gửi ngay; chatbot tra theo đúng quyền của người đang đăng nhập. */
+const LIVE_SUGGESTIONS = [
+  'Tôi còn bao nhiêu ngày phép?',
+  'Phiếu lương tháng này của tôi',
+  'Hôm nay ai đang nghỉ phép?',
+  'Chấm công tháng này của tôi',
+];
+
 const KB_MAX_SIZE_MB = 10;
 
 /** Nhãn hiển thị chế độ truy hồi RAG mà backend đã dùng cho 1 câu trả lời. */
@@ -154,6 +163,7 @@ export default function ChatbotPage() {
             role: 'bot',
             text: log.answer || '',
             sources: Array.isArray(log.sources) ? log.sources.map(normalizeSource) : [],
+            mode: log.mode || null,
             createdAt: log.created_at,
           });
         });
@@ -302,7 +312,7 @@ export default function ChatbotPage() {
     ]);
     setSending(true);
     try {
-      const { answer, sources, mode } = await askChatbot(question);
+      const { answer, sources, mode, retrievalMode } = await askChatbot(question);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === typingId
@@ -312,6 +322,7 @@ export default function ChatbotPage() {
                 text: answer || 'Chatbot chưa trả về nội dung, vui lòng thử lại.',
                 sources: sources.map(normalizeSource),
                 mode: mode || null,
+                retrievalMode: retrievalMode || null,
               }
             : m,
         ),
@@ -343,7 +354,7 @@ export default function ChatbotPage() {
     <div className="page-shell">
       <PageHeader
         title="Chatbot HR"
-        subtitle="Hỏi đáp quy chế nội bộ công ty. Chatbot chỉ trả lời dựa trên tài liệu quy chế do HR cung cấp và luôn kèm nguồn trích dẫn — nếu tài liệu chưa có thông tin, chatbot sẽ báo rõ thay vì tự suy đoán."
+        subtitle="Hỏi đáp quy chế nội bộ dựa trên tài liệu do HR cung cấp, luôn kèm nguồn trích dẫn. Bạn cũng có thể hỏi dữ liệu của chính mình (ngày phép, phiếu lương, chấm công) — chatbot tra trực tiếp từ hệ thống theo đúng quyền truy cập của bạn."
       />
 
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
@@ -478,13 +489,19 @@ export default function ChatbotPage() {
                         )}
                       </div>
                       {!m.typing && (
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] font-medium text-gray-400">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-gray-400">
                           <span>{formatTime(m.createdAt)}</span>
-                          {!m.error && m.mode && RETRIEVAL_MODE_LABELS[m.mode] && (
-                            <span className="text-gray-500">
-                              · {RETRIEVAL_MODE_LABELS[m.mode]}
-                            </span>
+                          {!m.error && m.mode === 'live_data' && (
+                            <Badge tone="teal">Dữ liệu trực tiếp</Badge>
                           )}
+                          {!m.error &&
+                            m.mode !== 'live_data' &&
+                            m.retrievalMode &&
+                            RETRIEVAL_MODE_LABELS[m.retrievalMode] && (
+                              <span className="text-gray-500">
+                                · {RETRIEVAL_MODE_LABELS[m.retrievalMode]}
+                              </span>
+                            )}
                         </div>
                       )}
                     </div>
@@ -493,9 +510,29 @@ export default function ChatbotPage() {
               )}
             </div>
 
+            {/* Chips tra dữ liệu trực tiếp (tool layer) — ngay trên ô nhập */}
+            <div className="border-t border-gray-200 bg-white px-4 pt-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Tra dữ liệu của bạn
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {LIVE_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    disabled={sending}
+                    className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[13px] font-medium text-gray-700 transition-colors duration-150 hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => sendQuestion(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Thanh nhập cố định ở đáy khung chat */}
             <form
-              className="flex items-end gap-3 border-t border-gray-200 bg-white px-4 py-4"
+              className="flex items-end gap-3 bg-white px-4 py-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 sendQuestion();

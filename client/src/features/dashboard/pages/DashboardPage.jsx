@@ -31,6 +31,7 @@ import StaggerList, { StaggerItem } from '../../../components/motion/StaggerList
 import DeferredMount from '../../../components/motion/DeferredMount.jsx';
 import { getCurrentUser } from '../../auth/services';
 import { getAnnouncements } from '../../announcements/services';
+import LatestKudosWidget from '../../kudos/components/LatestKudosWidget.jsx';
 import { getEmployees } from '../../employees/services';
 import { fetchOverview } from '../services';
 
@@ -252,6 +253,7 @@ function DashboardExtras() {
     .sort((a, b) => a.date - b.date);
 
   return (
+    <>
     <section className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
       {/* Thông báo mới nhất */}
       <Card className="lg:col-span-2">
@@ -368,6 +370,10 @@ function DashboardExtras() {
         )}
       </Card>
     </section>
+
+    {/* Vinh danh mới nhất (mở rộng v3 — module Engagement) */}
+    <LatestKudosWidget />
+    </>
   );
 }
 
