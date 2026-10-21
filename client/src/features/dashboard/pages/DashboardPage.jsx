@@ -196,7 +196,16 @@ function EmployeeHome({ user }) {
           );
         })}
       </StaggerList>
-      <DashboardExtras />
+      <DeferredMount
+        fallback={
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl" />
+          </div>
+        }
+      >
+        <DashboardExtras />
+      </DeferredMount>
       <p className="mt-5 text-[13px] text-gray-500">
         Số liệu thống kê toàn công ty chỉ hiển thị cho Quản trị viên, phòng HR và Trưởng
         phòng theo đúng phạm vi phân quyền.
@@ -678,7 +687,16 @@ export default function DashboardPage() {
           </section>
 
           {/* Hàng 4 (đội E): thông báo mới nhất + tháng này */}
-          <DashboardExtras />
+          <DeferredMount
+        fallback={
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl" />
+          </div>
+        }
+      >
+        <DashboardExtras />
+      </DeferredMount>
         </>
       )}
     </div>

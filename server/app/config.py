@@ -46,7 +46,15 @@ class Config:
     # Bật khi deploy (Koyeb): tự tạo bảng khi khởi động nếu DB còn trống.
     AUTO_CREATE_TABLES = os.environ.get("AUTO_CREATE_TABLES", "0") == "1"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        # Hồ kết nối lớn hơn mặc định (5) để các request song song trên
+        # Dashboard không phải chờ mở kết nối Neon mới; recycle trước khi
+        # Neon/pooler cắt kết nối nhàn rỗi (tránh trả lỗi ở request đầu).
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_recycle": 280,
+    }
 
     # --- JWT (Flask-JWT-Extended, ADR-7) ---
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-me-in-production-0123456789")
