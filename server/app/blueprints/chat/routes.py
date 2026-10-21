@@ -1,6 +1,7 @@
 """Routes cho Chatbot HR — tiền tố /api/v1/chat (docs B3.2, FR-10).
 
-    POST /chat/ask        Hỏi đáp RAG: {"question": "..."} -> {"answer", "sources"}
+    POST /chat/ask        Hỏi đáp RAG: {"question": "..."} -> {"answer", "sources", "mode"}
+                          (mode = chế độ truy hồi: hybrid_rerank/hybrid/embedding/keyword/none)
     GET  /chat/history    Lịch sử hỏi đáp của chính mình (phân trang)
 
 Mọi vai trò đã đăng nhập đều dùng được (A2); mỗi người chỉ xem được

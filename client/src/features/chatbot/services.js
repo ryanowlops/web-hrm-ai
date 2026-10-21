@@ -30,7 +30,9 @@ function toList(res) {
 /**
  * Hỏi chatbot quy chế nội bộ (RAG).
  * POST /chat/ask { question }
- * -> { answer, sources: [ { document_title|title, page_no|page, chunk_text|excerpt } ] }
+ * -> { answer, sources: [ { document_title|title, page_no|page, chunk_text|excerpt } ], mode }
+ * mode là chế độ truy hồi backend đã dùng: hybrid_rerank | hybrid |
+ * embedding | keyword | none — trang hiển thị nhãn nhỏ dưới câu trả lời.
  * Nếu tài liệu không có thông tin, backend trả câu từ chối mẫu kèm sources rỗng.
  */
 export async function askChatbot(question) {
@@ -39,6 +41,7 @@ export async function askChatbot(question) {
   return {
     answer: payload.answer || '',
     sources: Array.isArray(payload.sources) ? payload.sources : [],
+    mode: payload.mode || null,
   };
 }
 
@@ -82,6 +85,27 @@ export async function uploadKbDocument({ title, file }) {
 /** Xoá 1 tài liệu quy chế (kèm toàn bộ chunk/embedding của nó ở backend). */
 export async function deleteKbDocument(documentId) {
   return bodyOf(await api.delete(`/kb/documents/${documentId}`));
+}
+
+/**
+ * Lập chỉ mục lại 1 tài liệu (HR/Admin).
+ * POST /kb/documents/:id/reindex — backend đọc lại file gốc, chia chunk và
+ * tạo embedding lại từ đầu (mất file gốc thì chỉ bổ sung embedding thiếu).
+ * -> tài liệu đã serialize + { rebuilt, embeddedChunks, failedChunks }
+ */
+export async function reindexKbDocument(documentId) {
+  const body = bodyOf(await api.post(`/kb/documents/${documentId}/reindex`));
+  return body?.data ?? body;
+}
+
+/**
+ * Tạo embedding cho MỌI chunk trong KB chưa có embedding (HR/Admin).
+ * POST /kb/embed-missing -> { total, embedded, failed }
+ * Dùng sau khi server vừa được cấu hình AI_API_KEY/model embedding.
+ */
+export async function embedMissingKbChunks() {
+  const body = bodyOf(await api.post('/kb/embed-missing'));
+  return body?.data ?? body;
 }
 
 /* ------------------------------ Xử lý lỗi -------------------------------- */

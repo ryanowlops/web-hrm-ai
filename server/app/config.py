@@ -66,6 +66,8 @@ class Config:
     AI_PROVIDER = os.environ.get("AI_PROVIDER", "")          # ví dụ: openai-compatible
     AI_MODEL = os.environ.get("AI_MODEL", "")
     AI_API_KEY = os.environ.get("AI_API_KEY", "")            # CHỈ ở server, không commit
+    # Model embedding cho RAG (KB/chatbot) — provider đọc qua ai_service.
+    AI_EMBEDDING_MODEL = os.environ.get("AI_EMBEDDING_MODEL", "text-embedding-3-small")
     EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
     AI_MAX_CANDIDATES_PER_RUN = int(os.environ.get("AI_MAX_CANDIDATES_PER_RUN", "20"))
     AI_REQUEST_TIMEOUT = int(os.environ.get("AI_REQUEST_TIMEOUT", "60"))

@@ -8,11 +8,16 @@ Luồng xử lý (docs A5.5, A6.2):
       -> trích text (pypdf cho PDF, giải mã UTF-8 cho TXT)
       -> chia chunk 500-1000 ký tự, overlap 100 ký tự, ưu tiên cắt ở
          ranh giới câu/đoạn, ghi kèm số trang (page_no)
-      -> embedding: nếu app.ai_service có hàm embedding thì gọi để lấy
-         vector cho từng chunk; KHÔNG có -> lưu embedding = None và
-         đánh dấu tài liệu dùng tìm kiếm từ khóa (chatbot tự fallback,
-         xem blueprints/chat/services.py). Không phụ thuộc cứng vào AI:
+      -> embedding: nếu app.ai_service có hàm embedding thì gọi BATCH để
+         lấy vector cho mọi chunk (nội dung đem embed = tiêu đề tài liệu +
+         nội dung chunk); KHÔNG có -> lưu embedding = None và đánh dấu
+         tài liệu dùng tìm kiếm từ khóa (chatbot tự fallback, xem
+         blueprints/chat/services.py). Không phụ thuộc cứng vào AI:
          lỗi embedding không làm hỏng việc nạp tài liệu.
+      -> lập chỉ mục lại (reindex): đọc lại file gốc đã lưu -> trích/chunk/
+         embed lại từ đầu; mất file gốc thì chỉ bổ sung embedding còn thiếu.
+         Toàn bộ chunk thiếu embedding trong KB cũng bổ sung được qua
+         embed_missing_chunks() (endpoint POST /kb/embed-missing).
 
 Trạng thái tài liệu (KbDocument.status): processing -> ready | failed.
 Việc trích/chunk chạy đồng bộ trong request vì giới hạn đồ án (tài liệu
@@ -81,9 +86,64 @@ def embed_text(text: str):
         return None
 
 
+def _embeddings_function():
+    """Trả về hàm tạo embedding BATCH (embed_texts) của app.ai_service nếu có."""
+    try:
+        from app import ai_service
+    except Exception:
+        return None
+    fn = getattr(ai_service, "embed_texts", None)
+    return fn if callable(fn) else None
+
+
+def embed_texts(texts):
+    """Tạo embedding BATCH cho nhiều đoạn; list kết quả cùng thứ tự đầu vào.
+
+    Mỗi phần tử là list[float] hoặc None (đoạn đó lỗi/không tạo được).
+    Ưu tiên hàm batch của ai_service (1 request cho nhiều chunk); không có
+    hàm batch thì gọi lẻ embed_text từng đoạn. KHÔNG bao giờ raise — đúng
+    thiết kế cũ: lỗi embedding không được làm hỏng pipeline tài liệu.
+    """
+    texts = list(texts or [])
+    if not texts:
+        return []
+    fn = _embeddings_function()
+    if fn is not None:
+        try:
+            vectors = fn(texts)
+            if vectors is not None and len(vectors) == len(texts):
+                result = []
+                for vector in vectors:
+                    if not vector:
+                        result.append(None)
+                        continue
+                    try:
+                        result.append([float(x) for x in vector])
+                    except (TypeError, ValueError):
+                        result.append(None)
+                return result
+        except Exception:  # lỗi batch -> thử gọi lẻ từng đoạn trước khi bỏ cuộc
+            current_app.logger.warning(
+                "Tạo embedding batch thất bại, chuyển sang gọi lẻ từng đoạn.",
+                exc_info=True)
+    return [embed_text(text) for text in texts]
+
+
 def embedding_available() -> bool:
-    """True nếu hệ thống đang tạo được embedding (chat sẽ tìm theo vector)."""
-    return _embedding_function() is not None
+    """True nếu hệ thống đang tạo được embedding (chat sẽ tìm theo vector).
+
+    ai_service luôn có sẵn hàm embed_text (móc chuẩn) nhưng khi chưa cấu
+    hình AI_API_KEY hàm đó raise AIUnavailableError — vì vậy phải kiểm tra
+    thêm provider có sẵn sàng không, tránh báo "có embedding" oan.
+    """
+    if _embedding_function() is None:
+        return False
+    try:
+        from app import ai_service
+        provider = ai_service.get_provider()
+        return bool(getattr(provider, "is_available", False))
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -224,22 +284,27 @@ def create_document(file_storage, title: str | None, uploaded_by: int) -> KbDocu
 
     try:
         pages = extract_pages(data, filename)
-        chunks: list[KbChunk] = []
+        pieces: list[tuple[int, int | None, str]] = []  # (chunk_index, page_no, text)
         index = 0
         for page_no, page_text in pages:
             for piece in split_chunks(page_text):
-                chunks.append(KbChunk(
-                    document_id=document.id,
-                    chunk_text=piece,
-                    chunk_index=index,
-                    page_no=page_no,
-                    embedding=embed_text(piece),
-                ))
+                pieces.append((index, page_no, piece))
                 index += 1
-        if not chunks:
+        if not pieces:
             raise ApiError(422, "TEXT_EXTRACT_FAILED",
                            "Không trích xuất được nội dung chữ từ tài liệu. "
                            "Nếu đây là PDF scan (chỉ có ảnh), vui lòng dùng bản PDF có text hoặc tệp TXT.")
+        # Embedding BATCH cho mọi chunk trong 1 lần gọi. Nội dung đem embed
+        # kèm tiêu đề tài liệu để vector mang ngữ cảnh nguồn; chunk_text lưu
+        # DB giữ nguyên bản để hiển thị/trích dẫn.
+        vectors = embed_texts([f"{document.title}\n{piece}" for _, _, piece in pieces])
+        chunks = [KbChunk(
+            document_id=document.id,
+            chunk_text=piece,
+            chunk_index=chunk_index,
+            page_no=page_no,
+            embedding=vectors[i] if i < len(vectors) else None,
+        ) for i, (chunk_index, page_no, piece) in enumerate(pieces)]
         db.session.add_all(chunks)
         document.status = KbDocument.STATUS_READY
         db.session.commit()
@@ -261,10 +326,11 @@ def serialize_document(document: KbDocument, chunks_count: int | None = None) ->
     if chunks_count is None:
         chunks_count = (db.session.query(KbChunk)
                         .filter_by(document_id=document.id).count())
-    has_embedding = (db.session.query(KbChunk.id)
-                     .filter(KbChunk.document_id == document.id,
-                             KbChunk.embedding.isnot(None))
-                     .first() is not None)
+    # Kiểm tra phía Python: cột JSON lưu None thành JSON null (không phải
+    # SQL NULL) nên isnot(None) ở SQL báo "có embedding" oan.
+    has_embedding = any(
+        row[0] for row in db.session.query(KbChunk.embedding)
+        .filter(KbChunk.document_id == document.id).all())
     return {
         "id": document.id,
         "title": document.title,
@@ -300,6 +366,119 @@ def list_documents(page: int = 1, limit: int = 20):
             "totalPages": (total + limit - 1) // limit if total else 0,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Lập chỉ mục lại & bổ sung embedding
+# ---------------------------------------------------------------------------
+
+_EMBED_BATCH_SIZE = 64  # số chunk tối đa trong 1 lần gọi embed batch
+
+
+def _embed_missing(chunks: list[KbChunk], titles: dict[int, str]) -> tuple[int, int]:
+    """Tạo embedding cho các chunk đang thiếu trong danh sách (theo batch).
+
+    Nội dung đem embed = tiêu đề tài liệu + nội dung chunk (nhất quán với
+    lúc nạp mới). Trả (số thành công, số thất bại). Caller tự commit.
+    """
+    missing = [c for c in chunks if not c.embedding]
+    embedded = failed = 0
+    for start in range(0, len(missing), _EMBED_BATCH_SIZE):
+        batch = missing[start:start + _EMBED_BATCH_SIZE]
+        vectors = embed_texts(
+            [f"{titles.get(c.document_id, '')}\n{c.chunk_text}" for c in batch])
+        for chunk, vector in zip(batch, vectors):
+            if vector:
+                chunk.embedding = vector
+                embedded += 1
+            else:
+                failed += 1
+    return embedded, failed
+
+
+def embed_missing_chunks() -> dict:
+    """Tạo embedding cho MỌI chunk trong KB chưa có embedding.
+
+    Dùng khi: vừa bổ sung AI_API_KEY/model embedding cho hệ thống đã có
+    sẵn tài liệu nạp ở chế độ từ khóa. Trả {total, embedded, failed}.
+    """
+    # LƯU Ý: cột JSON của SQLAlchemy lưu None thành JSON null chứ không
+    # phải SQL NULL -> lọc bằng embedding.is_(None) ở SQL sẽ sót chunk.
+    # KB quy mô đồ án nhỏ nên lọc phía Python cho đúng cả SQLite/Postgres.
+    chunks = [c for c in KbChunk.query.all() if not c.embedding]
+    if not chunks:
+        return {"total": 0, "embedded": 0, "failed": 0}
+    titles = {d.id: d.title for d in KbDocument.query.all()}
+    embedded = failed = 0
+    for start in range(0, len(chunks), _EMBED_BATCH_SIZE):
+        batch = chunks[start:start + _EMBED_BATCH_SIZE]
+        ok, bad = _embed_missing(batch, titles)
+        embedded += ok
+        failed += bad
+        db.session.commit()  # commit theo đợt — lỗi giữa chừng không mất hết
+    return {"total": len(chunks), "embedded": embedded, "failed": failed}
+
+
+def reindex_document(document_id: int) -> dict:
+    """Lập chỉ mục lại 1 tài liệu (đổi model embedding / sửa pipeline...).
+
+    Hệ thống CÓ giữ file gốc trên server (cột file_url, thư mục uploads/kb)
+    nên cách chính là làm lại từ đầu: đọc file gốc -> trích text -> chia
+    chunk -> embed batch, thay toàn bộ chunk cũ. Nếu file gốc không còn
+    (bị dọn tay), lùi về chỉ bổ sung embedding cho các chunk đang thiếu —
+    nội dung chunk cũ vẫn nguyên vẹn để chatbot dùng được.
+    """
+    document = db.session.get(KbDocument, document_id)
+    if document is None:
+        raise ApiError(404, "DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu.")
+
+    data = None
+    if document.file_url:
+        upload_root = current_app.config.get("UPLOAD_FOLDER") or "uploads"
+        try:
+            with open(os.path.join(upload_root, document.file_url), "rb") as fh:
+                data = fh.read()
+        except OSError:
+            data = None  # file gốc đã mất -> dùng đường lùi bên dưới
+
+    rebuilt = False
+    embedded = failed = 0
+    if data:
+        pages = extract_pages(data, os.path.basename(document.file_url or ""))
+        pieces: list[tuple[int, int | None, str]] = []
+        index = 0
+        for page_no, page_text in pages:
+            for piece in split_chunks(page_text):
+                pieces.append((index, page_no, piece))
+                index += 1
+        if pieces:
+            vectors = embed_texts(
+                [f"{document.title}\n{piece}" for _, _, piece in pieces])
+            KbChunk.query.filter_by(document_id=document.id).delete(
+                synchronize_session=False)
+            db.session.add_all([KbChunk(
+                document_id=document.id,
+                chunk_text=piece,
+                chunk_index=chunk_index,
+                page_no=page_no,
+                embedding=vectors[i] if i < len(vectors) else None,
+            ) for i, (chunk_index, page_no, piece) in enumerate(pieces)])
+            document.status = KbDocument.STATUS_READY
+            db.session.commit()
+            rebuilt = True
+            embedded = sum(1 for v in vectors if v)
+            failed = len(vectors) - embedded
+
+    if not rebuilt:
+        chunks = KbChunk.query.filter_by(document_id=document.id).all()
+        embedded, failed = _embed_missing(chunks, {document.id: document.title})
+        db.session.commit()
+
+    result = serialize_document(document)
+    result["rebuilt"] = rebuilt
+    result["embeddedChunks"] = embedded
+    result["failedChunks"] = failed
+    return result
 
 
 def delete_document(document_id: int) -> None:

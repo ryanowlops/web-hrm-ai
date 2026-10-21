@@ -5,6 +5,8 @@ import {
   listKbDocuments,
   uploadKbDocument,
   deleteKbDocument,
+  reindexKbDocument,
+  embedMissingKbChunks,
   friendlyError,
 } from '../services';
 import {
@@ -46,6 +48,14 @@ const SUGGESTIONS = [
 ];
 
 const KB_MAX_SIZE_MB = 10;
+
+/** Nhãn hiển thị chế độ truy hồi RAG mà backend đã dùng cho 1 câu trả lời. */
+const RETRIEVAL_MODE_LABELS = {
+  hybrid_rerank: 'Truy hồi: Lai + xếp hạng lại',
+  hybrid: 'Truy hồi: Lai (vector + từ khoá)',
+  embedding: 'Truy hồi: Vector',
+  keyword: 'Truy hồi: Từ khoá',
+};
 
 function getStoredUser() {
   try {
@@ -114,6 +124,7 @@ export default function ChatbotPage() {
   const [kbTitle, setKbTitle] = useState('');
   const [kbFile, setKbFile] = useState(null);
   const [kbUploading, setKbUploading] = useState(false);
+  const [kbBusyId, setKbBusyId] = useState(null);
   const [kbError, setKbError] = useState('');
   const [kbNotice, setKbNotice] = useState('');
 
@@ -225,6 +236,44 @@ export default function ChatbotPage() {
     }
   }
 
+  async function handleKbReindex(doc) {
+    setKbError('');
+    setKbNotice('');
+    setKbBusyId(doc.id);
+    try {
+      const result = await reindexKbDocument(doc.id);
+      setKbNotice(
+        result?.rebuilt
+          ? `Đã lập chỉ mục lại "${doc.title}" — đã tạo embedding cho ${result.embeddedChunks ?? 0} đoạn trích.`
+          : `Đã bổ sung embedding còn thiếu cho "${doc.title}".`,
+      );
+      await loadKbDocs();
+    } catch (err) {
+      setKbError(friendlyError(err, 'Lập chỉ mục lại thất bại, vui lòng thử lại.'));
+    } finally {
+      setKbBusyId(null);
+    }
+  }
+
+  async function handleEmbedMissing() {
+    setKbError('');
+    setKbNotice('');
+    setKbBusyId('embed-missing');
+    try {
+      const result = await embedMissingKbChunks();
+      setKbNotice(
+        result?.total
+          ? `Đã tạo embedding cho ${result.embedded}/${result.total} đoạn còn thiếu${result.failed ? ` (${result.failed} đoạn chưa tạo được)` : ''}.`
+          : 'Mọi đoạn trích đã có embedding, không cần bổ sung.',
+      );
+      await loadKbDocs();
+    } catch (err) {
+      setKbError(friendlyError(err, 'Tạo embedding bổ sung thất bại, vui lòng thử lại.'));
+    } finally {
+      setKbBusyId(null);
+    }
+  }
+
   async function handleKbDelete(doc) {
     if (!window.confirm(`Xoá tài liệu "${doc.title}"? Chatbot sẽ không còn dùng tài liệu này để trả lời.`)) return;
     setKbError('');
@@ -253,7 +302,7 @@ export default function ChatbotPage() {
     ]);
     setSending(true);
     try {
-      const { answer, sources } = await askChatbot(question);
+      const { answer, sources, mode } = await askChatbot(question);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === typingId
@@ -262,6 +311,7 @@ export default function ChatbotPage() {
                 typing: false,
                 text: answer || 'Chatbot chưa trả về nội dung, vui lòng thử lại.',
                 sources: sources.map(normalizeSource),
+                mode: mode || null,
               }
             : m,
         ),
@@ -428,8 +478,13 @@ export default function ChatbotPage() {
                         )}
                       </div>
                       {!m.typing && (
-                        <div className="mt-1 text-[11px] font-medium text-gray-400">
-                          {formatTime(m.createdAt)}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] font-medium text-gray-400">
+                          <span>{formatTime(m.createdAt)}</span>
+                          {!m.error && m.mode && RETRIEVAL_MODE_LABELS[m.mode] && (
+                            <span className="text-gray-500">
+                              · {RETRIEVAL_MODE_LABELS[m.mode]}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -519,6 +574,20 @@ export default function ChatbotPage() {
                   </Button>
                 </form>
 
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-4 w-full"
+                  loading={kbBusyId === 'embed-missing'}
+                  onClick={handleEmbedMissing}
+                >
+                  Bổ sung embedding còn thiếu
+                </Button>
+                <p className="mt-1.5 text-xs leading-relaxed text-gray-500">
+                  Dùng sau khi máy chủ vừa được cấu hình khoá AI — tạo vector
+                  cho các đoạn trích đang ở chế độ từ khoá để bật truy hồi lai.
+                </p>
+
                 <div className="mt-6">
                   <div className="ui-label mb-2">
                     Tài liệu đã có (<AnimatedNumber value={kbDocs.length} />)
@@ -557,6 +626,16 @@ export default function ChatbotPage() {
                           <div className="mt-1.5 text-xs leading-relaxed text-[#B42318]">
                             Không trích xuất được nội dung — kiểm tra lại file hoặc xoá và tải bản khác.
                           </div>
+                        )}
+                        {doc.status === 'ready' && (
+                          <button
+                            type="button"
+                            className="mt-1.5 text-xs font-medium text-brand-700 transition-colors duration-150 hover:text-brand-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 disabled:cursor-not-allowed disabled:text-gray-400"
+                            onClick={() => handleKbReindex(doc)}
+                            disabled={kbBusyId !== null}
+                          >
+                            {kbBusyId === doc.id ? 'Đang lập chỉ mục lại…' : 'Lập chỉ mục lại'}
+                          </button>
                         )}
                       </div>
                       <button

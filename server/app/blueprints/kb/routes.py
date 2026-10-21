@@ -2,6 +2,11 @@
 
     POST   /kb/documents            HR/Admin tải tài liệu quy chế (PDF/TXT)
     GET    /kb/documents            HR/Admin xem danh sách tài liệu đã nạp
+    POST   /kb/documents/<id>/reindex  HR/Admin lập chỉ mục lại 1 tài liệu
+                                       (đọc file gốc -> chunk + embed lại;
+                                       mất file gốc -> bổ sung embedding thiếu)
+    POST   /kb/embed-missing        HR/Admin tạo embedding cho mọi chunk
+                                    trong KB chưa có embedding
     DELETE /kb/documents/<id>       HR/Admin xoá tài liệu + toàn bộ chunk
 
 Theo FR-10/A2: tài liệu quy chế do HR quản lý — nhân viên chỉ dùng
@@ -35,6 +40,20 @@ def get_documents():
     page = request.args.get("page", 1, type=int)
     limit = request.args.get("limit", 20, type=int)
     return jsonify(services.list_documents(page=page, limit=limit))
+
+
+@bp.post("/documents/<int:document_id>/reindex")
+@require_roles(*HR_ROLES)
+def reindex_document(document_id: int):
+    """Lập chỉ mục lại 1 tài liệu -> tài liệu (serialize) + số chunk đã embed."""
+    return jsonify(services.reindex_document(document_id))
+
+
+@bp.post("/embed-missing")
+@require_roles(*HR_ROLES)
+def embed_missing():
+    """Tạo embedding cho mọi chunk chưa có -> {total, embedded, failed}."""
+    return jsonify(services.embed_missing_chunks())
 
 
 @bp.delete("/documents/<int:document_id>")
