@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 512" role="img" aria-label="Web HRM AI — Hệ thống quản lý nhân sự tích hợp AI">
+  <title>Web HRM AI</title>
+  <!-- Biểu tượng -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#274FEA"/>
+  <rect x="150" y="150" width="58" height="212" rx="15" fill="#FFFFFF"/>
+  <rect x="304" y="150" width="58" height="212" rx="15" fill="#FFFFFF"/>
+  <rect x="150" y="231" width="212" height="50" fill="#FFFFFF"/>
+  <path d="M398 84 C404 104 412 112 432 118 C412 124 404 132 398 152 C392 132 384 124 364 118 C384 112 392 104 398 84 Z" fill="#B9CCFF"/>
+  <circle cx="398" cy="188" r="10" fill="#B9CCFF"/>
+  <!-- Wordmark -->
+  <text x="556" y="258" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="112" font-weight="700" fill="#111827">Web HRM <tspan fill="#274FEA">AI</tspan></text>
+  <text x="560" y="336" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="40" fill="#6B7280">Hệ thống quản lý nhân sự tích hợp AI</text>
+</svg>

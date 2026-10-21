@@ -46,18 +46,12 @@ function validateForm({ email, password }) {
 
 function LogoMark({ className = 'h-9 w-9 rounded-lg' }) {
   return (
-    <div
+    <img
+      src="/logo.svg"
+      alt=""
       aria-hidden="true"
-      className={`flex items-center justify-center bg-brand-600 text-white ${className}`}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-[58%] w-[58%]">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M8.25 21v-3.75a3.75 3.75 0 0 1 7.5 0V21M8.25 6.75h.008v.008H8.25V6.75Zm3.75 0h.008v.008H12V6.75Zm3.75 0h.008v.008h-.008V6.75ZM8.25 10.5h.008v.008H8.25V10.5Zm3.75 0h.008v.008H12V10.5Zm3.75 0h.008v.008h-.008V10.5Z"
-        />
-      </svg>
-    </div>
+      className={`flex-none ${className}`}
+    />
   );
 }
 

@@ -482,12 +482,12 @@ export default function AppLayout() {
       >
         {/* Khối logo */}
         <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-4">
-          <span
-            className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-600 text-[15px] font-semibold text-white"
+          <img
+            src="/logo.svg"
+            alt=""
             aria-hidden="true"
-          >
-            H
-          </span>
+            className="h-8 w-8 flex-none rounded-lg"
+          />
           <span className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
             <span className="block truncate text-[15px] font-semibold leading-tight text-gray-900">
               Web HRM AI
