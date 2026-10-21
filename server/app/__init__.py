@@ -185,4 +185,11 @@ def create_app(config=None) -> Flask:
     def _shell_context():
         return {"db": db, "app": app}
 
+    # Deploy production (Koyeb + Neon): khi AUTO_CREATE_TABLES=1 thì tạo
+    # toàn bộ bảng nếu DB còn trống, để service lên là chạy ngay không cần
+    # chạy migration tay. Tắt mặc định ở mọi môi trường khác.
+    if app.config.get("AUTO_CREATE_TABLES"):
+        with app.app_context():
+            db.create_all()
+
     return app

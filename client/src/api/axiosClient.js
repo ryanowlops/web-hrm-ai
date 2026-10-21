@@ -32,7 +32,9 @@ function unwrapPayload(payload) {
 }
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  // Production (Vercel): đặt VITE_API_BASE_URL=https://<backend>/api/v1.
+  // Local: để trống, Vite proxy chuyển /api về backend 5000.
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
