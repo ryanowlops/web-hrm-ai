@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 
-// Drawer (v3) — panel trượt từ phải bằng spring (stiffness 380, damping 34),
-// nền mờ dần. Đóng bằng Esc / click nền / nút X. Tôn trọng reduced-motion.
-export const SPRING_PANEL = { type: 'spring', stiffness: 380, damping: 34 };
+// Drawer (v4) — panel trượt từ phải 200ms ease-out (hợp đồng v4 mục 6: bỏ
+// spring nảy mạnh của v3), nền mờ dần. Đóng bằng Esc / click nền / nút X.
+// Tôn trọng reduced-motion.
+// SPRING_PANEL giữ nguyên tên export cho tương thích, nhưng từ v4 giá trị
+// là tween ease-out 200ms — KHÔNG còn là spring.
+export const SPRING_PANEL = { duration: 0.2, ease: [0, 0, 0.2, 1] };
 
 export default function Drawer({ open = false, title, subtitle, onClose, children, width = 'max-w-md' }) {
   const reduce = useReducedMotion();
@@ -26,12 +29,12 @@ export default function Drawer({ open = false, title, subtitle, onClose, childre
         <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label={title}>
           <motion.button
             aria-label="Đóng"
-            className="absolute inset-0 bg-navy-950/55 backdrop-blur-[3px]"
+            className="absolute inset-0 bg-navy-950/55"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reduce ? 0 : 0.18 }}
+            transition={{ duration: reduce ? 0 : 0.2 }}
           />
           <motion.aside
             className={`absolute right-0 top-0 flex h-full w-full ${width} flex-col bg-white shadow-pop`}

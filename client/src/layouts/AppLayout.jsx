@@ -8,11 +8,11 @@ import PageTransition from '../components/motion/PageTransition.jsx';
 import ActivePill from '../components/motion/ActivePill.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 
-// Layout chính cho khu vực đã đăng nhập (design system v3 — "Nhịp nhân sự"):
-// sidebar Ink Navy (#081A3A) thu gọn 76px ↔ mở rộng 264px bằng spring,
-// mục đang chọn dùng ActivePill layoutId trượt theo điều hướng,
-// PageTransition bọc Outlet theo pathname. Topbar trắng mờ giữ nguyên
-// chức năng (tìm kiếm, chuông thông báo, chip người dùng, Đăng xuất).
+// Layout chính cho khu vực đã đăng nhập (design system v4 — bám shadcn-admin):
+// sidebar TRẮNG 264px border-r gray-200 (thu gọn 76px ở desktop), mục đang
+// chọn nền phẳng brand-50 qua ActivePill, topbar trắng 64px có ô tìm kiếm
+// kiểu ⌘K + chuông thông báo chấm đỏ, nội dung nền gray-50.
+// PageTransition bọc Outlet theo pathname. Logic giữ nguyên 100%.
 
 const ROLE_LABELS = {
   admin: 'Quản trị viên',
@@ -227,12 +227,12 @@ function getInitials(user) {
 
 const navLinkClass = ({ isActive }) =>
   [
-    'group relative flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium',
-    'transition-colors duration-200 ease-spring',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-900',
+    'group relative flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm',
+    'transition-colors duration-150',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30',
     isActive
-      ? 'font-semibold text-white'
-      : 'text-slate-300/85 hover:bg-white/[0.06] hover:text-white',
+      ? 'font-medium text-brand-700'
+      : 'text-gray-700 hover:bg-gray-50',
   ].join(' ');
 
 export default function AppLayout() {
@@ -266,9 +266,9 @@ export default function AppLayout() {
   }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-canvas text-slate-800 lg:flex-row">
+    <div className="flex min-h-dvh flex-col bg-gray-50 text-gray-800 lg:flex-row">
       <a
-        className="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[60] focus:rounded-br-xl focus:bg-brand-700 focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[60] focus:rounded-br-lg focus:bg-brand-600 focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-white"
         href="#main-content"
       >
         Bỏ qua tới nội dung chính
@@ -276,45 +276,35 @@ export default function AppLayout() {
 
       {/* ============================ SIDEBAR ============================ */}
       <motion.aside
-        className="flex w-full flex-none flex-col bg-gradient-to-b from-navy-950 via-navy-900 to-navy-800 text-slate-200 shadow-lift lg:sticky lg:top-0 lg:h-dvh"
+        className="flex w-full flex-none flex-col border-b border-gray-200 bg-white text-gray-700 lg:sticky lg:top-0 lg:h-dvh lg:border-b-0 lg:border-r"
         animate={sidebarWidth ? { width: sidebarWidth } : undefined}
-        transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 34 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
       >
         {/* Khối logo */}
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4 lg:py-5">
+        <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-4">
           <span
-            className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 text-white shadow-lift ring-1 ring-white/25"
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-600 text-[15px] font-semibold text-white"
             aria-hidden="true"
           >
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="8" r="3.6" />
-              <path d="M4.5 20.5c1.2-4 4-6 7.5-6s6.3 2 7.5 6" />
-            </svg>
+            H
           </span>
-          <span className={`font-display text-[17px] font-bold leading-tight tracking-tight text-white ${collapsed ? 'lg:hidden' : ''}`}>
-            Web HRM AI
+          <span className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
+            <span className="block truncate text-[15px] font-semibold leading-tight text-gray-900">
+              Web HRM AI
+            </span>
+            <span className="block truncate text-xs leading-tight text-gray-500">
+              Quản lý nhân sự
+            </span>
           </span>
-          <span
-            className={`ml-auto h-2 w-2 flex-none rounded-full bg-accent-400 shadow-[0_0_10px_rgba(39,207,169,0.9)] animate-pulse-soft lg:ml-0 ${collapsed ? 'lg:hidden' : ''}`}
-            aria-hidden="true"
-          />
           {/* Nút thu/mở sidebar (desktop) */}
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
             aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
             title={collapsed ? 'Mở rộng' : 'Thu gọn'}
-            className={`ml-auto hidden h-8 w-8 flex-none items-center justify-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 lg:flex ${collapsed ? 'lg:ml-0' : ''}`}
+            className={`ml-auto hidden h-8 w-8 flex-none items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30 lg:flex ${collapsed ? 'lg:ml-0' : ''}`}
           >
-            {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
         </div>
 
@@ -324,8 +314,8 @@ export default function AppLayout() {
           aria-label="Điều hướng chính"
         >
           {navSections.map((section) => (
-            <div key={section.label} className="flex items-start gap-1 lg:mt-4 lg:block lg:first:mt-0">
-              <p className={`hidden px-3 pb-1.5 text-[11px] font-semibold text-slate-400/70 lg:block ${collapsed ? 'lg:invisible' : ''}`}>
+            <div key={section.label} className="flex items-start gap-1 lg:mt-5 lg:block lg:first:mt-0">
+              <p className={`hidden px-3 pb-1.5 text-xs font-medium text-gray-500 lg:block ${collapsed ? 'lg:invisible' : ''}`}>
                 {section.label}
               </p>
               <div className="flex gap-1 lg:flex-col lg:gap-0.5">
@@ -342,18 +332,12 @@ export default function AppLayout() {
                         {isActive ? (
                           <ActivePill
                             layoutId="sidebar-active"
-                            className="absolute inset-0 rounded-xl bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-inset ring-white/10"
-                          />
-                        ) : null}
-                        {isActive ? (
-                          <span
-                            aria-hidden="true"
-                            className="absolute left-0 top-1/2 z-10 h-6 w-1 -translate-y-1/2 rounded-full bg-accent-400 shadow-[0_0_12px_rgba(39,207,169,0.85)]"
+                            className="absolute inset-0 rounded-lg bg-brand-50"
                           />
                         ) : null}
                         <span
-                          className={`relative z-10 transition-colors duration-200 ${
-                            isActive ? 'text-accent-300' : 'text-slate-400 group-hover:text-slate-100'
+                          className={`relative z-10 transition-colors duration-150 ${
+                            isActive ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-500'
                           }`}
                         >
                           {item.icon}
@@ -369,55 +353,70 @@ export default function AppLayout() {
         </nav>
 
         {/* Chân sidebar: link công khai + thẻ người dùng */}
-        <div className="mt-auto hidden space-y-2 border-t border-white/10 p-3 lg:block">
+        <div className="mt-auto hidden border-t border-gray-200 p-3 lg:block">
           <NavLink
             to="/jobs"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300/85 transition-all duration-200 ease-spring hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30"
           >
-            <span className="text-slate-400">{globeIcon}</span>
+            <span className="text-gray-400">{globeIcon}</span>
             <span className={collapsed ? 'lg:hidden' : ''}>Trang tuyển dụng công khai</span>
           </NavLink>
 
-          <div className="flex items-center gap-3 rounded-xl bg-white/[0.06] px-3 py-2.5 ring-1 ring-white/10">
+          <div className="flex items-center gap-3 px-3 py-2">
             <span
-              className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-accent-500 text-xs font-bold text-white ring-2 ring-white/15"
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700"
               aria-hidden="true"
             >
               {getInitials(user)}
             </span>
             <span className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
-              <span className="block truncate text-sm font-semibold leading-tight text-white">
+              <span className="block truncate text-sm font-medium leading-tight text-gray-900">
                 {displayName}
               </span>
               {roleLabel ? (
-                <span className="block truncate text-xs leading-tight text-slate-400">
+                <span className="block truncate text-xs leading-tight text-gray-500">
                   {roleLabel}
                 </span>
               ) : null}
             </span>
+            <button
+              type="button"
+              onClick={logout}
+              aria-label="Đăng xuất"
+              title="Đăng xuất"
+              className={`ml-auto flex h-8 w-8 flex-none items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30 ${collapsed ? 'lg:hidden' : ''}`}
+            >
+              {ICONS.logout}
+            </button>
           </div>
         </div>
       </motion.aside>
 
       {/* ============================ THÂN TRANG ============================ */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar trắng mờ */}
-        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/75 backdrop-blur-xl">
+        {/* Topbar trắng */}
+        <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
           <div className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-5 lg:px-8">
-            {/* Ô tìm kiếm (trang trí) */}
+            {/* Ô tìm kiếm kiểu shadcn-admin (trình bày, giữ hành vi hiện có) */}
             <div className="relative hidden w-full max-w-sm md:block">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 {searchIcon}
               </span>
               <input
                 type="search"
                 aria-label="Tìm kiếm"
-                placeholder="Tìm kiếm nhân viên, phòng ban…"
-                className="w-full rounded-xl border border-slate-200/90 bg-slate-100/70 py-2 pl-10 pr-4 text-sm text-slate-700 shadow-[inset_0_1px_2px_rgba(16,24,40,0.04)] transition duration-200 ease-spring placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/15"
+                placeholder="Tìm kiếm..."
+                className="h-10 w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-14 text-sm text-gray-700 transition placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-600/20"
               />
+              <kbd
+                className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-500"
+                aria-hidden="true"
+              >
+                ⌘K
+              </kbd>
             </div>
             <div className="min-w-0 flex-1 md:hidden">
-              <span className="block truncate text-sm font-semibold text-slate-800">
+              <span className="block truncate text-sm font-medium text-gray-900">
                 {displayName}
               </span>
             </div>
@@ -426,31 +425,35 @@ export default function AppLayout() {
               {/* Chuông thông báo */}
               <button
                 type="button"
-                aria-label="Thông báo"
-                className="relative flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-card transition duration-200 ease-spring hover:-translate-y-px hover:border-brand-200 hover:text-brand-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20"
+                aria-label={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
+                className="relative flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20"
               >
                 {bellIcon}
                 {unreadCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white animate-scale-in">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
+                  <>
+                    <span className="sr-only">{unreadCount} thông báo chưa đọc</span>
+                    <span
+                      className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#F04438] ring-2 ring-white"
+                      aria-hidden="true"
+                    />
+                  </>
                 ) : null}
               </button>
 
-              {/* Chip người dùng */}
-              <div className="hidden items-center gap-2.5 rounded-full border border-slate-200/90 bg-white py-1.5 pl-1.5 pr-3.5 shadow-card sm:flex">
+              {/* Khối người dùng */}
+              <div className="hidden items-center gap-2.5 sm:flex">
                 <span
-                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[11px] font-bold text-white"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white"
                   aria-hidden="true"
                 >
                   {getInitials(user)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block max-w-[150px] truncate text-[13px] font-semibold leading-tight text-slate-800">
+                  <span className="block max-w-[150px] truncate text-sm font-medium leading-tight text-gray-900">
                     {displayName}
                   </span>
                   {roleLabel ? (
-                    <span className="block text-[11px] leading-tight text-slate-500">
+                    <span className="block text-xs leading-tight text-gray-500">
                       {roleLabel}
                     </span>
                   ) : null}
@@ -461,7 +464,7 @@ export default function AppLayout() {
               <button
                 type="button"
                 onClick={logout}
-                className="inline-flex flex-none items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-card transition duration-200 ease-spring hover:-translate-y-px hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/15 sm:px-3.5"
+                className="inline-flex h-10 flex-none items-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20"
               >
                 {ICONS.logout}
                 Đăng xuất
@@ -470,7 +473,7 @@ export default function AppLayout() {
           </div>
         </header>
 
-        <main id="main-content" className="min-w-0 flex-1" tabIndex={-1}>
+        <main id="main-content" className="min-w-0 flex-1 bg-gray-50 p-6 lg:p-8" tabIndex={-1}>
           <PageTransition key={location.pathname}>
             <Outlet />
           </PageTransition>

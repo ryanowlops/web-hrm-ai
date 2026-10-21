@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   listJobs,
@@ -22,22 +22,19 @@ import {
   PageHeader,
   Select,
   Skeleton,
-  StatCard,
   Textarea,
 } from '../../../components/ui';
-import { StaggerList, StaggerItem } from '../../../components/motion';
 import {
   IconBriefcase,
   IconBuilding,
   IconCalendar,
-  IconCheck,
   IconSearch,
   IconUsers,
 } from '../../../components/icons.jsx';
 
 const JOB_STATUS = {
   open: { label: 'Đang tuyển', tone: 'green' },
-  closed: { label: 'Đã đóng', tone: 'slate' },
+  closed: { label: 'Đã đóng', tone: 'gray' },
 };
 
 const EMPTY_FORM = {
@@ -265,14 +262,6 @@ export default function RecruitmentPage() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  const stats = useMemo(
-    () => ({
-      open: jobs.filter((j) => j.status === 'open').length,
-      candidates: jobs.reduce((sum, j) => sum + (j.candidates_count ?? j.candidate_count ?? 0), 0),
-    }),
-    [jobs],
-  );
-
   const openCreateModal = () => {
     setEditing(null);
     setFormError('');
@@ -322,39 +311,16 @@ export default function RecruitmentPage() {
     <div className="page-shell">
       {/* Header */}
       <PageHeader
-        eyebrow="Tuyển dụng"
         title="Tuyển dụng"
         subtitle={
           <>
             Quản lý tin tuyển dụng và ứng viên. Mở 1 vị trí để xem CV và dùng{' '}
-            <span className="font-semibold text-accent-600">AI sàng lọc CV</span> — AI chỉ gợi ý, HR là
+            <span className="font-medium text-brand-700">AI sàng lọc CV</span> — AI chỉ gợi ý, HR là
             người quyết định.
           </>
         }
         actions={<Button onClick={openCreateModal}>+ Đăng tin tuyển dụng</Button>}
       />
-
-      {/* Mini stats */}
-      <div className="stagger mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
-          icon={<IconBriefcase size={22} />}
-          label="Tin đang hiển thị"
-          value={meta.totalItems ?? jobs.length}
-          tone="blue"
-        />
-        <StatCard
-          icon={<IconCheck size={22} />}
-          label="Đang tuyển (trang này)"
-          value={stats.open}
-          tone="teal"
-        />
-        <StatCard
-          icon={<IconUsers size={22} />}
-          label="Ứng viên (trang này)"
-          value={stats.candidates}
-          tone="violet"
-        />
-      </div>
 
       {notice && (
         <Alert tone="success" className="mb-4">
@@ -371,7 +337,7 @@ export default function RecruitmentPage() {
       <Card className="mb-5">
         <CardBody className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[220px] flex-1">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
               <IconSearch size={17} />
             </span>
             <Input
@@ -425,90 +391,113 @@ export default function RecruitmentPage() {
           />
         </Card>
       ) : (
-        <StaggerList className="space-y-4">
-          {jobs.map((job, i) => {
-            const st = JOB_STATUS[job.status] ?? JOB_STATUS.closed;
-            const deptName = job.department_name ?? job.department?.name;
-            const count = job.candidates_count ?? job.candidate_count ?? 0;
-            const overdue = isOverdue(job);
-            return (
-              <StaggerItem key={job.id} index={i}>
-              <Card hover>
-                <CardBody className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={`/recruitment/${job.id}`}
-                        className="text-base font-bold tracking-[-0.01em] text-slate-900 transition-colors hover:text-brand-700"
-                      >
-                        {job.title}
-                      </Link>
-                      <Badge tone={st.tone} dot={job.status === 'open'}>
-                        {st.label}
-                      </Badge>
-                      {overdue && <Badge tone="red">Quá hạn nộp</Badge>}
-                    </div>
-
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                      {deptName && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <IconBuilding size={15} className="text-slate-400" />
-                          {deptName}
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="ui-table min-w-[860px]">
+              <thead>
+                <tr>
+                  <th className="ui-th">Vị trí tuyển dụng</th>
+                  <th className="ui-th w-44">Phòng ban</th>
+                  <th className="ui-th w-40">Trạng thái</th>
+                  <th className="ui-th w-36">Hạn nộp</th>
+                  <th className="ui-th w-28 text-right">Ứng viên</th>
+                  <th className="ui-th w-64 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => {
+                  const st = JOB_STATUS[job.status] ?? JOB_STATUS.closed;
+                  const deptName = job.department_name ?? job.department?.name;
+                  const count = job.candidates_count ?? job.candidate_count ?? 0;
+                  const overdue = isOverdue(job);
+                  return (
+                    <tr key={job.id} className="ui-tr">
+                      <td className="ui-td">
+                        <Link
+                          to={`/recruitment/${job.id}`}
+                          className="text-sm font-medium text-gray-900 transition-colors hover:text-brand-700"
+                        >
+                          {job.title}
+                        </Link>
+                        <span className="mt-0.5 block text-[13px] text-gray-500">
+                          Tuyển {job.quantity ?? 1} người
                         </span>
-                      )}
-                      <span>Tuyển {job.quantity ?? 1} người</span>
-                      <span
-                        className={`inline-flex items-center gap-1.5 ${overdue ? 'font-semibold text-rose-600' : ''}`}
-                      >
-                        <IconCalendar size={15} className={overdue ? 'text-rose-400' : 'text-slate-400'} />
-                        Hạn nộp: {formatDate(job.deadline)}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 font-medium text-slate-600">
-                        <IconUsers size={15} className="text-slate-400" />
-                        {count} ứng viên
-                      </span>
-                    </div>
-
-                    {job.description && (
-                      <p className="mt-2.5 line-clamp-2 max-w-3xl text-sm leading-relaxed text-slate-500">
-                        {job.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Link
-                      to={`/recruitment/${job.id}`}
-                      className="inline-flex h-9 select-none items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3.5 text-[13px] font-semibold tracking-[0.01em] text-white shadow-[0_6px_16px_-6px_rgba(39,79,234,.55)] transition-all duration-200 ease-spring hover:-translate-y-px hover:bg-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 active:translate-y-0 active:scale-[.99]"
-                    >
-                      Xem ứng viên
-                    </Link>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(job);
-                        setFormError('');
-                        setModalOpen(true);
-                      }}
-                    >
-                      Sửa
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleToggleStatus(job)}
-                      disabled={busyJobId === job.id}
-                    >
-                      {busyJobId === job.id ? 'Đang xử lý...' : job.status === 'open' ? 'Đóng tin' : 'Mở lại'}
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
-              </StaggerItem>
-            );
-          })}
-        </StaggerList>
+                        {job.description && (
+                          <span className="mt-0.5 line-clamp-1 block max-w-md text-[13px] text-gray-500">
+                            {job.description}
+                          </span>
+                        )}
+                      </td>
+                      <td className="ui-td">
+                        {deptName ? (
+                          <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                            <IconBuilding size={15} className="text-gray-400" />
+                            {deptName}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="ui-td">
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <Badge tone={st.tone} dot={job.status === 'open'}>
+                            {st.label}
+                          </Badge>
+                          {overdue && <Badge tone="red">Quá hạn nộp</Badge>}
+                        </span>
+                      </td>
+                      <td className="ui-td">
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-sm tabular-nums ${
+                            overdue ? 'font-medium text-rose-700' : 'text-gray-700'
+                          }`}
+                        >
+                          <IconCalendar size={15} className={overdue ? 'text-rose-500' : 'text-gray-400'} />
+                          {formatDate(job.deadline)}
+                        </span>
+                      </td>
+                      <td className="ui-td text-right">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums text-gray-900">
+                          <IconUsers size={15} className="text-gray-400" />
+                          {count}
+                        </span>
+                      </td>
+                      <td className="ui-td">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Link
+                            to={`/recruitment/${job.id}`}
+                            className="inline-flex h-8 select-none items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-[13px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                          >
+                            Xem ứng viên
+                          </Link>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setEditing(job);
+                              setFormError('');
+                              setModalOpen(true);
+                            }}
+                          >
+                            Sửa
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleToggleStatus(job)}
+                            disabled={busyJobId === job.id}
+                          >
+                            {busyJobId === job.id ? 'Đang xử lý...' : job.status === 'open' ? 'Đóng tin' : 'Mở lại'}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* Pagination */}
@@ -517,7 +506,7 @@ export default function RecruitmentPage() {
           <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
             ← Trước
           </Button>
-          <span className="font-medium text-slate-500">
+          <span className="font-medium text-gray-500">
             Trang {meta.page ?? page}/{meta.totalPages}
           </span>
           <Button

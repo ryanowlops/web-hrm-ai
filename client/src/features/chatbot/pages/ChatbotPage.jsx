@@ -300,44 +300,43 @@ export default function ChatbotPage() {
         {/* ------------------------------ Khung chat ------------------------------ */}
         <div className="min-w-0 flex-1">
           <Card className="flex flex-col overflow-hidden">
-            {/* Header khung chat */}
-            <div className="flex items-center gap-3.5 border-b border-slate-100 bg-white px-5 py-4">
-              <div className="relative shrink-0">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-500 text-white shadow-[0_8px_16px_-6px_rgba(13,183,149,.6)] ring-4 ring-accent-50">
-                  <IconSparkles size={22} />
-                </div>
-                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" aria-hidden="true" />
+            {/* Header khung chat — phẳng: tên chatbot + Badge AI, không trang trí */}
+            <div className="flex items-center gap-3 border-b border-gray-200 bg-white px-5 py-3.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+                <IconSparkles size={18} />
               </div>
               <div className="min-w-0">
-                <h2 className="font-display truncate text-[15px] font-bold tracking-[-0.01em] text-slate-900">
-                  Chatbot HR
-                </h2>
-                <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                  <span className="h-2 w-2 animate-pulse-soft rounded-full bg-emerald-500" aria-hidden="true" />
-                  Sẵn sàng
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate text-sm font-semibold text-gray-900">
+                    Chatbot HR
+                  </h2>
+                  <Badge tone="blue">AI</Badge>
+                </div>
+                <p className="mt-0.5 text-[13px] text-gray-500">
+                  Sẵn sàng — trả lời dựa trên tài liệu quy chế, kèm nguồn trích dẫn
                 </p>
               </div>
             </div>
 
             {/* Vùng tin nhắn */}
             <div
-              className="nice-scroll flex h-[clamp(400px,58vh,600px)] flex-col gap-4 overflow-y-auto bg-slate-50/70 px-5 py-5"
+              className="nice-scroll flex h-[clamp(400px,58vh,600px)] flex-col gap-4 overflow-y-auto bg-gray-50 px-5 py-5"
               ref={scrollRef}
               aria-live="polite"
             >
               {historyLoading && (
                 <div className="space-y-4" aria-label="Đang tải lịch sử trò chuyện…">
                   <div className="flex gap-3">
-                    <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-                    <Skeleton className="h-16 w-2/3 rounded-2xl" />
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                    <Skeleton className="h-16 w-2/3 rounded-xl" />
                   </div>
                   <div className="flex flex-row-reverse gap-3">
                     <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-                    <Skeleton className="h-12 w-1/2 rounded-2xl" />
+                    <Skeleton className="h-12 w-1/2 rounded-xl" />
                   </div>
                   <div className="flex gap-3">
-                    <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-                    <Skeleton className="h-20 w-3/5 rounded-2xl" />
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                    <Skeleton className="h-20 w-3/5 rounded-xl" />
                   </div>
                 </div>
               )}
@@ -353,7 +352,7 @@ export default function ChatbotPage() {
                         <button
                           key={s}
                           type="button"
-                          className="rounded-full border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-brand-700 shadow-sm transition-all duration-200 ease-spring hover:-translate-y-px hover:border-brand-400 hover:bg-brand-50 hover:shadow-lift active:translate-y-0 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25"
+                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors duration-150 hover:border-brand-600 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20"
                           onClick={() => sendQuestion(s)}
                         >
                           {s}
@@ -368,16 +367,16 @@ export default function ChatbotPage() {
                 m.role === 'user' ? (
                   <div key={m.id} className="msg-in flex flex-row-reverse gap-3">
                     <div
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-200/60"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[13px] font-semibold text-gray-700"
                       aria-hidden="true"
                     >
                       {myInitial}
                     </div>
                     <div className="min-w-0 max-w-[85%] sm:max-w-[78%]">
-                      <div className="whitespace-pre-wrap break-words rounded-2xl rounded-tr-md bg-brand-600 px-4 py-3 text-sm leading-relaxed text-white shadow-[0_6px_16px_-8px_rgba(39,79,234,.55)]">
+                      <div className="whitespace-pre-wrap break-words rounded-xl bg-brand-600 px-4 py-3 text-sm leading-relaxed text-white">
                         {m.text}
                       </div>
-                      <div className="mt-1 text-right text-[11px] font-medium text-slate-400">
+                      <div className="mt-1 text-right text-[11px] font-medium text-gray-400">
                         {formatTime(m.createdAt)}
                       </div>
                     </div>
@@ -385,38 +384,38 @@ export default function ChatbotPage() {
                 ) : (
                   <div key={m.id} className="msg-in flex gap-3">
                     <div
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-500 text-white shadow-[0_6px_14px_-6px_rgba(13,183,149,.6)]"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white"
                       aria-hidden="true"
                     >
-                      <IconSparkles size={18} />
+                      <IconSparkles size={16} />
                     </div>
                     <div className="min-w-0 max-w-[85%] sm:max-w-[78%]">
                       <div
-                        className={`whitespace-pre-wrap break-words rounded-2xl rounded-tl-md px-4 py-3 text-sm leading-relaxed shadow-card ${
+                        className={`whitespace-pre-wrap break-words rounded-xl px-4 py-3 text-sm leading-relaxed ${
                           m.error
-                            ? 'border border-rose-200 bg-rose-50 text-rose-700'
-                            : 'border border-slate-200/90 bg-white text-slate-800'
+                            ? 'bg-[#FEF3F2] text-[#B42318]'
+                            : 'bg-gray-100 text-gray-900'
                         }`}
                       >
                         {m.typing ? (
                           <span className="inline-flex items-center gap-1.5 py-1" role="status" aria-label="Chatbot đang trả lời">
-                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-slate-400" />
-                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-slate-400" />
-                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-slate-400" />
+                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-gray-400" />
+                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-gray-400" />
+                            <span className="typing-dot h-[7px] w-[7px] rounded-full bg-gray-400" />
                           </span>
                         ) : (
                           m.text
                         )}
                         {!m.typing && m.sources && m.sources.length > 0 && (
-                          <div className="mt-3 border-t border-dashed border-slate-200 pt-3">
-                            <div className="mb-2 text-xs font-semibold text-slate-500">
+                          <div className="mt-3 border-t border-gray-200 pt-3">
+                            <div className="mb-2 text-xs font-semibold text-gray-500">
                               Nguồn trích dẫn
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {m.sources.map((s) => (
                                 <span
                                   key={s.key}
-                                  className="ui-badge bg-accent-50 text-accent-700 ring-accent-600/20"
+                                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-200"
                                   title={s.excerpt || undefined}
                                 >
                                   <IconFileText size={12} />
@@ -429,7 +428,7 @@ export default function ChatbotPage() {
                         )}
                       </div>
                       {!m.typing && (
-                        <div className="mt-1 text-[11px] font-medium text-slate-400">
+                        <div className="mt-1 text-[11px] font-medium text-gray-400">
                           {formatTime(m.createdAt)}
                         </div>
                       )}
@@ -441,7 +440,7 @@ export default function ChatbotPage() {
 
             {/* Thanh nhập cố định ở đáy khung chat */}
             <form
-              className="flex items-end gap-3 border-t border-slate-100 bg-white px-4 py-4"
+              className="flex items-end gap-3 border-t border-gray-200 bg-white px-4 py-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 sendQuestion();
@@ -461,7 +460,7 @@ export default function ChatbotPage() {
               <Button
                 type="submit"
                 variant="primary"
-                className="h-[42px] w-[42px] shrink-0 rounded-full px-0"
+                className="h-10 w-10 shrink-0 rounded-lg px-0"
                 disabled={sending || !input.trim()}
                 aria-label="Gửi câu hỏi"
                 title="Gửi câu hỏi"
@@ -475,7 +474,7 @@ export default function ChatbotPage() {
         {/* --------------------------- Panel tài liệu KB --------------------------- */}
         {kbVisible && (
           <aside className="w-full shrink-0 xl:w-[340px]" aria-label="Quản lý tài liệu quy chế">
-            <Card className="animate-fade-up">
+            <Card>
               <CardHeader
                 title="Tài liệu quy chế (KB)"
                 subtitle="Chỉ HR/Admin quản lý khu vực này. Tài liệu tải lên là nguồn duy nhất để chatbot trả lời — hãy giữ tài liệu luôn cập nhật."
@@ -510,7 +509,7 @@ export default function ChatbotPage() {
                       onChange={(e) => setKbFile(e.target.files?.[0] || null)}
                     />
                     {kbFile && (
-                      <div className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                      <div className="mt-1.5 text-xs leading-relaxed text-gray-500">
                         Đã chọn: {kbFile.name} ({(kbFile.size / 1024).toFixed(0)} KB)
                       </div>
                     )}
@@ -540,29 +539,29 @@ export default function ChatbotPage() {
                   <StaggerList>
                   {kbDocs.map((doc, i) => (
                     <StaggerItem key={doc.id} index={i}>
-                    <div className="flex items-start gap-3 border-t border-slate-100 py-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-50 text-accent-600 ring-1 ring-inset ring-accent-100">
+                    <div className="flex items-start gap-3 border-t border-gray-100 py-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
                         <IconFileText size={16} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">
+                        <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">
                           {doc.title || 'Tài liệu không tên'}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-gray-500">
                           <Badge tone={kbStatusTone[doc.status] || 'amber'} dot>
                             {kbStatusLabel[doc.status] || 'Đang xử lý'}
                           </Badge>
                           <span>{formatDateTime(doc.created_at)}</span>
                         </div>
                         {doc.status === 'failed' && (
-                          <div className="mt-1.5 text-xs leading-relaxed text-rose-600">
+                          <div className="mt-1.5 text-xs leading-relaxed text-[#B42318]">
                             Không trích xuất được nội dung — kiểm tra lại file hoặc xoá và tải bản khác.
                           </div>
                         )}
                       </div>
                       <button
                         type="button"
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition duration-200 hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/25"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors duration-150 hover:bg-[#FEF3F2] hover:text-[#B42318] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#F04438]/20"
                         onClick={() => handleKbDelete(doc)}
                         aria-label={`Xoá tài liệu ${doc.title || ''}`}
                         title="Xoá tài liệu"

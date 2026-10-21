@@ -2,11 +2,13 @@
    ICONS — bộ icon SVG inline dùng chung toàn app (kiểu Lucide/Feather).
    KHÔNG dùng emoji làm icon. Màu theo currentColor.
 
-   CHUẨN NÉT VẼ (mọi icon trong file này đều theo):
+   CHUẨN NÉT VẼ (mọi icon trong file này đều theo) — v4: chuẩn Lucide
+   (bộ icon của template shadcn-admin), đã rà từng icon ở cỡ nhỏ 18–20px:
      - viewBox "0 0 24 24"
-     - fill: none, stroke: currentColor
-     - strokeWidth mặc định 1.8 (ghi đè được qua prop)
+     - fill: none, stroke: currentColor (không fill đặc ở bất kỳ icon nào)
+     - strokeWidth mặc định 1.8 đồng nhất (ghi đè được qua prop)
      - strokeLinecap / strokeLinejoin: round
+     - kích thước mặc định 20px (dùng 18px cho menu/topbar)
 
    Cách dùng:
      import { IconHome, IconUsers } from "./icons";
@@ -123,9 +125,10 @@ export const IconBell = createIcon(
 
 export const IconChart = createIcon(
   <>
-    <path d="M12 20V10" />
-    <path d="M18 20V4" />
-    <path d="M6 20v-4" />
+    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+    <path d="M7 16v-5" />
+    <path d="M12 16V8" />
+    <path d="M17 16v-8" />
   </>
 );
 
@@ -182,7 +185,7 @@ export const IconChevronDown = createIcon(<path d="M6 9l6 6 6-6" />);
 
 export const IconEye = createIcon(
   <>
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
     <circle cx="12" cy="12" r="3" />
   </>
 );
@@ -213,8 +216,9 @@ export const IconFileText = createIcon(
 
 export const IconSparkles = createIcon(
   <>
-    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z" />
-    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" />
+    <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3Z" />
+    <path d="M5 3v4M3 5h4" />
+    <path d="M19 17v4M17 19h4" />
   </>
 );
 

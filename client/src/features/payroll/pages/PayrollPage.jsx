@@ -23,7 +23,23 @@ import {
   Skeleton,
   TableSkeleton,
 } from '../../../components/ui';
-import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
+import { AnimatedNumber } from '../../../components/motion';
+
+/* ===== Lớp trình bày v4 (bám hợp đồng frontend-design-v4, mục 3 & 5) =====
+   Bảng phẳng trong thẻ: thead bg-gray-50, chữ 12px medium gray-500;
+   hàng border-t gray-100, hover bg-gray-50; ô padding 12px 16px;
+   cột tiền tabular-nums căn phải, tổng semibold gray-900 — không band màu. */
+const TH = 'bg-gray-50 px-4 py-3 text-xs font-medium text-gray-500';
+const TD = 'px-4 py-3 text-sm text-gray-700';
+const TR = 'border-t border-gray-100 transition-colors hover:bg-gray-50';
+
+// Chữ viết tắt cho avatar tròn ở ô tên nhân viên (chỉ trình bày)
+const initialsOf = (name) => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '—';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 /* ================= Helpers ================= */
 
@@ -259,7 +275,6 @@ function HrPayrollView() {
   return (
     <div className="page-shell">
       <PageHeader
-        eyebrow="Tài chính · Bảng lương"
         title="Bảng lương"
         subtitle="Tạo kỳ lương, tính lương từ bảng công đã tổng hợp và chốt kỳ để nhân viên xem phiếu lương."
         actions={
@@ -273,7 +288,7 @@ function HrPayrollView() {
       <Alert tone="success" className="mb-4">{notice}</Alert>
 
       {/* Danh sách kỳ lương */}
-      <Card className="mb-6 animate-fade-up">
+      <Card className="mb-6 overflow-hidden">
         <CardHeader title="Kỳ lương" subtitle="Chọn một kỳ để xem bảng lương chi tiết bên dưới." />
         {loadingPeriods ? (
           <TableSkeleton rows={3} cols={5} />
@@ -283,17 +298,15 @@ function HrPayrollView() {
             description="Bấm “Tạo kỳ lương” để bắt đầu."
           />
         ) : (
-          <StaggerList>
-            <StaggerItem>
           <div className="overflow-x-auto">
-            <table className="ui-table">
+            <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="ui-th">Kỳ lương</th>
-                  <th className="ui-th text-right">Ngày công chuẩn</th>
-                  <th className="ui-th">Trạng thái</th>
-                  <th className="ui-th">Chốt lúc</th>
-                  <th className="ui-th text-right">Thao tác</th>
+                  <th className={`${TH} text-left`}>Kỳ lương</th>
+                  <th className={`${TH} text-right`}>Ngày công chuẩn</th>
+                  <th className={`${TH} text-left`}>Trạng thái</th>
+                  <th className={`${TH} text-left`}>Chốt lúc</th>
+                  <th className={`${TH} text-right`}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -302,22 +315,20 @@ function HrPayrollView() {
                   const busy = String(busyId) === String(p.id);
                   const selected = String(selectedId) === String(p.id);
                   return (
-                    <tr key={p.id} className={`ui-tr ${selected ? 'bg-brand-50/70' : ''}`}>
-                      <td className="ui-td">
-                        <strong className="font-bold text-slate-900">
-                          Tháng {pick(p, 'month')}/{pick(p, 'year')}
-                        </strong>
+                    <tr key={p.id} className={`${TR} ${selected ? 'bg-brand-50 hover:bg-brand-50' : ''}`}>
+                      <td className={`${TD} font-medium text-gray-900`}>
+                        Tháng {pick(p, 'month')}/{pick(p, 'year')}
                       </td>
-                      <td className="ui-td text-right tabular-nums">{pick(p, 'standard_workdays', 'standardWorkdays') ?? '—'}</td>
-                      <td className="ui-td">
+                      <td className={`${TD} text-right tabular-nums`}>{pick(p, 'standard_workdays', 'standardWorkdays') ?? '—'}</td>
+                      <td className={TD}>
                         {locked ? (
                           <Badge tone="green" dot>Đã chốt</Badge>
                         ) : (
                           <Badge tone="amber" dot>Nháp</Badge>
                         )}
                       </td>
-                      <td className="ui-td tabular-nums">{formatDateTime(pick(p, 'locked_at', 'lockedAt'))}</td>
-                      <td className="ui-td">
+                      <td className={`${TD} tabular-nums`}>{formatDateTime(pick(p, 'locked_at', 'lockedAt'))}</td>
+                      <td className={TD}>
                         <div className="flex flex-wrap justify-end gap-2">
                           <Button variant="secondary" size="sm" onClick={() => selectPeriod(p.id)}>
                             Xem bảng lương
@@ -350,14 +361,23 @@ function HrPayrollView() {
               </tbody>
             </table>
           </div>
-            </StaggerItem>
-          </StaggerList>
         )}
       </Card>
 
       {/* Bảng lương chi tiết của kỳ đang chọn */}
-      <Card className="animate-fade-up">
-        <CardHeader title={itemsTitle} />
+      <Card className="overflow-hidden">
+        <CardHeader
+          title={itemsTitle}
+          actions={
+            selectedPeriod ? (
+              pick(selectedPeriod, 'status') === 'locked' ? (
+                <Badge tone="green" dot>Đã chốt</Badge>
+              ) : (
+                <Badge tone="amber" dot>Nháp</Badge>
+              )
+            ) : null
+          }
+        />
         {!selectedPeriod ? (
           <EmptyState title="Chọn một kỳ lương để xem chi tiết." description="Chọn một kỳ ở bảng phía trên, hoặc bấm “Tạo kỳ lương” nếu chưa có kỳ nào." />
         ) : loadingItems ? (
@@ -369,50 +389,54 @@ function HrPayrollView() {
           />
         ) : (
           <>
-            <StaggerList>
-              <StaggerItem>
             <div className="overflow-x-auto">
-              <table className="ui-table">
+              <table className="w-full border-collapse">
                 <thead>
                   <tr>
-                    <th className="ui-th">Mã NV</th>
-                    <th className="ui-th">Nhân viên</th>
-                    <th className="ui-th">Phòng ban</th>
-                    <th className="ui-th text-right">Ngày công hưởng lương</th>
-                    <th className="ui-th text-right">Lương cơ bản</th>
-                    <th className="ui-th text-right">Phụ cấp</th>
-                    <th className="ui-th text-right">Khấu trừ bảo hiểm</th>
-                    <th className="ui-th text-right">Khấu trừ khác</th>
-                    <th className="ui-th text-right">Tổng nhận</th>
+                    <th className={`${TH} text-left`}>Mã NV</th>
+                    <th className={`${TH} text-left`}>Nhân viên</th>
+                    <th className={`${TH} text-left`}>Phòng ban</th>
+                    <th className={`${TH} text-right`}>Ngày công hưởng lương</th>
+                    <th className={`${TH} text-right`}>Lương cơ bản</th>
+                    <th className={`${TH} text-right`}>Phụ cấp</th>
+                    <th className={`${TH} text-right`}>Khấu trừ bảo hiểm</th>
+                    <th className={`${TH} text-right`}>Khấu trừ khác</th>
+                    <th className={`${TH} text-right`}>Tổng nhận</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it) => {
                     const emp = it.employee || {};
+                    const empName = pick(it, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName') || '—';
                     return (
-                      <tr key={it.id} className="ui-tr">
-                        <td className="ui-td font-semibold text-slate-900">{pick(it, 'employee_code', 'employeeCode') || pick(emp, 'code') || '—'}</td>
-                        <td className="ui-td">{pick(it, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName') || '—'}</td>
-                        <td className="ui-td">
+                      <tr key={it.id} className={TR}>
+                        <td className={`${TD} font-medium text-gray-900`}>{pick(it, 'employee_code', 'employeeCode') || pick(emp, 'code') || '—'}</td>
+                        <td className={TD}>
+                          <span className="flex items-center gap-3">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
+                              {initialsOf(empName)}
+                            </span>
+                            <span className="font-medium text-gray-900">{empName}</span>
+                          </span>
+                        </td>
+                        <td className={TD}>
                           {pick(it, 'department_name', 'departmentName') || pick(emp, 'department_name', 'departmentName') || pick(emp.department || {}, 'name') || '—'}
                         </td>
-                        <td className="ui-td text-right tabular-nums">{pick(it, 'workdays_paid', 'workdaysPaid') ?? '—'}</td>
-                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'base_salary', 'baseSalary'))}</td>
-                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'allowance'))}</td>
-                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'insurance_deduction', 'insuranceDeduction'))}</td>
-                        <td className="ui-td text-right tabular-nums">{formatVND(pick(it, 'other_deduction', 'otherDeduction'))}</td>
-                        <td className="ui-td text-right font-bold tabular-nums text-slate-900">{formatVND(pick(it, 'total_salary', 'totalSalary'))}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{pick(it, 'workdays_paid', 'workdaysPaid') ?? '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'base_salary', 'baseSalary'))}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'allowance'))}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'insurance_deduction', 'insuranceDeduction'))}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'other_deduction', 'otherDeduction'))}</td>
+                        <td className={`${TD} text-right font-semibold tabular-nums text-gray-900`}>{formatVND(pick(it, 'total_salary', 'totalSalary'))}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-              </StaggerItem>
-            </StaggerList>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3.5 text-sm text-gray-500">
               <span>
-                Tổng chi trang này: <strong className="font-bold tabular-nums text-slate-900"><AnimatedNumber value={pageTotal} format={(n) => formatVND(n)} /></strong>
+                Tổng chi trang này: <strong className="font-semibold tabular-nums text-gray-900"><AnimatedNumber value={pageTotal} format={(n) => formatVND(n)} /></strong>
                 {itemsMeta?.totalItems ? ` · ${itemsMeta.totalItems} nhân viên trong kỳ` : ''}
               </span>
               <span className="flex items-center gap-2">
@@ -507,7 +531,7 @@ function HrPayrollView() {
             </>
           }
         >
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-800">
+          <div className="rounded-lg border border-[#FEDF89] bg-[#FFFAEB] px-4 py-3 text-sm leading-relaxed text-[#B54708]">
             ⚠️ Sau khi chốt kỳ lương tháng {pick(lockTarget, 'month')}/{pick(lockTarget, 'year')},{' '}
             <strong>bảng lương sẽ bị khoá và không thể sửa hay tính lại trực tiếp</strong>. Nhân viên
             sẽ xem được phiếu lương của mình ngay sau khi chốt.
@@ -605,19 +629,18 @@ function MyPayslipView() {
   const empName = pick(slip, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName');
   const empCode = pick(slip, 'employee_code', 'employeeCode') || pick(emp, 'code');
 
-  const slipRow = 'flex items-baseline justify-between gap-4 border-b border-dashed border-slate-200 py-3 text-sm last:border-0';
-  const slipLabel = 'text-slate-500';
-  const slipValue = 'font-semibold tabular-nums text-slate-800';
+  const slipRow = 'flex items-baseline justify-between gap-4 border-b border-gray-100 py-3 text-sm last:border-0';
+  const slipLabel = 'text-gray-500';
+  const slipValue = 'font-medium tabular-nums text-gray-900';
 
   return (
     <div className="page-shell">
       <PageHeader
-        eyebrow="Tài chính · Bảng lương"
         title="Phiếu lương của tôi"
         subtitle="Phiếu lương chỉ hiển thị sau khi HR đã chốt kỳ lương."
         actions={
           lockedPeriods.length > 1 ? (
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
               Kỳ lương:
               <Select
                 className="w-auto"
@@ -656,31 +679,25 @@ function MyPayslipView() {
           />
         </Card>
       ) : (
-        <Card className="mx-auto max-w-2xl animate-scale-in overflow-hidden">
-          {/* Dải tiêu đề phiếu lương */}
-          <div className="bg-navy-900 px-6 py-5 text-white">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <Card className="mx-auto max-w-2xl overflow-hidden">
+          <CardBody className="px-6 py-5">
+            {/* Tiêu đề phiếu lương — phẳng, không band màu */}
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-4">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-brand-300">
-                  Web HRM AI · Phiếu lương
-                </p>
-                <h2 className="font-display mt-1.5 text-xl font-extrabold tracking-[-0.01em]">
-                  PHIẾU LƯƠNG {periodLabel ? periodLabel.toUpperCase() : ''}
+                <h2 className="text-base font-semibold text-gray-900">
+                  Phiếu lương {periodLabel}
                 </h2>
                 {(empName || empCode) && (
-                  <p className="mt-1 text-[13px] text-slate-300">
+                  <p className="mt-0.5 text-[13px] text-gray-500">
                     {empName}
                     {empCode ? ` · Mã NV: ${empCode}` : ''}
                   </p>
                 )}
               </div>
-              <Badge tone="green" dot className="bg-emerald-400/15 text-emerald-300 ring-emerald-300/30">
+              <Badge tone="green" dot>
                 Kỳ đã chốt
               </Badge>
             </div>
-          </div>
-
-          <CardBody className="px-6 py-5">
             <div className={slipRow}>
               <span className={slipLabel}>Lương cơ bản (theo hợp đồng)</span>
               <strong className={slipValue}>{formatVND(baseSalary)}</strong>
@@ -703,33 +720,33 @@ function MyPayslipView() {
             )}
             <div className={slipRow}>
               <span className={slipLabel}>Phụ cấp</span>
-              <strong className={`${slipValue} text-emerald-600`}>+ {formatVND(allowance)}</strong>
+              <strong className={slipValue}>+ {formatVND(allowance)}</strong>
             </div>
             <div className={slipRow}>
               <span className={slipLabel}>
                 Khấu trừ bảo hiểm (BHXH/BHYT/BHTN)
                 {insuranceRate ? ` — tỷ lệ ${insuranceRate}% trên lương cơ bản` : ''}
               </span>
-              <strong className={`${slipValue} text-rose-600`}>− {formatVND(insuranceDeduction)}</strong>
+              <strong className={slipValue}>− {formatVND(insuranceDeduction)}</strong>
             </div>
             {Number(otherDeduction || 0) > 0 && (
               <div className={slipRow}>
                 <span className={slipLabel}>Khấu trừ khác</span>
-                <strong className={`${slipValue} text-rose-600`}>− {formatVND(otherDeduction)}</strong>
+                <strong className={slipValue}>− {formatVND(otherDeduction)}</strong>
               </div>
             )}
 
-            {/* Tổng thực nhận nổi bật */}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-50 px-5 py-4 ring-1 ring-inset ring-brand-100">
-              <span className="text-sm font-extrabold uppercase tracking-[0.08em] text-brand-900">
+            {/* Tổng thực nhận — nổi bật bằng semibold gray-900 + border, không band màu */}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-4">
+              <span className="text-sm font-semibold text-gray-900">
                 Tổng thực nhận
               </span>
-              <span className="text-2xl font-extrabold tabular-nums tracking-[-0.01em] text-brand-700">
+              <span className="text-xl font-semibold tabular-nums text-gray-900">
                 <AnimatedNumber value={Number(totalSalary) || 0} format={(n) => formatVND(n)} />
               </span>
             </div>
 
-            <p className="mt-4 text-xs leading-relaxed text-slate-400">
+            <p className="mt-4 text-xs leading-relaxed text-gray-400">
               Ghi chú: lương được tính từ bảng công và các đơn nghỉ đã duyệt trong kỳ theo công thức:
               lương cơ bản × (ngày công hưởng lương / ngày công chuẩn) + phụ cấp − khấu trừ bảo hiểm −
               khấu trừ khác. Đây là mô hình tính lương đơn giản hoá; nếu thấy sai lệch, vui lòng liên

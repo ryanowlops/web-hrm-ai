@@ -1,45 +1,56 @@
-/** Tailwind CSS — Web HRM AI design system v3 ("Nhịp nhân sự").
+/** Tailwind CSS — Web HRM AI design system v4 (bám shadcn-admin × Untitled UI).
  * Bảng màu + font + shadow + animation dùng chung toàn hệ thống.
  * Mọi trang KHÔNG tự chế màu ngoài bảng này (trừ màu trạng thái ngữ nghĩa).
  * Đồng bộ với src/styles/tokens.css — sửa màu phải sửa cả hai nơi.
+ * v4: KHÔNG gradient, KHÔNG shadow nổi — thẻ chỉ border gray-200 + shadow-card siêu nhẹ.
  */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
-        // Màu thương hiệu chính (xanh doanh nghiệp)
+        // Thang xám Untitled UI (ghi đè thang gray mặc định của Tailwind)
+        gray: {
+          25: '#FCFCFD', 50: '#F9FAFB', 100: '#F2F4F7', 200: '#EAECF0',
+          300: '#D0D5DD', 400: '#98A2B3', 500: '#667085', 600: '#475467',
+          700: '#344054', 800: '#1D2939', 900: '#101828', 950: '#0C111D',
+        },
+        // Màu thương hiệu chính (xanh doanh nghiệp) — giữ nguyên từ v2/v3
         brand: {
           50: '#EEF4FF', 100: '#DCE7FD', 200: '#C0D4FE', 300: '#94B8FD',
           400: '#6193FA', 500: '#3D6EF5', 600: '#274FEA', 700: '#1F3FD8',
           800: '#2134AE', 900: '#0F2160', 950: '#0A1638',
         },
-        // Navy cho sidebar / vùng tối — 950 là Ink Navy v3 (#081A3A)
+        // Navy — v4 CHỈ còn dùng cho chữ/phụ, KHÔNG dùng làm nền sidebar/hero nữa.
+        // Giữ token để không vỡ class cũ; không xoá.
         navy: {
           700: '#1B3358', 800: '#12294D', 900: '#0C2144', 950: '#081A3A',
         },
-        // Ink Navy v3 — "nền sân khấu" cho sidebar / hero tối
         ink: '#081A3A',
-        // Signal Amber v3 — cảnh báo / chờ duyệt (dùng tiết kiệm, đúng ngữ nghĩa)
+        // Amber cảnh báo / chờ duyệt (dùng tiết kiệm, đúng ngữ nghĩa)
         signal: '#F59E0B',
-        // Màu nhấn phụ (teal) cho AI / điểm nhấn
+        // Màu nhấn phụ (teal) cho AI / trạng thái tích cực
         accent: {
           50: '#EFFDF9', 100: '#C9F7EA', 300: '#5FE3C3', 400: '#27CFA9',
           500: '#0DB795', 600: '#02957B', 700: '#017763',
         },
-        // Nền ứng dụng — Canvas Mist v3
-        canvas: '#EEF2F9',
+        // Nền ứng dụng — gray-50 Untitled UI
+        canvas: '#F9FAFB',
       },
       fontFamily: {
         sans: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
-        // Font tiêu đề v3 — Be Vietnam Pro: dấu tiếng Việt cân đẹp, bản sắc Việt
-        display: ['"Be Vietnam Pro"', '"Inter Variable"', 'Inter', 'system-ui', 'sans-serif'],
+        // v4: Inter cho MỌI thứ (bỏ Be Vietnam Pro) — font-display ánh xạ về Inter
+        display: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       boxShadow: {
-        card: '0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06)',
-        lift: '0 8px 24px -8px rgba(16,24,40,.16), 0 4px 8px -4px rgba(16,24,40,.08)',
-        pop: '0 16px 40px -12px rgba(10,22,56,.25), 0 4px 12px -4px rgba(10,22,56,.12)',
-        glow: '0 0 0 4px rgba(39,79,234,.14)',
+        // Thẻ: chỉ shadow-xs phẳng đúng Untitled UI
+        card: '0 1px 2px rgba(16,24,40,.05)',
+        // lift/pop/glow của v3 đã bị LOẠI khỏi hệ thống v4 — ánh xạ về mức nhẹ
+        // tương đương để class cũ không vỡ: lift ≈ shadow-lg nhẹ (modal/dropdown),
+        // pop = shadow vừa cho lớp phủ, glow = hạ về shadow-card.
+        lift: '0 10px 15px -3px rgba(16,24,40,.08), 0 4px 6px -4px rgba(16,24,40,.08)',
+        pop: '0 12px 24px -8px rgba(16,24,40,.12)',
+        glow: '0 1px 2px rgba(16,24,40,.05)',
       },
       borderRadius: {
         xl2: '1.25rem',

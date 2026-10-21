@@ -33,24 +33,22 @@ import {
   CardBody,
   CardHeader,
   EmptyState,
+  PageHeader,
   Skeleton,
+  StatCard,
 } from '../../../components/ui';
-import AnimatedNumber from '../../../components/motion/AnimatedNumber.jsx';
-import ProgressRing from '../../../components/motion/ProgressRing.jsx';
-import PulseBar from '../../../components/motion/PulseBar.jsx';
 import StaggerList, { StaggerItem } from '../../../components/motion/StaggerList.jsx';
 import { getCurrentUser } from '../../auth/services';
 import { fetchOverview } from '../services';
 
 // ============================================================
-// Trang Dashboard — route "/" — Design v3 "Nhịp nhân sự"
-// - Hero Ink Navy "Nhịp hôm nay": thanh nhịp (PulseBar) vẽ theo dữ liệu
-//   chấm công thật từ GET /stats/overview, các mốc giờ làm việc
-//   07:30 / 12:00 / 13:00 / 17:30 sáng dần theo giờ thật.
-// - Bố cục bất đối xứng: biểu đồ (2/3) + cột "Cần xử lý" (1/3),
-//   hàng dưới: hội nhập nhân viên mới + vòng chuyên cần.
-// - Employee: hero chào + thanh nhịp ngày làm việc + lối tắt cá nhân.
-// Logic/dữ liệu giữ nguyên v2 — chỉ thay lớp trình bày.
+// Trang Dashboard — route "/" — Design v4 (mẫu Overview của shadcn-admin)
+// - Không hero/band tối, không trang trí: PageHeader phẳng, hàng 4
+//   StatCard, biểu đồ chấm công màu phẳng (2/3) + thẻ "Cần xử lý" (1/3),
+//   hàng dưới: cơ cấu phòng ban + bảng đơn nghỉ phép gần đây.
+// - Số liệu lấy nguyên từ GET /stats/overview qua fetchOverview —
+//   không suy diễn thêm % tăng/giảm hay số liệu ngoài API.
+// Logic/dữ liệu giữ nguyên các bản trước — chỉ thay lớp trình bày.
 // ============================================================
 
 const ROLE_LABELS = {
@@ -74,8 +72,15 @@ const LEAVE_STATUS_TONES = {
   rejected: 'red',
 };
 
-// Màu biểu đồ lấy từ design token (--chart-1..5 trong styles/tokens.css).
-const chartColor = (index) => `var(--chart-${(index % 5) + 1})`;
+// Màu biểu đồ phẳng theo hợp đồng v4 (fill đặc, không hiệu ứng màu chuyển):
+// brand-600, teal accent-500, amber-500, gray-300.
+const ATTENDANCE_COLORS = {
+  'Đúng giờ': '#274FEA',
+  'Đi muộn': '#F59E0B',
+  'Nghỉ phép': '#0DB795',
+  Vắng: '#D0D5DD',
+};
+const DEPARTMENT_COLORS = ['#274FEA', '#0DB795', '#F59E0B', '#98A2B3', '#667085', '#D0D5DD'];
 
 function formatDate(value) {
   if (!value) return '';
@@ -107,98 +112,33 @@ function greetingByHour() {
   return 'Chào buổi tối';
 }
 
-// Mốc nhịp ngày làm việc 07:30 → 17:30 + tiến độ ngày theo giờ thật.
-function dayRhythm() {
-  const now = new Date();
-  const t = now.getHours() * 60 + now.getMinutes();
-  const start = 7 * 60 + 30;
-  const noon = 12 * 60;
-  const back = 13 * 60;
-  const end = 17 * 60 + 30;
-  const pct = Math.max(0, Math.min(100, ((t - start) / (end - start)) * 100));
-  return {
-    pct,
-    milestones: [
-      { at: 0, label: '07:30', done: t >= start },
-      { at: (noon - start) / (end - start), label: '12:00', done: t >= noon },
-      { at: (back - start) / (end - start), label: '13:00', done: t >= back },
-      { at: 1, label: '17:30', done: t >= end },
-    ],
-  };
-}
+// Lớp nút dạng liên kết theo hợp đồng v4 (rounded-lg, 14px medium).
+const LINK_BUTTON_PRIMARY =
+  'inline-flex h-9 items-center justify-center rounded-lg bg-brand-600 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20';
+const LINK_BUTTON_SECONDARY =
+  'inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-3.5 text-[13px] font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20';
 
 // ---------- Trạng thái đang tải ----------
 
 function DashboardSkeleton() {
   return (
     <div aria-hidden="true">
-      <Skeleton className="mb-5 h-[190px] rounded-3xl" />
+      <Skeleton className="mb-2 h-6 w-72" />
+      <Skeleton className="mb-6 h-4 w-96 max-w-full" />
+      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-[104px] rounded-xl" />
+        ))}
+      </div>
+      <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <Skeleton className="h-[340px] rounded-xl lg:col-span-2" />
+        <Skeleton className="h-[340px] rounded-xl" />
+      </div>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Skeleton className="h-[320px] lg:col-span-2" />
-        <Skeleton className="h-[320px]" />
+        <Skeleton className="h-[300px] rounded-xl" />
+        <Skeleton className="h-[300px] rounded-xl lg:col-span-2" />
       </div>
     </div>
-  );
-}
-
-// ---------- Hero "Nhịp hôm nay" (HR / Manager / Admin) ----------
-
-function TodayPulseHero({ user, data }) {
-  const rhythm = dayRhythm();
-  const att = data.attendanceToday;
-  const scheduled = att.present + att.late + att.absent + att.onLeave;
-  const checkedIn = att.present + att.late;
-  const pulseValue = scheduled > 0 ? (checkedIn / scheduled) * 100 : rhythm.pct;
-  return (
-    <section className="relative mb-6 overflow-hidden rounded-3xl bg-navy-950 text-white shadow-lift">
-      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-navy-900 via-navy-950 to-brand-950" />
-      <div aria-hidden="true" className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand-500/20 blur-3xl" />
-      <div className="relative flex flex-col gap-6 px-6 py-6 sm:px-8 lg:flex-row lg:items-center">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium capitalize text-slate-300">{formatToday()}</p>
-          <h1 className="mt-1 font-display text-[28px] font-bold leading-tight lg:text-[32px]">
-            {greetingByHour()}{user?.fullName ? `, ${user.fullName}` : ''}
-          </h1>
-          <p className="mt-1 text-sm text-slate-300">
-            Nhịp hôm nay — <span className="tnum font-semibold text-white">{checkedIn}/{scheduled || data.totalEmployees}</span> đã
-            chấm công · <span className="tnum font-semibold text-accent-300">{att.onLeave}</span> đang nghỉ phép
-            {att.late > 0 ? <> · <span className="tnum font-semibold text-amber-300">{att.late}</span> đi muộn</> : null}
-            {att.absent > 0 ? <> · <span className="tnum font-semibold text-rose-300">{att.absent}</span> vắng</> : null}
-          </p>
-          <PulseBar value={pulseValue} milestones={rhythm.milestones} className="mt-6 max-w-xl" />
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 text-[13px] text-slate-300">
-            <span>Tổng nhân viên: <AnimatedNumber value={data.totalEmployees} className="font-bold text-white" /></span>
-            <span>Phòng ban: <AnimatedNumber value={data.totalDepartments} className="font-bold text-white" /></span>
-            {data.openJobs != null && (
-              <span>Đang tuyển: <AnimatedNumber value={data.openJobs} className="font-bold text-white" /> vị trí</span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-none items-center gap-4 rounded-2xl bg-white/[0.06] px-5 py-4 ring-1 ring-white/10">
-          <ProgressRing
-            value={data.attendanceRate ?? pulseValue}
-            size={96}
-            stroke={9}
-            color="#0DB795"
-            track="rgba(255,255,255,0.14)"
-            labelClassName="text-white"
-            subClassName="text-slate-300"
-            sub="chuyên cần"
-          />
-          <div className="text-sm leading-relaxed text-slate-300">
-            <p className="font-display text-[15px] font-bold text-white">Chuyên cần hôm nay</p>
-            <p className="mt-1">
-              Đúng giờ <span className="tnum font-semibold text-white">{att.present}</span> · Muộn{' '}
-              <span className="tnum font-semibold text-white">{att.late}</span>
-            </p>
-            <p>
-              Nghỉ phép <span className="tnum font-semibold text-white">{att.onLeave}</span> · Vắng{' '}
-              <span className="tnum font-semibold text-white">{att.absent}</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -236,23 +176,12 @@ const EMPLOYEE_FEATURES = [
 ];
 
 function EmployeeHome({ user }) {
-  const rhythm = dayRhythm();
   return (
     <div>
-      <section className="relative mb-6 overflow-hidden rounded-3xl bg-navy-950 text-white shadow-lift">
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-br from-navy-900 via-navy-950 to-brand-950" />
-        <div className="relative px-6 py-6 sm:px-8">
-          <p className="text-sm font-medium capitalize text-slate-300">{formatToday()}</p>
-          <h1 className="mt-1 font-display text-[28px] font-bold leading-tight">
-            {greetingByHour()}{user?.fullName ? `, ${user.fullName}` : ''}
-          </h1>
-          <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-300">
-            Đây là nhịp ngày làm việc của bạn. Chấm công, gửi đơn nghỉ phép, xem phiếu
-            lương và hỏi chatbot HR ngay trong hệ thống.
-          </p>
-          <PulseBar value={rhythm.pct} milestones={rhythm.milestones} className="mt-6 max-w-xl" />
-        </div>
-      </section>
+      <PageHeader
+        title={`${greetingByHour()}${user?.fullName ? `, ${user.fullName}` : ''}`}
+        subtitle={`${formatToday()} · Chấm công, gửi đơn nghỉ phép, xem phiếu lương và hỏi chatbot HR ngay trong hệ thống.`}
+      />
       <StaggerList className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {EMPLOYEE_FEATURES.map((feature, i) => {
           const FeatureIcon = feature.icon;
@@ -261,19 +190,19 @@ function EmployeeHome({ user }) {
               <Link to={feature.to} className="block h-full focus-visible:outline-none">
                 <Card hover className="h-full p-5">
                   <div
-                    className={`mb-3.5 flex h-11 w-11 items-center justify-center rounded-xl ring-1 ring-inset ${feature.tone}`}
+                    className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ring-1 ring-inset ${feature.tone}`}
                   >
-                    <FeatureIcon size={21} />
+                    <FeatureIcon size={20} />
                   </div>
-                  <div className="font-display font-bold text-slate-900">{feature.title}</div>
-                  <div className="mt-1 text-sm leading-relaxed text-slate-500">{feature.description}</div>
+                  <div className="text-[15px] font-semibold text-gray-900">{feature.title}</div>
+                  <div className="mt-1 text-sm leading-relaxed text-gray-500">{feature.description}</div>
                 </Card>
               </Link>
             </StaggerItem>
           );
         })}
       </StaggerList>
-      <p className="mt-5 text-[13px] text-slate-500">
+      <p className="mt-5 text-[13px] text-gray-500">
         Số liệu thống kê toàn công ty chỉ hiển thị cho Quản trị viên, phòng HR và Trưởng
         phòng theo đúng phạm vi phân quyền.
       </p>
@@ -299,14 +228,43 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
+  if (isEmployee) {
+    return (
+      <div className="page-shell">
+        <EmployeeHome user={user} />
+      </div>
+    );
+  }
+
   const roleLabel = ROLE_LABELS[role] || 'Người dùng';
-  const hasAttendanceData = data?.attendanceChart?.some((item) => item.value > 0);
+  const scopeText =
+    role === 'manager'
+      ? 'Số liệu trong phạm vi phòng ban bạn quản lý'
+      : role === 'admin' || role === 'hr'
+        ? 'Số liệu toàn công ty'
+        : '';
+
+  const header = (
+    <PageHeader
+      title={`${greetingByHour()}${user?.fullName ? `, ${user.fullName}` : ''}`}
+      subtitle={`${formatToday()} · Vai trò: ${roleLabel}${scopeText ? ` · ${scopeText}` : ''}`}
+      actions={
+        <>
+          <Link to="/attendance" className={LINK_BUTTON_SECONDARY}>
+            Xem chấm công
+          </Link>
+          <Link to="/leave" className={LINK_BUTTON_PRIMARY}>
+            Duyệt phép
+          </Link>
+        </>
+      }
+    />
+  );
 
   return (
     <div className="page-shell">
-      {isEmployee ? (
-        <EmployeeHome user={user} />
-      ) : isLoading ? (
+      {header}
+      {isLoading ? (
         <DashboardSkeleton />
       ) : isError ? (
         <Card>
@@ -332,35 +290,170 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
-          <TodayPulseHero user={user} data={data} />
-          <p className="mb-5 -mt-2 text-[13px] text-slate-500">
-            Vai trò: {roleLabel}
-            {role === 'manager' ? ' · Số liệu trong phạm vi phòng ban bạn quản lý' : ''}
-            {role === 'admin' || role === 'hr' ? ' · Số liệu toàn công ty' : ''}
-          </p>
+          {/* Hàng 1: 4 thẻ số liệu phẳng */}
+          <section className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              icon={<IconUsers size={20} />}
+              label="Tổng nhân viên"
+              value={data.totalEmployees}
+              sub={`${data.totalDepartments} phòng ban đang hoạt động`}
+              tone="blue"
+            />
+            <StatCard
+              icon={<IconClock size={20} />}
+              label="Đã chấm công hôm nay"
+              value={data.attendanceToday.present + data.attendanceToday.late}
+              sub={`Đúng giờ ${data.attendanceToday.present} · Muộn ${data.attendanceToday.late} · Vắng ${data.attendanceToday.absent} · Nghỉ phép ${data.attendanceToday.onLeave}`}
+              tone="teal"
+            />
+            <StatCard
+              icon={<IconClipboard size={20} />}
+              label="Đơn phép chờ duyệt"
+              value={data.pendingLeaveCount}
+              sub={data.pendingLeaveCount > 0 ? 'Đang chờ quyết định của bạn' : 'Không có đơn nào đang chờ'}
+              tone="amber"
+            />
+            <StatCard
+              icon={<IconFileText size={20} />}
+              label="Hợp đồng sắp hết hạn"
+              value={data.expiringContracts.length}
+              sub="Hợp đồng còn dưới 30 ngày hiệu lực"
+              tone="slate"
+            />
+          </section>
 
-          {/* Hàng chính bất đối xứng: biểu đồ 2/3 + Cần xử lý 1/3 */}
-          <section className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {/* Hàng 2: biểu đồ chấm công (2/3) + Cần xử lý (1/3) */}
+          <section className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
             <Card className="lg:col-span-2">
-              <CardHeader title="Cơ cấu nhân sự theo phòng ban" subtitle={`${data.totalDepartments} phòng ban đang hoạt động`} />
+              <CardHeader
+                title="Chuyên cần hôm nay"
+                subtitle="Phân bổ trạng thái chấm công trong ngày theo số liệu tổng quan"
+              />
+              <CardBody>
+                {data.attendanceChart.some((item) => item.value > 0) ? (
+                  <div style={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={data.attendanceChart} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                        <CartesianGrid stroke="#EAECF0" strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#667085' }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#667085' }} />
+                        <Tooltip formatter={(value) => [`${value} người`, 'Số lượng']} />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={800}>
+                          {data.attendanceChart.map((entry) => (
+                            <Cell key={entry.name} fill={ATTENDANCE_COLORS[entry.name] || '#274FEA'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={<IconChart size={26} />}
+                    title="Hôm nay chưa có dữ liệu chấm công"
+                    description="Biểu đồ sẽ xuất hiện khi nhân viên bắt đầu check-in trong ngày."
+                  />
+                )}
+              </CardBody>
+            </Card>
+
+            {/* Cần xử lý — danh sách việc chờ quyết định */}
+            <Card>
+              <CardHeader title="Cần xử lý" subtitle="Những việc đang chờ bạn quyết định" />
+              <div className="px-5 py-2">
+                <div className="flex items-center gap-3 border-b border-gray-100 py-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
+                    <IconClipboard size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900">Đơn phép chờ duyệt</p>
+                    <p className="mt-0.5 text-[13px] text-gray-500">
+                      {data.pendingLeaveCount > 0
+                        ? `Có ${data.pendingLeaveCount} đơn đang chờ quyết định`
+                        : 'Không có đơn nào đang chờ'}
+                    </p>
+                  </div>
+                  <Badge tone={data.pendingLeaveCount > 0 ? 'amber' : 'slate'} dot>
+                    {data.pendingLeaveCount}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-3 border-b border-gray-100 py-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200">
+                    <IconFileText size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900">Hợp đồng sắp hết hạn</p>
+                    <p className="mt-0.5 text-[13px] text-gray-500">
+                      {data.expiringContracts.length > 0
+                        ? `${data.expiringContracts.length} hợp đồng còn dưới 30 ngày hiệu lực`
+                        : 'Không có hợp đồng nào sắp hết hạn'}
+                    </p>
+                  </div>
+                  <Badge tone={data.expiringContracts.length > 0 ? 'amber' : 'slate'} dot>
+                    {data.expiringContracts.length}
+                  </Badge>
+                </div>
+                {data.openJobs != null && (
+                  <div className="flex items-center gap-3 border-b border-gray-100 py-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200">
+                      <IconBriefcase size={18} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900">Vị trí đang tuyển</p>
+                      <p className="mt-0.5 text-[13px] text-gray-500">Tin tuyển dụng đang mở trên hệ thống</p>
+                    </div>
+                    <Badge tone="blue" dot>
+                      {data.openJobs}
+                    </Badge>
+                  </div>
+                )}
+                {data.totalCandidates != null && (
+                  <div className="flex items-center gap-3 py-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-200">
+                      <IconUsers size={18} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900">Ứng viên trong hệ thống</p>
+                      <p className="mt-0.5 text-[13px] text-gray-500">Tổng số hồ sơ ứng viên đã tiếp nhận</p>
+                    </div>
+                    <Badge tone="blue" dot>
+                      {data.totalCandidates}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-gray-100 px-5 py-4">
+                <Link to="/leave" className={`${LINK_BUTTON_PRIMARY} w-full`}>
+                  Mở hàng chờ duyệt phép
+                </Link>
+              </div>
+            </Card>
+          </section>
+
+          {/* Hàng 3: cơ cấu phòng ban + đơn nghỉ phép gần đây */}
+          <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <Card>
+              <CardHeader
+                title="Cơ cấu nhân sự theo phòng ban"
+                subtitle={`${data.totalDepartments} phòng ban đang hoạt động`}
+              />
               <CardBody>
                 {data.byDepartment.length > 0 ? (
-                  <div style={{ width: '100%', height: 280 }}>
+                  <div style={{ width: '100%', height: 260 }}>
                     <ResponsiveContainer>
                       <PieChart>
                         <Pie
                           data={data.byDepartment}
                           dataKey="value"
                           nameKey="name"
-                          innerRadius={58}
-                          outerRadius={92}
-                          paddingAngle={2}
+                          innerRadius={56}
+                          outerRadius={88}
+                          paddingAngle={1}
                           isAnimationActive
                           animationDuration={800}
                           label={({ name, value }) => `${name}: ${value}`}
                         >
                           {data.byDepartment.map((entry, index) => (
-                            <Cell key={entry.name} fill={chartColor(index)} />
+                            <Cell key={entry.name} fill={DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length]} />
                           ))}
                         </Pie>
                         <Tooltip formatter={(value) => [`${value} nhân viên`, 'Số lượng']} />
@@ -377,179 +470,60 @@ export default function DashboardPage() {
               </CardBody>
             </Card>
 
-            {/* Cần xử lý — hàng chờ hành động */}
-            <Card className={data.pendingLeaveCount > 0 ? 'ring-1 ring-amber-200' : ''}>
+            <Card className="lg:col-span-2">
               <CardHeader
-                title="Cần xử lý"
-                subtitle="Những việc đang chờ bạn quyết định"
-                actions={
-                  <Badge tone={data.pendingLeaveCount > 0 ? 'amber' : 'slate'} dot>
-                    <AnimatedNumber value={data.pendingLeaveCount} /> đơn phép
-                  </Badge>
-                }
+                title="Đơn nghỉ phép gần đây"
+                subtitle="Các đơn đang chờ duyệt trong dữ liệu tổng quan"
               />
-              <div className="px-2.5 py-2">
-                {data.pendingLeaves.length > 0 ? (
-                  <ul>
-                    {data.pendingLeaves.slice(0, 4).map((item, index) => (
-                      <li
-                        key={item.id ?? index}
-                        className="flex items-start gap-3 rounded-xl px-2.5 py-3 transition-colors duration-150 [border-bottom:1px_solid_#f1f5f9] last:[border-bottom:none] hover:bg-brand-50/60"
-                      >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-bold text-brand-700 ring-1 ring-inset ring-brand-100">
-                          {initialsOf(item.employeeName)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-semibold text-slate-800">{item.employeeName}</span>
+              {data.pendingLeaves.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Nhân viên</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Loại phép</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Thời gian</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Số ngày</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.pendingLeaves.slice(0, 6).map((item, index) => (
+                        <tr
+                          key={item.id ?? index}
+                          className="border-t border-gray-100 transition-colors hover:bg-gray-50"
+                        >
+                          <td className="px-4 py-3">
+                            <span className="flex items-center gap-3">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">
+                                {initialsOf(item.employeeName)}
+                              </span>
+                              <span className="font-medium text-gray-900">{item.employeeName}</span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{item.leaveType}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {item.fromDate ? formatDate(item.fromDate) : ''}
+                            {item.toDate ? ` → ${formatDate(item.toDate)}` : ''}
+                          </td>
+                          <td className="tabular-nums px-4 py-3 text-gray-600">
+                            {item.daysCount ? `${item.daysCount} ngày` : '—'}
+                          </td>
+                          <td className="px-4 py-3">
                             <Badge tone={LEAVE_STATUS_TONES[item.status] || 'amber'} dot>
                               {LEAVE_STATUS_LABELS[item.status] || 'Đang chờ duyệt'}
                             </Badge>
-                          </div>
-                          <div className="mt-0.5 text-sm text-slate-500">
-                            {item.leaveType}
-                            {item.fromDate ? ` · ${formatDate(item.fromDate)}` : ''}
-                            {item.toDate ? ` → ${formatDate(item.toDate)}` : ''}
-                            {item.daysCount ? ` · ${item.daysCount} ngày` : ''}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyState
-                    icon={<IconClipboard size={26} />}
-                    title="Không có đơn nghỉ nào đang chờ"
-                    description="Mọi đơn nghỉ phép đã được xử lý. Khi có đơn mới, chúng sẽ hiện ở đây."
-                  />
-                )}
-                <div className="space-y-1.5 px-2.5 py-3 text-sm text-slate-600">
-                  <p className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2"><IconFileText size={16} /> Hợp đồng sắp hết hạn</span>
-                    <span className="tnum font-bold text-slate-900"><AnimatedNumber value={data.expiringContracts.length} /></span>
-                  </p>
-                  {data.openJobs != null && (
-                    <p className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-2"><IconBriefcase size={16} /> Vị trí đang tuyển</span>
-                      <span className="tnum font-bold text-slate-900"><AnimatedNumber value={data.openJobs} /></span>
-                    </p>
-                  )}
-                  {data.totalCandidates != null && (
-                    <p className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-2"><IconUsers size={16} /> Ứng viên trong hệ thống</span>
-                      <span className="tnum font-bold text-slate-900"><AnimatedNumber value={data.totalCandidates} /></span>
-                    </p>
-                  )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="px-2.5 pb-3">
-                  <Link to="/leave" className="inline-flex w-full items-center justify-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/30">
-                    Mở hàng chờ duyệt phép
-                  </Link>
-                </div>
-              </div>
-            </Card>
-          </section>
-
-          {/* Hàng dưới: chuyên cần + hội nhập + hợp đồng */}
-          <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <Card className="lg:col-span-1">
-              <CardHeader title="Chuyên cần hôm nay" />
-              <CardBody>
-                {hasAttendanceData ? (
-                  <div style={{ width: '100%', height: 240 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={data.attendanceChart} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                        <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(value) => [`${value} người`, 'Số lượng']} />
-                        <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={800}>
-                          {data.attendanceChart.map((entry, index) => (
-                            <Cell key={entry.name} fill={chartColor(index)} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon={<IconChart size={26} />}
-                    title="Hôm nay chưa có dữ liệu chấm công"
-                    description="Biểu đồ sẽ xuất hiện khi nhân viên bắt đầu check-in trong ngày."
-                  />
-                )}
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader title="Hội nhập nhân viên mới" subtitle="Nhân viên bắt đầu làm việc trong tháng này" />
-              <CardBody>
-                <div className="flex items-center gap-5">
-                  <ProgressRing
-                    value={
-                      data.totalEmployees > 0 && data.newEmployeesThisMonth != null
-                        ? (data.newEmployeesThisMonth / data.totalEmployees) * 100
-                        : 0
-                    }
-                    size={92}
-                    color="#274FEA"
-                    label={data.newEmployeesThisMonth != null ? `${data.newEmployeesThisMonth}` : '—'}
-                    sub="nhân viên mới"
-                  />
-                  <div className="min-w-0 text-sm leading-relaxed text-slate-600">
-                    <p>
-                      Tháng này có <span className="tnum font-bold text-slate-900">{data.newEmployeesThisMonth ?? 0}</span> nhân
-                      viên mới và <span className="tnum font-bold text-slate-900">{data.resignedThisMonth ?? 0}</span> trường
-                      hợp nghỉ việc.
-                    </p>
-                    <p className="mt-2 text-slate-500">
-                      Theo dõi tiến độ hội nhập chi tiết trong hồ sơ từng nhân viên. Module
-                      Onboarding theo checklist đang nằm trong lộ trình mở rộng đã duyệt.
-                    </p>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader title={`Hợp đồng sắp hết hạn (${data.expiringContracts.length})`} />
-              {data.expiringContracts.length > 0 ? (
-                <ul className="px-2.5 py-2">
-                  {data.expiringContracts.slice(0, 4).map((item, index) => (
-                    <li
-                      key={item.id ?? index}
-                      className="flex items-start gap-3 rounded-xl px-2.5 py-3 transition-colors duration-150 [border-bottom:1px_solid_#f1f5f9] last:[border-bottom:none] hover:bg-brand-50/60"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[13px] font-bold text-amber-700 ring-1 ring-inset ring-amber-100">
-                        {initialsOf(item.employeeName)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="font-semibold text-slate-800">{item.employeeName}</span>
-                          {item.daysRemaining != null && (
-                            <Badge tone={item.daysRemaining <= 7 ? 'red' : 'amber'} dot>
-                              {item.daysRemaining < 0
-                                ? `Đã hết hạn ${Math.abs(item.daysRemaining)} ngày`
-                                : item.daysRemaining === 0
-                                  ? 'Hết hạn hôm nay'
-                                  : `Còn ${item.daysRemaining} ngày`}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="mt-0.5 text-sm text-slate-500">
-                          {item.contractType}
-                          {item.departmentName ? ` · ${item.departmentName}` : ''}
-                          {item.endDate ? ` · Hết hạn ${formatDate(item.endDate)}` : ''}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               ) : (
                 <EmptyState
-                  icon={<IconFileText size={26} />}
-                  title="Không có hợp đồng nào sắp hết hạn"
-                  description="Danh sách sẽ hiển thị hợp đồng còn dưới 30 ngày hiệu lực để HR chủ động gia hạn."
+                  icon={<IconClipboard size={26} />}
+                  title="Không có đơn nghỉ nào đang chờ"
+                  description="Mọi đơn nghỉ phép đã được xử lý. Khi có đơn mới, chúng sẽ hiện ở đây."
                 />
               )}
             </Card>

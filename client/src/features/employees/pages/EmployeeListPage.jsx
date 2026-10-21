@@ -77,12 +77,12 @@ function initials(name = '') {
 
 // Class bổ sung để ô nhập có lỗi hiển thị viền đỏ (trên nền .ui-input/.ui-select của kit).
 const errCls = (hasError) =>
-  hasError ? 'border-rose-400 hover:border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : '';
+  hasError ? 'border-red-400 hover:border-red-400 focus:border-red-500 focus:ring-red-500/15' : '';
 
 // Nhãn trường có dấu * bắt buộc (dùng với FormField của UI kit).
 const reqLabel = (text) => (
   <>
-    {text} <span className="text-rose-500">*</span>
+    {text} <span className="text-red-500">*</span>
   </>
 );
 
@@ -411,7 +411,7 @@ export default function EmployeeListPage() {
       <Card className="mb-5 p-4 sm:p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="relative">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
               {SearchIcon}
             </span>
             <Input
@@ -465,47 +465,47 @@ export default function EmployeeListPage() {
           <StaggerList>
             <StaggerItem>
           <div className="overflow-x-auto">
-            <table className="ui-table">
+            <table className="w-full border-collapse text-left text-sm">
               <thead>
-                <tr>
-                  <th className="ui-th">Nhân viên</th>
-                  <th className="ui-th">Phòng ban</th>
-                  <th className="ui-th">Chức vụ</th>
-                  <th className="ui-th">Ngày vào làm</th>
-                  <th className="ui-th">Trạng thái</th>
-                  {canWrite && <th className="ui-th text-right">Thao tác</th>}
+                <tr className="bg-gray-50">
+                  <th className="whitespace-nowrap px-4 py-3 text-xs font-medium text-gray-500">Nhân viên</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-xs font-medium text-gray-500">Phòng ban</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-xs font-medium text-gray-500">Chức vụ</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-xs font-medium text-gray-500">Ngày vào làm</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-xs font-medium text-gray-500">Trạng thái</th>
+                  {canWrite && <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-medium text-gray-500">Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
                 {items.map((emp) => (
-                  <tr key={emp.id} className="ui-tr">
-                    <td className="ui-td">
+                  <tr key={emp.id} className="border-t border-gray-100 transition-colors hover:bg-gray-50">
+                    <td className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-3">
                         {emp.avatar_url ? (
-                          <img src={emp.avatar_url} alt={emp.full_name} className="h-10 w-10 rounded-full object-cover ring-1 ring-inset ring-slate-900/5" />
+                          <img src={emp.avatar_url} alt={emp.full_name} className="h-9 w-9 rounded-full object-cover ring-1 ring-inset ring-gray-200" />
                         ) : (
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-bold text-brand-700 ring-1 ring-inset ring-brand-100">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
                             {initials(emp.full_name)}
                           </span>
                         )}
                         <div className="min-w-0">
-                          <Link to={`/employees/${emp.id}`} className="font-semibold text-slate-900 transition hover:text-brand-600">
+                          <Link to={`/employees/${emp.id}`} className="text-sm font-medium text-gray-900 transition hover:text-brand-700">
                             {emp.full_name}
                           </Link>
-                          <div className="truncate text-xs text-slate-400">{emp.code} · {emp.email}</div>
+                          <div className="truncate text-[13px] text-gray-500">{emp.code} · {emp.email}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="ui-td">{deptName(emp)}</td>
-                    <td className="ui-td">{posTitle(emp)}</td>
-                    <td className="ui-td">{formatDate(emp.start_date)}</td>
-                    <td className="ui-td">
+                    <td className="px-4 py-3 align-middle text-gray-700">{deptName(emp)}</td>
+                    <td className="px-4 py-3 align-middle text-gray-700">{posTitle(emp)}</td>
+                    <td className="px-4 py-3 align-middle tabular-nums text-gray-700">{formatDate(emp.start_date)}</td>
+                    <td className="px-4 py-3 align-middle">
                       <Badge tone={STATUS_TONE[emp.status] || 'slate'} dot>
                         {STATUS_LABEL[emp.status] || emp.status}
                       </Badge>
                     </td>
                     {canWrite && (
-                      <td className="ui-td">
+                      <td className="px-4 py-3 align-middle">
                         <div className="flex justify-end gap-1">
                           <Button type="button" variant="ghost" size="sm" onClick={() => navigate(`/employees/${emp.id}`)}>
                             Chi tiết
@@ -513,7 +513,7 @@ export default function EmployeeListPage() {
                           <Button type="button" variant="ghost" size="sm" onClick={() => setFormTarget(emp)} className="text-brand-600 hover:bg-brand-50 hover:text-brand-700">
                             Sửa
                           </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget(emp)} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteTarget(emp)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
                             Xóa
                           </Button>
                         </div>
@@ -531,9 +531,9 @@ export default function EmployeeListPage() {
 
       {/* Phân trang */}
       {meta && totalPages > 1 && (
-        <div className="mt-5 flex items-center justify-between text-sm text-slate-500">
+        <div className="mt-5 flex items-center justify-between text-sm text-gray-500">
           <span>
-            Trang <strong className="font-semibold text-slate-700">{meta.page}</strong> / {totalPages}
+            Trang <strong className="font-semibold tabular-nums text-gray-700">{meta.page}</strong> <span className="tabular-nums">/ {totalPages}</span>
           </span>
           <div className="flex gap-2">
             <Button
@@ -580,8 +580,8 @@ export default function EmployeeListPage() {
       {/* Modal xác nhận xóa */}
       {deleteTarget && (
         <Modal title="Xóa nhân viên" onClose={() => !submitting && setDeleteTarget(null)}>
-          <p className="text-sm leading-relaxed text-slate-600">
-            Anh/chị có chắc muốn xóa hồ sơ của <strong className="font-semibold text-slate-800">{deleteTarget.full_name}</strong> ({deleteTarget.code})?
+          <p className="text-sm leading-relaxed text-gray-600">
+            Anh/chị có chắc muốn xóa hồ sơ của <strong className="font-semibold text-gray-800">{deleteTarget.full_name}</strong> ({deleteTarget.code})?
             Thao tác này không thể hoàn tác và có thể ảnh hưởng tới dữ liệu chấm công, nghỉ phép, lương đã gắn với nhân viên.
           </p>
           <div className="mt-6 flex justify-end gap-2.5">

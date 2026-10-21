@@ -26,7 +26,7 @@ import {
   TableSkeleton,
   Textarea,
 } from '../../../components/ui';
-import { StaggerList, StaggerItem } from '../../../components/motion';
+import { Drawer, StaggerList, StaggerItem } from '../../../components/motion';
 import { IconFileText, IconSparkles, IconUsers, IconX } from '../../../components/icons.jsx';
 
 /* ------------------------------ Hằng số UI ------------------------------- */
@@ -77,11 +77,11 @@ function getScore(candidate) {
   return typeof s === 'number' ? s : null;
 }
 
-function scoreTone(score) {
-  if (score == null) return { text: 'text-slate-400', bar: 'bg-slate-200', ring: '#cbd5e1' };
-  if (score >= 75) return { text: 'text-emerald-600', bar: 'bg-emerald-500', ring: '#10b981' };
-  if (score >= 50) return { text: 'text-amber-600', bar: 'bg-amber-500', ring: '#f59e0b' };
-  return { text: 'text-rose-500', bar: 'bg-rose-500', ring: '#f43f5e' };
+function scoreText(score) {
+  if (score == null) return 'text-gray-400';
+  if (score >= 75) return 'text-emerald-700';
+  if (score >= 50) return 'text-amber-700';
+  return 'text-rose-700';
 }
 
 function initials(name) {
@@ -90,44 +90,13 @@ function initials(name) {
   return (parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '');
 }
 
-/* ------------------------- Vòng tròn điểm AI (SVG) ------------------------ */
-
-function ScoreRing({ score, size = 76 }) {
-  const tone = scoreTone(score);
-  const stroke = 7;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const filled = score == null ? 0 : (Math.max(0, Math.min(100, score)) / 100) * c;
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={tone.ring}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${filled} ${c}`}
-          className="transition-all duration-700"
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`text-lg font-bold leading-none ${tone.text}`}>{score == null ? '—' : score}</span>
-        <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">/ 100</span>
-      </div>
-    </div>
-  );
-}
+/* --------------------- Thanh điểm AI phẳng (không gradient) -------------------- */
 
 function ScoreBar({ score }) {
-  const tone = scoreTone(score);
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
       <div
-        className={`h-full rounded-full transition-all duration-700 ${tone.bar}`}
+        className="h-full rounded-full bg-brand-600 transition-all duration-500"
         style={{ width: `${score == null ? 0 : Math.max(0, Math.min(100, score))}%` }}
       />
     </div>
@@ -135,7 +104,7 @@ function ScoreBar({ score }) {
 }
 
 function SkillChips({ items, tone }) {
-  if (!items?.length) return <p className="text-sm text-slate-400">Không có dữ liệu.</p>;
+  if (!items?.length) return <p className="text-sm text-gray-400">Không có dữ liệu.</p>;
   const cls =
     tone === 'ok'
       ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
@@ -198,48 +167,35 @@ function CandidateDrawer({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex animate-fade-in justify-end bg-navy-950/50 backdrop-blur-[2px]"
-      onClick={onClose}
+    <Drawer
+      open
+      onClose={onClose}
+      width="max-w-xl"
+      title={
+        <span className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-[13px] font-semibold uppercase text-white">
+            {initials(candidate.full_name)}
+          </span>
+          {candidate.full_name}
+        </span>
+      }
+      subtitle={`Nộp ngày ${formatDate(candidate.created_at)}`}
     >
-      <div
-        className="nice-scroll h-full w-full max-w-xl animate-slide-in overflow-y-auto bg-white shadow-pop"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white/95 px-6 py-4 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-600 text-sm font-bold uppercase text-white shadow-[0_6px_16px_-6px_rgba(39,79,234,.55)]">
-              {initials(candidate.full_name)}
-            </div>
-            <div>
-              <h2 className="font-display text-base font-bold tracking-[-0.01em] text-slate-900">{candidate.full_name}</h2>
-              <p className="text-xs text-slate-500">Nộp ngày {formatDate(candidate.created_at)}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Đóng chi tiết"
-          >
-            <IconX size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-6 px-6 py-5">
+        <div className="space-y-6">
           {/* Liên hệ + CV gốc */}
           <section>
-            <h3 className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+            <h3 className="mb-2 text-[13px] font-medium text-gray-500">
               Thông tin ứng viên
             </h3>
-            <div className="space-y-1 text-sm text-slate-700">
+            <div className="space-y-1 text-sm text-gray-700">
               <p>
-                <span className="text-slate-400">Email:</span> {candidate.email || '—'}
+                <span className="text-gray-400">Email:</span> {candidate.email || '—'}
               </p>
               <p>
-                <span className="text-slate-400">Điện thoại:</span> {candidate.phone || '—'}
+                <span className="text-gray-400">Điện thoại:</span> {candidate.phone || '—'}
               </p>
               <p className="flex items-center gap-2">
-                <span className="text-slate-400">Trạng thái hiện tại:</span>
+                <span className="text-gray-400">Trạng thái hiện tại:</span>
                 <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
               </p>
             </div>
@@ -248,21 +204,21 @@ function CandidateDrawer({
                 href={candidate.cv_file_url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 ease-spring hover:-translate-y-px hover:bg-navy-800"
+                className="mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800"
               >
                 <IconFileText size={16} />
                 Xem CV gốc (PDF)
               </a>
             ) : (
-              <p className="mt-3 text-sm text-slate-400">Ứng viên chưa có file CV.</p>
+              <p className="mt-3 text-sm text-gray-400">Ứng viên chưa có file CV.</p>
             )}
           </section>
 
           {/* Kết quả AI — khu vực nhấn accent (teal) */}
-          <section className="rounded-2xl border border-accent-500/25 bg-accent-50/60 p-5 shadow-card">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-card">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="flex items-center gap-2.5 text-sm font-bold text-slate-900">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-500 text-white shadow-[0_6px_16px_-6px_rgba(13,183,149,.55)]">
+              <h3 className="flex items-center gap-2.5 text-sm font-semibold text-gray-900">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
                   <IconSparkles size={17} />
                 </span>
                 Kết quả AI sàng lọc
@@ -272,59 +228,62 @@ function CandidateDrawer({
 
             {analysisLoading ? (
               <div className="space-y-3 py-1">
-                <div className="flex items-center gap-2.5 text-sm font-medium text-accent-700">
-                  <Spinner className="h-5 w-5 text-accent-600" />
-                  <span className="animate-pulse-soft">Đang tải kết quả phân tích...</span>
+                <div className="flex items-center gap-2.5 text-sm font-medium text-gray-700">
+                  <Spinner className="h-5 w-5 text-brand-600" />
+                  Đang tải kết quả phân tích...
                 </div>
-                <Skeleton className="h-20 w-full bg-white/70" />
-                <Skeleton className="h-4 w-2/3 bg-white/70" />
-                <Skeleton className="h-4 w-1/2 bg-white/70" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
               </div>
             ) : analysisError ? (
-              <div className="rounded-xl bg-white px-3.5 py-3 text-sm leading-relaxed text-slate-600 ring-1 ring-accent-500/15">
+              <div className="rounded-lg bg-gray-50 px-3.5 py-3 text-sm leading-relaxed text-gray-600 ring-1 ring-gray-200">
                 {analysisError}
               </div>
             ) : !a ? (
-              <p className="py-2 text-sm leading-relaxed text-slate-500">
+              <p className="py-2 text-sm leading-relaxed text-gray-500">
                 Ứng viên này chưa được AI phân tích. Đóng panel, chọn ứng viên trong danh sách rồi bấm
                 "Phân tích AI" để nhận gợi ý điểm phù hợp, kỹ năng khớp/thiếu và nhận xét.
               </p>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <ScoreRing score={score} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-700">Mức độ phù hợp với JD</p>
-                    <div className="mt-2">
-                      <ScoreBar score={score} />
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">
+                <div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-700">Mức độ phù hợp với JD</p>
+                    <p className={`text-xl font-semibold tabular-nums ${scoreText(score)}`}>
+                      {score == null ? '—' : score}
+                      <span className="ml-1 text-[13px] font-normal text-gray-400">/ 100</span>
+                    </p>
+                  </div>
+                  <div className="mt-2">
+                    <ScoreBar score={score} />
+                  </div>
+                    <p className="mt-2 text-xs text-gray-500">
                       {a.experience_years_estimate != null &&
                         `Kinh nghiệm ước lượng: ~${a.experience_years_estimate} năm · `}
                       {a.education_summary && `Học vấn: ${a.education_summary} · `}
                       Phân tích lúc {formatDateTime(a.created_at)}
                       {a.model_name ? ` · Model: ${a.model_name}` : ''}
                     </p>
-                  </div>
                 </div>
 
                 {a.summary && (
                   <div>
-                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                    <p className="mb-1 text-[13px] font-medium text-gray-500">
                       Tóm tắt nhận xét
                     </p>
-                    <p className="text-sm leading-relaxed text-slate-700">{a.summary}</p>
+                    <p className="text-sm leading-relaxed text-gray-700">{a.summary}</p>
                   </div>
                 )}
 
                 <div>
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                  <p className="mb-1.5 text-[13px] font-medium text-gray-500">
                     Kỹ năng khớp với JD
                   </p>
                   <SkillChips items={a.matched_skills} tone="ok" />
                 </div>
                 <div>
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                  <p className="mb-1.5 text-[13px] font-medium text-gray-500">
                     Kỹ năng còn thiếu
                   </p>
                   <SkillChips items={a.missing_skills} tone="miss" />
@@ -332,10 +291,10 @@ function CandidateDrawer({
 
                 {a.strengths?.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                    <p className="mb-1 text-[13px] font-medium text-gray-500">
                       Điểm mạnh
                     </p>
-                    <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
+                    <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
                       {a.strengths.map((s, i) => (
                         <li key={i}>{s}</li>
                       ))}
@@ -344,10 +303,10 @@ function CandidateDrawer({
                 )}
                 {a.concerns?.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                    <p className="mb-1 text-[13px] font-medium text-gray-500">
                       Điểm cần lưu ý
                     </p>
-                    <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
+                    <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
                       {a.concerns.map((s, i) => (
                         <li key={i}>{s}</li>
                       ))}
@@ -366,7 +325,7 @@ function CandidateDrawer({
 
           {/* Quyết định của HR */}
           <section>
-            <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+            <h3 className="mb-3 text-[13px] font-medium text-gray-500">
               Quyết định của HR
             </h3>
             <FormField label="Trạng thái ứng viên">
@@ -409,8 +368,7 @@ function CandidateDrawer({
             </Button>
           </section>
         </div>
-      </div>
-    </div>
+    </Drawer>
   );
 }
 
@@ -697,13 +655,13 @@ export default function JobDetailPage() {
         ← Quay lại danh sách tuyển dụng
       </Link>
 
-      {/* -------- Thông tin JD -------- */}
-      <Card className="mt-3">
-        <div className="p-6">
+      {/* -------- Thông tin JD: dau trang phang -------- */}
+      <div className="mt-4">
+        <div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="font-display text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+                <h1 className="text-xl font-semibold leading-tight tracking-[-0.01em] text-gray-900">
                   {job.title}
                 </h1>
                 {job.status === 'open' ? (
@@ -711,12 +669,12 @@ export default function JobDetailPage() {
                     Đang tuyển
                   </Badge>
                 ) : (
-                  <Badge tone="slate" dot>
+                  <Badge tone="gray" dot>
                     Đã đóng
                   </Badge>
                 )}
               </div>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-gray-500">
                 {(job.department_name ?? job.department?.name) && `${job.department_name ?? job.department.name} · `}
                 Tuyển {job.quantity ?? 1} người · Hạn nộp: {formatDate(job.deadline)} ·{' '}
                 {candidates.length} ứng viên
@@ -734,36 +692,36 @@ export default function JobDetailPage() {
           </div>
 
           {job.description && (
-            <div className="mt-6">
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+            <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-card">
+              <h2 className="text-sm font-semibold text-gray-900">
                 Mô tả công việc
               </h2>
-              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-gray-700">
                 {job.description}
               </p>
             </div>
           )}
           {job.requirements && (
-            <div className="mt-5 rounded-xl border border-accent-500/20 bg-accent-50/50 px-4 py-3.5">
-              <h2 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-accent-700">
-                <IconSparkles size={14} />
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                <IconSparkles size={14} className="text-brand-600" />
                 Yêu cầu ứng viên{' '}
-                <span className="font-semibold normal-case tracking-normal text-slate-400">
+                <span className="font-semibold normal-case tracking-normal text-gray-400">
                   (chuẩn để AI đối chiếu CV)
                 </span>
               </h2>
-              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-gray-700">
                 {job.requirements}
               </p>
             </div>
           )}
         </div>
-      </Card>
+      </div>
 
       {/* -------- Banner kết quả AI / lỗi -------- */}
       {aiBanner && (
-        <div className="relative mt-4 animate-scale-in">
-          <Alert tone={aiBanner.type === 'success' ? 'success' : 'error'} className="pr-10 shadow-card">
+        <div className="relative mt-4">
+          <Alert tone={aiBanner.type === 'success' ? 'success' : 'error'} className="pr-10">
             {aiBanner.text}
           </Alert>
           <button
@@ -778,27 +736,27 @@ export default function JobDetailPage() {
 
       {/* -------- Thanh tiến trình khi AI đang chạy -------- */}
       {aiRunning && (
-        <div className="mt-4 animate-fade-in rounded-2xl border border-accent-500/30 bg-accent-50 px-5 py-4 shadow-card">
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-card">
           <div className="flex items-start gap-3.5">
-            <span className="flex h-10 w-10 shrink-0 animate-pulse-soft items-center justify-center rounded-xl bg-accent-500 text-white shadow-[0_6px_16px_-6px_rgba(13,183,149,.55)]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
               <IconSparkles size={19} />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-gray-900">
                   AI đang phân tích CV... {aiJob.processed ?? 0}/{aiJob.total ?? '?'} ứng viên
                 </p>
-                <span className="animate-pulse-soft text-sm font-bold text-accent-700">
+                <span className="text-sm font-semibold tabular-nums text-gray-900">
                   {aiProgress}%
                 </span>
               </div>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
                 Quá trình chạy nền — bạn cứ để trang này mở, danh sách sẽ tự cập nhật khi phân tích
                 xong. Có thể mất vài chục giây mỗi CV.
               </p>
-              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-accent-100">
+              <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-600 transition-all duration-500"
+                  className="h-full rounded-full bg-brand-600 transition-all duration-500"
                   style={{ width: `${Math.max(aiProgress, 6)}%` }}
                 />
               </div>
@@ -809,11 +767,11 @@ export default function JobDetailPage() {
 
       {/* -------- Toolbar ứng viên -------- */}
       <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-bold tracking-[-0.01em] text-slate-900">
-          Ứng viên <span className="text-sm font-medium text-slate-400">({counts.all})</span>
+        <h2 className="text-base font-semibold text-gray-900">
+          Ứng viên <span className="text-sm font-medium text-gray-400">({counts.all})</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2.5">
-          <label className="text-sm text-slate-500" htmlFor="sortBy">
+          <label className="text-sm text-gray-500" htmlFor="sortBy">
             Sắp xếp:
           </label>
           <Select
@@ -827,7 +785,7 @@ export default function JobDetailPage() {
             <option value="full_name">Tên A → Z</option>
           </Select>
           <Button
-            variant="accent"
+            variant="primary"
             onClick={handleAnalyze}
             disabled={selected.size === 0}
             loading={aiRunning}
@@ -844,10 +802,10 @@ export default function JobDetailPage() {
       <div className="mt-3.5 flex flex-wrap gap-2">
         <button
           onClick={() => setStatusFilter('')}
-          className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold ring-1 ring-inset transition-all duration-200 ease-spring ${
+          className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium ring-1 ring-inset transition-colors ${
             statusFilter === ''
-              ? 'bg-navy-900 text-white ring-navy-900 shadow-sm'
-              : 'bg-white text-slate-600 ring-slate-300 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900'
+              ? 'bg-gray-900 text-white ring-gray-900'
+              : 'bg-white text-gray-600 ring-gray-300 hover:bg-gray-50 hover:text-gray-900'
           }`}
         >
           Tất cả ({counts.all})
@@ -856,10 +814,10 @@ export default function JobDetailPage() {
           <button
             key={o.value}
             onClick={() => setStatusFilter(o.value)}
-            className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold ring-1 ring-inset transition-all duration-200 ease-spring ${
+            className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium ring-1 ring-inset transition-colors ${
               statusFilter === o.value
-                ? 'bg-navy-900 text-white ring-navy-900 shadow-sm'
-                : 'bg-white text-slate-600 ring-slate-300 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-gray-900 text-white ring-gray-900'
+                : 'bg-white text-gray-600 ring-gray-300 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             {o.label} ({counts[o.value] ?? 0})
@@ -867,7 +825,7 @@ export default function JobDetailPage() {
         ))}
       </div>
 
-      <p className="mt-3 text-xs leading-relaxed text-slate-400">
+      <p className="mt-3 text-xs leading-relaxed text-gray-400">
         Chọn 1 hoặc nhiều ứng viên rồi bấm "Phân tích AI" (tối đa {AI_BATCH_LIMIT} CV/lượt). Điểm AI
         chỉ là gợi ý tham khảo — HR là người ra quyết định cuối cùng.
       </p>
@@ -884,7 +842,7 @@ export default function JobDetailPage() {
           <TableSkeleton rows={4} cols={4} />
         </Card>
       ) : candidates.length === 0 ? (
-        <Card className="mt-4 animate-fade-in">
+        <Card className="mt-4">
           <EmptyState
             icon={<IconUsers size={26} />}
             title={statusFilter ? 'Không có ứng viên nào ở trạng thái này' : 'Chưa có ứng viên nào nộp CV'}
@@ -892,16 +850,16 @@ export default function JobDetailPage() {
           />
         </Card>
       ) : (
-        <Card className="mt-4 animate-fade-in overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
+        <Card className="mt-4 overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/80 px-4 py-2.5">
             <input
               type="checkbox"
               checked={allSelected}
               onChange={toggleAll}
-              className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+              className="h-4 w-4 rounded border-gray-300 accent-brand-600"
               aria-label="Chọn tất cả ứng viên"
             />
-            <span className="text-[13px] font-medium text-slate-500">
+            <span className="text-[13px] font-medium text-gray-500">
               {selected.size > 0 ? `Đã chọn ${selected.size} ứng viên` : 'Chọn ứng viên để phân tích AI'}
             </span>
           </div>
@@ -923,16 +881,15 @@ export default function JobDetailPage() {
               <tbody>
                 {candidates.map((c) => {
                   const score = getScore(c);
-                  const tone = scoreTone(score);
                   const st = CANDIDATE_STATUS[c.status] ?? CANDIDATE_STATUS.new;
                   return (
-                    <tr key={c.id} className={`ui-tr ${selected.has(c.id) ? 'bg-accent-50/60' : ''}`}>
+                    <tr key={c.id} className={`ui-tr ${selected.has(c.id) ? 'bg-brand-50' : ''}`}>
                       <td className="ui-td">
                         <input
                           type="checkbox"
                           checked={selected.has(c.id)}
                           onChange={() => toggleOne(c.id)}
-                          className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                          className="h-4 w-4 rounded border-gray-300 accent-brand-600"
                           aria-label={`Chọn ${c.full_name}`}
                         />
                       </td>
@@ -941,14 +898,14 @@ export default function JobDetailPage() {
                           onClick={() => openDrawer(c)}
                           className="flex min-w-0 items-center gap-3 text-left"
                         >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold uppercase text-white shadow-[0_4px_12px_-4px_rgba(39,79,234,.5)]">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold uppercase text-white">
                             {initials(c.full_name)}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-slate-900">
+                            <span className="block truncate text-sm font-medium text-gray-900">
                               {c.full_name}
                             </span>
-                            <span className="block truncate text-xs text-slate-500">
+                            <span className="block truncate text-[13px] text-gray-500">
                               {c.email || '—'}
                               {c.phone ? ` · ${c.phone}` : ''} · Nộp {formatDate(c.created_at)}
                             </span>
@@ -958,16 +915,16 @@ export default function JobDetailPage() {
                       <td className="ui-td">
                         {score != null ? (
                           <div className="flex items-center gap-2.5" title="Điểm phù hợp do AI gợi ý">
+                            <span className={`w-8 shrink-0 text-sm font-semibold tabular-nums ${scoreText(score)}`}>
+                              {score}
+                            </span>
                             <span className="w-20 shrink-0">
                               <ScoreBar score={score} />
                             </span>
-                            <span className={`text-sm font-bold ${tone.text}`}>{score}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                              AI
-                            </span>
+                            <span className="text-xs text-gray-400">AI</span>
                           </div>
                         ) : (
-                          <span className="text-xs italic text-slate-400">Chưa phân tích</span>
+                          <span className="text-[13px] text-gray-400">Chưa phân tích</span>
                         )}
                       </td>
                       <td className="ui-td">

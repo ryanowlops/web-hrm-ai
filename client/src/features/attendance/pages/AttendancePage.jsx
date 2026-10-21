@@ -63,7 +63,7 @@ function MonthNav({ cursor, onChange }) {
   return (
     <div className="flex items-center gap-2">
       <Button type="button" variant="secondary" size="sm" onClick={() => shift(-1)}>← Tháng trước</Button>
-      <span className="min-w-28 text-center text-sm font-bold text-slate-800">Tháng {cursor.month}/{cursor.year}</span>
+      <span className="min-w-28 text-center text-sm font-semibold text-gray-800">Tháng {cursor.month}/{cursor.year}</span>
       <Button type="button" variant="secondary" size="sm" onClick={() => shift(1)}>Tháng sau →</Button>
     </div>
   );
@@ -172,47 +172,44 @@ export default function AttendancePage() {
       )}
 
       <StaggerList className="space-y-6">
-        {/* === Thẻ hôm nay (nổi bật) === */}
+        {/* === Thẻ hôm nay: check-in / check-out (thẻ trắng phẳng, v4) === */}
         <StaggerItem index={0}>
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-950 via-navy-900 to-brand-900 text-white shadow-lift">
-          <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand-500/25 blur-3xl" />
-          <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-accent-500/20 blur-3xl" />
-          <div className="relative flex flex-wrap items-center justify-between gap-6 p-6 lg:p-7">
+        <section className="rounded-xl border border-gray-200 bg-white shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-6 px-5 py-5 lg:px-6">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-medium capitalize text-slate-300">
-                <span className="h-2 w-2 animate-pulse-soft rounded-full bg-accent-400" />
+              <p className="text-sm font-medium capitalize text-gray-500">
                 {clock.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
               </p>
-              <p className="mt-1.5 text-5xl font-extrabold tabular-nums tracking-tight lg:text-[56px] lg:leading-none">
+              <p className="mt-1 text-[26px] font-semibold leading-tight tabular-nums tracking-[-0.01em] text-gray-900">
                 {clock.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </p>
               {todayLoading ? (
                 <div className="mt-4 flex items-center gap-3" aria-hidden="true">
-                  <div className="h-5 w-40 animate-shimmer rounded-lg bg-white/15" />
-                  <div className="h-5 w-32 animate-shimmer rounded-lg bg-white/15" />
+                  <div className="h-5 w-40 animate-shimmer rounded-lg bg-gray-100" />
+                  <div className="h-5 w-32 animate-shimmer rounded-lg bg-gray-100" />
                 </div>
               ) : (
-                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-200">
-                  <span>Giờ vào: <b className="text-base font-bold tabular-nums text-white">{fmtTime(today?.check_in_at)}</b></span>
-                  <span>Giờ ra: <b className="text-base font-bold tabular-nums text-white">{fmtTime(today?.check_out_at)}</b></span>
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-500">
+                  <span>Giờ vào: <b className="font-medium tabular-nums text-gray-900">{fmtTime(today?.check_in_at)}</b></span>
+                  <span>Giờ ra: <b className="font-medium tabular-nums text-gray-900">{fmtTime(today?.check_out_at)}</b></span>
                   {today?.status && <StatusBadge status={today.status} />}
                 </div>
               )}
               {!todayLoading && !checkedIn && (
-                <p className="mt-3 text-sm font-medium text-amber-300">Bạn chưa check-in hôm nay. Hãy check-in khi bắt đầu giờ làm việc.</p>
+                <p className="mt-3 text-sm font-medium text-amber-700">Bạn chưa check-in hôm nay. Hãy check-in khi bắt đầu giờ làm việc.</p>
               )}
               {!todayLoading && checkedIn && !checkedOut && (
-                <p className="mt-3 text-sm text-slate-300">Đã ghi nhận giờ vào. Đừng quên check-out khi kết thúc ngày làm việc.</p>
+                <p className="mt-3 text-sm text-gray-500">Đã ghi nhận giờ vào. Đừng quên check-out khi kết thúc ngày làm việc.</p>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
-                type="button" variant="accent" size="lg" loading={acting}
+                type="button" variant="primary" loading={acting}
                 disabled={acting || todayLoading || checkedIn}
                 onClick={() => doCheck(checkIn, 'Check-in thành công. Chúc anh/chị một ngày làm việc hiệu quả!')}
               >Check-in</Button>
               <Button
-                type="button" variant="secondary" size="lg"
+                type="button" variant="secondary"
                 disabled={acting || todayLoading || !checkedIn || checkedOut}
                 onClick={() => doCheck(checkOut, 'Check-out thành công. Hẹn gặp lại ngày mai!')}
               >Check-out</Button>
@@ -243,20 +240,23 @@ export default function AttendancePage() {
                 description="Hãy check-in ở thẻ hôm nay phía trên khi bắt đầu giờ làm việc, hoặc chuyển sang tháng khác để xem dữ liệu đã có."
               />
             ) : (
-              <div className="overflow-x-auto px-2 pb-2 pt-2">
+              <div className="overflow-x-auto">
                 <table className="ui-table min-w-[560px]">
                   <thead><tr>
-                    <th className="ui-th">Ngày</th><th className="ui-th">Giờ vào</th>
-                    <th className="ui-th">Giờ ra</th><th className="ui-th">Trạng thái</th><th className="ui-th">Ghi chú</th>
+                    <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Ngày</th>
+                    <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Giờ vào</th>
+                    <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Giờ ra</th>
+                    <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Trạng thái</th>
+                    <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Ghi chú</th>
                   </tr></thead>
                   <tbody>
                     {myData.records.map((r) => (
-                      <tr key={r.id || r.work_date} className="ui-tr">
-                        <td className="ui-td whitespace-nowrap font-semibold capitalize text-slate-800">{fmtDate(r.work_date)}</td>
-                        <td className="ui-td tabular-nums">{fmtTime(r.check_in_at)}</td>
-                        <td className="ui-td tabular-nums">{fmtTime(r.check_out_at)}</td>
+                      <tr key={r.id || r.work_date} className="ui-tr hover:bg-gray-50">
+                        <td className="ui-td whitespace-nowrap font-medium capitalize text-gray-900">{fmtDate(r.work_date)}</td>
+                        <td className="ui-td tabular-nums text-gray-700">{fmtTime(r.check_in_at)}</td>
+                        <td className="ui-td tabular-nums text-gray-700">{fmtTime(r.check_out_at)}</td>
                         <td className="ui-td"><StatusBadge status={r.status} /></td>
-                        <td className="ui-td text-slate-500">{r.note || '—'}</td>
+                        <td className="ui-td text-gray-500">{r.note || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -294,25 +294,40 @@ export default function AttendancePage() {
                   description="Thử bỏ bộ lọc phòng ban / nhân viên hoặc chuyển sang tháng khác để xem bảng công của đội ngũ."
                 />
               ) : (
-                <div className="overflow-x-auto px-2 pb-2">
+                <div className="overflow-x-auto">
                   <table className="ui-table min-w-[640px]">
                     <thead><tr>
-                      <th className="ui-th">Nhân viên</th><th className="ui-th">Phòng ban</th>
-                      <th className="ui-th text-center">Ngày công</th><th className="ui-th text-center">Đi muộn</th>
-                      <th className="ui-th text-center">Nghỉ phép</th><th className="ui-th text-center">Vắng</th>
+                      <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Nhân viên</th>
+                      <th className="ui-th bg-gray-50 text-xs font-medium normal-case tracking-normal text-gray-500">Phòng ban</th>
+                      <th className="ui-th bg-gray-50 text-center text-xs font-medium normal-case tracking-normal text-gray-500">Ngày công</th>
+                      <th className="ui-th bg-gray-50 text-center text-xs font-medium normal-case tracking-normal text-gray-500">Đi muộn</th>
+                      <th className="ui-th bg-gray-50 text-center text-xs font-medium normal-case tracking-normal text-gray-500">Nghỉ phép</th>
+                      <th className="ui-th bg-gray-50 text-center text-xs font-medium normal-case tracking-normal text-gray-500">Vắng</th>
                     </tr></thead>
                     <tbody>
                       {teamRows.map((row, i) => {
                         const emp = row.employee || row;
                         const s = row.summary || row;
+                        const nameParts = String(emp.full_name || '').trim().split(/\s+/).filter(Boolean);
+                        const initials = nameParts.length
+                          ? (nameParts[0][0] + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase()
+                          : '?';
                         return (
-                          <tr key={emp.id || i} className="ui-tr">
-                            <td className="ui-td font-semibold text-slate-800">{emp.full_name}{emp.code ? <span className="font-normal text-slate-400"> ({emp.code})</span> : null}</td>
-                            <td className="ui-td">{emp.department_name || emp.department?.name || '—'}</td>
-                            <td className="ui-td text-center font-semibold tabular-nums">{s.workdays ?? '—'}</td>
-                            <td className="ui-td text-center tabular-nums">{s.late ?? '—'}</td>
-                            <td className="ui-td text-center tabular-nums">{s.on_leave ?? '—'}</td>
-                            <td className="ui-td text-center tabular-nums">{s.absent ?? '—'}</td>
+                          <tr key={emp.id || i} className="ui-tr hover:bg-gray-50">
+                            <td className="ui-td">
+                              <div className="flex items-center gap-3">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[13px] font-semibold text-gray-600" aria-hidden="true">{initials}</span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-medium text-gray-900">{emp.full_name}</span>
+                                  {emp.code ? <span className="block text-[13px] text-gray-500">{emp.code}</span> : null}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="ui-td text-gray-700">{emp.department_name || emp.department?.name || '—'}</td>
+                            <td className="ui-td text-center font-medium tabular-nums text-gray-700">{s.workdays ?? '—'}</td>
+                            <td className="ui-td text-center tabular-nums text-gray-700">{s.late ?? '—'}</td>
+                            <td className="ui-td text-center tabular-nums text-gray-700">{s.on_leave ?? '—'}</td>
+                            <td className="ui-td text-center tabular-nums text-gray-700">{s.absent ?? '—'}</td>
                           </tr>
                         );
                       })}
@@ -320,7 +335,7 @@ export default function AttendancePage() {
                   </table>
                 </div>
               )}
-            <p className="border-t border-slate-100 px-5 py-3.5 text-xs text-slate-400">Phạm vi dữ liệu do server quyết định theo vai trò và phòng ban của bạn.</p>
+            <p className="border-t border-gray-100 px-5 py-3.5 text-xs text-gray-400">Phạm vi dữ liệu do server quyết định theo vai trò và phòng ban của bạn.</p>
           </Card>
           </StaggerItem>
         )}

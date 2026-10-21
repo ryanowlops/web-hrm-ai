@@ -1,28 +1,28 @@
 import { motion, useReducedMotion } from 'motion/react';
 
-// Button chuẩn design system v3 — chuyển động đáp lại hành động qua Motion:
-// hover nâng nhẹ, press co 0.98 (tôn trọng prefers-reduced-motion).
+// Button chuẩn design system v4 (bám Untitled UI / shadcn-admin):
+// phẳng hoàn toàn — không shadow nổi/glow, không nâng khi hover.
 // variant: primary | accent | secondary | ghost | danger | dark
-// size: sm | md | lg
+// size: sm | md | lg — chiều cao 36–40px, rounded-lg, chữ 14px medium.
 const VARIANTS = {
   primary:
-    'bg-brand-600 text-white shadow-[0_6px_16px_-6px_rgba(39,79,234,.55)] hover:bg-brand-700 active:bg-brand-800 focus-visible:ring-brand-500/40',
+    'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 focus-visible:ring-brand-600/25',
   accent:
-    'bg-accent-500 text-white shadow-[0_6px_16px_-6px_rgba(13,183,149,.55)] hover:bg-accent-600 active:bg-accent-700 focus-visible:ring-accent-500/40',
+    'bg-accent-500 text-white hover:bg-accent-600 active:bg-accent-700 focus-visible:ring-accent-500/30',
   secondary:
-    'bg-white text-slate-700 border border-slate-300 shadow-sm hover:border-slate-400 hover:bg-slate-50 active:bg-slate-100 focus-visible:ring-brand-500/30',
+    'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100 focus-visible:ring-brand-600/20',
   ghost:
-    'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200/70 focus-visible:ring-brand-500/30',
+    'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200/60 focus-visible:ring-brand-600/20',
   danger:
-    'bg-rose-600 text-white shadow-[0_6px_16px_-6px_rgba(225,29,72,.5)] hover:bg-rose-700 active:bg-rose-800 focus-visible:ring-rose-500/40',
+    'bg-[#D92D20] text-white hover:bg-[#B42318] active:bg-[#912018] focus-visible:ring-[#F04438]/30',
   dark:
-    'bg-navy-900 text-white hover:bg-navy-800 active:bg-navy-950 focus-visible:ring-navy-700/40',
+    'bg-gray-900 text-white hover:bg-gray-800 active:bg-gray-950 focus-visible:ring-gray-500/30',
 };
 
 const SIZES = {
   sm: 'h-9 px-3.5 text-[13px] rounded-lg gap-1.5',
-  md: 'h-[42px] px-[18px] text-sm rounded-xl gap-2',
-  lg: 'h-12 px-6 text-[15px] rounded-xl gap-2',
+  md: 'h-10 px-4 text-sm rounded-lg gap-2',
+  lg: 'h-10 px-5 text-sm rounded-lg gap-2',
 };
 
 export default function Button({
@@ -37,11 +37,10 @@ export default function Button({
   const reduce = useReducedMotion();
   return (
     <motion.button
-      whileHover={reduce || disabled || loading ? undefined : { y: -1 }}
       whileTap={reduce || disabled || loading ? undefined : { scale: 0.98 }}
       transition={{ duration: 0.12 }}
-      className={`inline-flex select-none items-center justify-center font-semibold tracking-[0.01em]
-        transition-colors duration-200 ease-spring
+      className={`inline-flex select-none items-center justify-center font-medium
+        transition-colors duration-150 active:scale-[.98]
         focus:outline-none focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-55
         ${VARIANTS[variant] || VARIANTS.primary} ${SIZES[size] || SIZES.md} ${className}`}
       disabled={disabled || loading}

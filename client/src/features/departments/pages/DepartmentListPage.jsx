@@ -1,15 +1,15 @@
 // Trang Phòng ban & Chức vụ — route /departments
 // Danh sách phòng ban (trưởng phòng, số nhân viên) và các chức vụ thuộc
 // từng phòng. CRUD chỉ hiển thị với admin / hr (server vẫn kiểm tra quyền).
-// Trình bày theo design system v2: .page-shell, PageHeader, Card, Badge,
-// bảng .ui-table và Modal/Button/FormField của UI kit (components/ui).
+// Trình bày theo hợp đồng thiết kế v4 (docs/frontend-design-v4.md):
+// PageHeader phẳng, thẻ phòng ban trắng border gray-200 rounded-xl
+// shadow-card nhẹ, bảng .ui-table và Modal/Button/FormField của UI kit.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../app/AuthContext.jsx';
 import {
   Button,
   Card,
   CardHeader,
-  Badge,
   Modal,
   PageHeader,
   EmptyState,
@@ -68,11 +68,12 @@ function FormActions({ onCancel, submitting, submitLabel }) {
   );
 }
 
-// Nút thao tác dạng ghost chỉ có icon (Sửa / Xóa) dùng trong thẻ và bảng.
+// Nút thao tác dạng ghost chỉ có icon (Sửa / Xóa) dùng trong thẻ và bảng —
+// phẳng theo v4: nền xám nhạt khi hover, không scale/shadow.
 function GhostIconButton({ label, tone = 'brand', onClick }) {
   const tones = {
-    brand: 'text-slate-400 hover:bg-brand-50 hover:text-brand-600',
-    danger: 'text-slate-400 hover:bg-rose-50 hover:text-rose-600',
+    brand: 'text-gray-400 hover:bg-gray-100 hover:text-gray-700',
+    danger: 'text-gray-400 hover:bg-red-50 hover:text-red-700',
   };
   return (
     <button
@@ -80,11 +81,19 @@ function GhostIconButton({ label, tone = 'brand', onClick }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`rounded-lg p-2 transition duration-200 hover:scale-105 active:scale-95 ${tones[tone] || tones.brand}`}
+      className={`rounded-lg p-2 transition duration-150 ${tones[tone] || tones.brand}`}
     >
       {label === 'Sửa' ? <IconEdit size={16} /> : <IconTrash size={16} />}
     </button>
   );
+}
+
+// Chữ viết tắt cho avatar trưởng phòng (họ + tên), vd "Nguyễn Văn An" -> "NA".
+function managerInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 // ---------- Form phòng ban ----------
@@ -338,7 +347,6 @@ export default function DepartmentListPage() {
   return (
     <div className="page-shell">
       <PageHeader
-        eyebrow="Cơ cấu tổ chức"
         title="Phòng ban & Chức vụ"
         subtitle={`Cơ cấu tổ chức công ty — ${departments.length} phòng ban, ${positions.length} chức vụ`}
         actions={canWrite && (
@@ -386,22 +394,9 @@ export default function DepartmentListPage() {
           <StaggerList className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {departments.map((dept, i) => (
               <StaggerItem key={dept.id} index={i} className="h-full">
-              <Card hover className="flex h-full flex-col p-5">
+              <Card className="flex h-full flex-col p-5">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 items-start gap-3.5">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-                      <IconBuilding size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="font-display truncate text-base font-bold tracking-[-0.01em] text-slate-900">{dept.name}</h2>
-                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                        <IconUser size={14} className="shrink-0 text-slate-400" />
-                        <span className="truncate">
-                          Trưởng phòng: <span className="font-semibold text-slate-700">{managerName(dept)}</span>
-                        </span>
-                      </p>
-                    </div>
-                  </div>
+                  <h2 className="min-w-0 truncate text-base font-semibold text-gray-900">{dept.name}</h2>
                   {canWrite && (
                     <div className="flex shrink-0 gap-0.5">
                       <GhostIconButton label="Sửa" onClick={() => setDeptTarget(dept)} />
@@ -410,22 +405,40 @@ export default function DepartmentListPage() {
                   )}
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Badge tone="blue" dot>{employeeCount(dept)} nhân viên</Badge>
-                  <Badge tone="slate">{positionsOf(dept.id).length} chức vụ</Badge>
+                <div className="mt-3 flex items-center gap-2.5">
+                  {managerName(dept) === 'Chưa gán' ? (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+                      <IconUser size={16} />
+                    </span>
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
+                      {managerInitials(managerName(dept))}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">{managerName(dept)}</p>
+                    <p className="text-[13px] text-gray-500">Trưởng phòng</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center gap-4 border-t border-gray-100 pt-3 text-sm text-gray-500">
+                  <span>
+                    <span className="font-semibold tabular-nums text-gray-900">{employeeCount(dept)}</span> nhân viên
+                  </span>
+                  <span>
+                    <span className="font-semibold tabular-nums text-gray-900">{positionsOf(dept.id).length}</span> chức vụ
+                  </span>
                 </div>
 
                 {canWrite && (
                   <div className="mt-auto pt-4">
-                    <div className="border-t border-slate-100 pt-3">
-                      <button
-                        type="button"
-                        onClick={() => setPosTarget({ departmentId: dept.id })}
-                        className="text-sm font-semibold text-brand-600 transition hover:text-brand-800"
-                      >
-                        + Thêm chức vụ vào phòng này
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPosTarget({ departmentId: dept.id })}
+                      className="text-sm font-medium text-brand-600 transition hover:text-brand-700"
+                    >
+                      + Thêm chức vụ vào phòng này
+                    </button>
                   </div>
                 )}
               </Card>
@@ -433,7 +446,7 @@ export default function DepartmentListPage() {
             ))}
           </StaggerList>
 
-          <Card className="mt-6 animate-fade-up">
+          <Card className="mt-6">
             <CardHeader
               title="Danh sách chức vụ"
               subtitle={`${positions.length} chức vụ thuộc ${departments.length} phòng ban`}
@@ -462,7 +475,7 @@ export default function DepartmentListPage() {
                   <tbody>
                     {positions.map((pos) => (
                       <tr key={pos.id} className="ui-tr">
-                        <td className="ui-td font-semibold text-slate-800">{pos.title}</td>
+                        <td className="ui-td font-medium text-gray-900">{pos.title}</td>
                         <td className="ui-td">{departmentName(pos.department_id)}</td>
                         {canWrite && (
                           <td className="ui-td">

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { animate, useReducedMotion } from 'motion/react';
 
-// AnimatedNumber (v3) — số liệu đếm lên (~600ms, ease-out) khi xuất hiện
+// AnimatedNumber (v4) — số liệu đếm lên nhanh (~400ms, ease-out) khi xuất hiện
 // hoặc khi giá trị thay đổi. format: hàm định dạng (mặc định toLocaleString vi-VN).
 // Tôn trọng reduced-motion: đặt giá trị ngay, không đếm.
 export default function AnimatedNumber({ value, format, className = '' }) {
@@ -22,7 +22,7 @@ export default function AnimatedNumber({ value, format, className = '' }) {
       return undefined;
     }
     const controls = animate(0, numeric, {
-      duration: 0.6,
+      duration: 0.4,
       ease: [0.22, 1, 0.36, 1],
       onUpdate: (v) => {
         if (ref.current) ref.current.textContent = fmt(v);

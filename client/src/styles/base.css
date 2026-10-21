@@ -1,36 +1,58 @@
-/* Base v2 — nền tảng hiển thị toàn app. Tailwind preflight đã xử lý reset;
-   file này chỉ đặt nền, font, focus và hành vi cuộn. */
+/* Base v4 — nền tảng hiển thị toàn app (hợp đồng frontend-design-v4).
+   Tailwind preflight đã xử lý reset; file này chỉ đặt nền, font, focus
+   và hành vi cuộn. Bề mặt phẳng: nền gray-50, KHÔNG gradient/quầng sáng. */
 html {
   scroll-behavior: smooth;
 }
 
 body {
   font-family: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--canvas);
-  color: #1e293b;
+  background: #F9FAFB; /* gray-50 */
+  color: #101828; /* gray-900 */
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* v3: tiêu đề dùng Be Vietnam Pro (font-display) */
+/* v4: Inter cho mọi thứ — tiêu đề dùng cùng font với thân, không font hiển thị riêng */
 h1, h2, h3 {
-  font-family: var(--font-display);
+  font-family: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* v3: số liệu thẳng cột (tabular numbers) cho bảng và số thống kê */
+/* Số liệu thẳng cột (tabular numbers) cho bảng và số thống kê */
 table, .tnum {
   font-variant-numeric: tabular-nums;
 }
 
 ::selection {
-  background: rgba(61, 110, 245, 0.22);
+  background: rgba(39, 79, 234, 0.16);
 }
 
-/* Focus nhìn rõ cho bàn phím (chuẩn truy cập) */
+/* Focus nhìn rõ cho bàn phím: ring brand-600 */
 :focus-visible {
-  outline: 2px solid var(--brand-500);
+  outline: 2px solid #274FEA; /* brand-600 */
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* Thanh cuộn mảnh, tông xám trung tính cho toàn app */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #D0D5DD transparent; /* gray-300 */
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #D0D5DD; /* gray-300 */
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #98A2B3; /* gray-400 */
 }
 
 /* Tôn trọng người dùng giảm chuyển động */

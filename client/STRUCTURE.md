@@ -2,7 +2,9 @@
 
 Tài liệu này là **chuẩn cấu trúc** cho mọi dev làm việc trên `client/`. Mục tiêu: ai mới vào dự án cũng biết code nằm ở đâu, thêm tính năng mới đặt file vào đâu, và không phá vỡ kiến trúc. Quy tắc thiết kế giao diện xem thêm ở [DESIGN.md](./DESIGN.md).
 
-Stack: **React 18 + Vite 5 + React Router 6 + TanStack Query 5 + Axios + Tailwind CSS 3 + Motion (`motion` — Motion for React) + `lucide-react`**. Font: Inter Variable (nội dung) + Be Vietnam Pro (tiêu đề, qua `@fontsource/be-vietnam-pro`). Không dùng Redux — dữ liệu server đi qua TanStack Query, phiên đăng nhập đi qua `AuthContext`.
+Stack: **React 18 + Vite 5 + React Router 6 + TanStack Query 5 + Axios + Tailwind CSS 3 + Motion (`motion` — Motion for React) + `lucide-react`**. Font: **Inter Variable cho mọi thứ** (design system v4 — đã bỏ Be Vietnam Pro khỏi giao diện). Không dùng Redux — dữ liệu server đi qua TanStack Query, phiên đăng nhập đi qua `AuthContext`.
+
+> Phiên bản tài liệu: **v4** — cấu trúc thư mục không đổi so với v3; chỉ có design system đổi theo [DESIGN.md](./DESIGN.md) v4 (bám shadcn-admin / Untitled UI / TailAdmin + pattern HR). Các ghi chú "v3" trong tài liệu này đã được thay bằng v4.
 
 ---
 
@@ -14,7 +16,7 @@ client/
 ├── tailwind.config.js          # Design tokens cho Tailwind (màu, font, shadow, animation)
 ├── postcss.config.js
 ├── vite.config.js              # Dev server + proxy /api -> backend Flask :5000
-├── DESIGN.md                   # Tài liệu design system v3 ("Nhịp nhân sự")
+├── DESIGN.md                   # Tài liệu design system v4 (bám shadcn-admin / Untitled UI)
 ├── STRUCTURE.md                # Tài liệu này
 └── src/
     ├── main.jsx                # Điểm vào: QueryClient + AuthProvider + RouterProvider, import styles
@@ -26,11 +28,11 @@ client/
     │   ├── axiosClient.js      # Axios instance (baseURL /api/v1, gắn JWT, refresh token)
     │   └── index.js            # Barrel: export api + helper token + các API dùng chung (authApi...)
     ├── components/             # Component dùng lại trên toàn app
-    │   ├── ui/                 # UI KIT — design system v3 (xem mục 3)
-    │   ├── motion/             # Motion primitives v3 (PageTransition, StaggerList, AnimatedNumber, ProgressRing, PulseBar, CheckMotion, Drawer, ActivePill)
+    │   ├── ui/                 # UI KIT — design system v4 (xem mục 3)
+    │   ├── motion/             # Motion primitives v4, giảm liều (PageTransition, StaggerList, AnimatedNumber, ProgressRing, CheckMotion, Drawer, ActivePill; PulseBar deprecated — không dùng)
     │   └── icons.jsx           # Bộ icon SVG inline (kiểu Lucide/Feather, stroke, currentColor); icon mới ưu tiên lucide-react
     ├── layouts/
-    │   └── AppLayout.jsx       # Khung sau đăng nhập: sidebar navy + header + <Outlet/>
+    │   └── AppLayout.jsx       # Khung sau đăng nhập: sidebar TRẮNG + topbar (kiểu shadcn-admin) + <Outlet/>
     ├── features/               # Mỗi nghiệp vụ một thư mục (xem mục 4)
     │   ├── auth/          dashboard/     employees/    departments/
     │   ├── attendance/    leave/         payroll/      recruitment/
@@ -70,10 +72,10 @@ import { Button, Card, CardHeader, CardBody, Badge, Modal } from '../../componen
 | `Card`, `CardHeader`, `CardBody` | `Card.jsx` | Thẻ nội dung chuẩn (`.ui-card`). `Card` nhận `hover` để bật hiệu ứng nhấc thẻ. `CardHeader` nhận `title`, `subtitle`, `actions`. |
 | `FormField`, `Input`, `Select`, `Textarea` | `forms.jsx` | `FormField` bọc label + `hint` + `error` quanh ô nhập. Input/Select/Textarea dùng class `.ui-input/.ui-select/.ui-textarea` nên đồng nhất chiều cao/focus. |
 | `Badge` | `Badge.jsx` | Nhãn trạng thái, `tone`: `slate` \| `blue` \| `green` \| `amber` \| `red` \| `violet` \| `teal`; prop `dot` thêm chấm màu phía trước. Ánh xạ trạng thái xem DESIGN.md. |
-| `Modal` | `Modal.jsx` | Hộp thoại chuẩn: nền mờ + `animate-scale-in`, đóng bằng Esc/nút X/click nền, khóa cuộn body. Props: `open`, `title`, `subtitle`, `onClose`, `actions` (footer), `width` (mặc định `max-w-lg`). |
+| `Modal` | `Modal.jsx` | Hộp thoại chuẩn: nền mờ + mở scale .98→1/fade 160ms, đóng bằng Esc/nút X/click nền, khóa cuộn body. Props: `open`, `title`, `subtitle`, `onClose`, `actions` (footer), `width` (mặc định `max-w-lg`). |
 | `Spinner`, `Skeleton`, `TableSkeleton`, `EmptyState`, `Alert` | `feedback.jsx` | Phản hồi tải/lỗi/rỗng. Đang tải bảng dùng `TableSkeleton rows cols`; không có dữ liệu dùng `EmptyState` (icon, title, description, action); thông báo dùng `Alert tone`: `success` \| `error` \| `info` \| `warning`. |
-| `PageHeader` | `PageHeader.jsx` | Đầu trang chuẩn: `eyebrow` (nhãn nhỏ viết hoa), `title`, `subtitle`, `actions` (nhóm nút bên phải). Mọi trang trong layout đều mở đầu bằng component này. |
-| `StatCard` | `StatCard.jsx` | Thẻ số liệu dashboard: `icon`, `label`, `value`, `sub`, `tone`: `blue` \| `teal` \| `amber` \| `violet` \| `rose` \| `slate`. |
+| `PageHeader` | `PageHeader.jsx` | Đầu trang chuẩn v4: `title` (20px semibold), `subtitle` (14px gray-500), `actions` (nhóm nút bên phải, secondary trước primary sau). **Không còn `eyebrow`.** Mọi trang trong layout đều mở đầu bằng component này. |
+| `StatCard` | `StatCard.jsx` | Thẻ số liệu dashboard phẳng v4: `label` (13px gray-500), `value` (24px semibold), `sub` (13px) — chỉ hiển thị số liệu thật từ API; kèm `icon`, `tone` khi cần. |
 
 Quy tắc: **page không tự chế nút/thẻ/ô nhập bằng class rời** — luôn dùng kit ở trên hoặc class `.ui-*` trong `styles/tailwind.css` (`.ui-card`, `.ui-input`, `.ui-select`, `.ui-textarea`, `.ui-label`, `.ui-badge`, `.ui-table/.ui-th/.ui-td/.ui-tr`, `.ui-skeleton`, `.nice-scroll`).
 
@@ -109,8 +111,8 @@ Thứ tự import trong `main.jsx` là cố định, không đổi thứ tự:
 | File | Vai trò |
 |---|---|
 | `tailwind.css` | `@tailwind base/components/utilities` + định nghĩa các component class `.ui-*` trong `@layer components`. |
-| `tokens.css` | Biến CSS `:root`: màu brand/accent/navy/canvas, shadow, radius, thời lượng motion (`--motion-fast/base/slow`), màu biểu đồ Recharts (`--chart-1..5`). **Phải đồng bộ với `tailwind.config.js`** — sửa màu thì sửa cả hai nơi. |
-| `base.css` | Font Inter, nền `canvas`, màu chữ, focus-visible, thanh cuộn, và khối `@media (prefers-reduced-motion: reduce)` tắt animation toàn cục. |
+| `tokens.css` | Biến CSS `:root`: thang gray Untitled UI (ghi đè `gray` của Tailwind), màu brand, shadow, radius, thời lượng motion, màu biểu đồ Recharts (`--chart-1..5`). **Phải đồng bộ với `tailwind.config.js`** — sửa màu thì sửa cả hai nơi. |
+| `base.css` | Font Inter, nền gray-50, màu chữ, focus-visible, thanh cuộn, và khối `@media (prefers-reduced-motion: reduce)` tắt animation toàn cục. |
 | `animations.css` | Keyframes/tiện ích bổ sung ngoài config: hiệu ứng xuất hiện so le `.stagger`, các class chuyển động dùng chung. Keyframes chính (`fade-up`, `fade-in`, `scale-in`, `slide-in`, `shimmer`, `pulse-soft`) khai báo trong `tailwind.config.js`. |
 | `motion.css` | Lớp micro-interaction bổ sung (hover/press/active) gắn vào class tiện ích riêng. CSS thuần, không `@apply`. |
 
@@ -140,15 +142,14 @@ Ví dụ thêm nghiệp vụ "Hợp đồng" (`contracts`):
 
 ## 9. Quy tắc dùng màu
 
-- Chỉ dùng **palette đã định nghĩa** trong `tailwind.config.js`: `brand` (xanh doanh nghiệp — hành động chính, link, điểm nhấn chính), `navy` (sidebar/vùng tối), `accent` (teal — điểm nhấn phụ, tính năng AI), `canvas` (nền app) và thang `slate` cho chữ/viền/nền trung tính.
-- Màu khác chỉ được dùng cho **trạng thái ngữ nghĩa** qua `Badge`/`Alert` tones: xanh lá (thành công/đã duyệt), amber (chờ/xử lý/cảnh báo), rose (lỗi/từ chối/xóa), violet (trạng thái đặc biệt). Không tự nghĩ mã hex mới trong page; cần biến CSS thì dùng token trong `tokens.css` (`--chart-*` dành riêng cho biểu đồ Recharts).
-- Cấm: gradient tím/hồng, màu neon, emoji làm icon, chữ tương phản thấp (giữ tương phản ≥ 4.5:1 cho text thường).
+- Chỉ dùng **palette v4 đã định nghĩa** trong `tailwind.config.js`: thang `gray` Untitled UI (ghi đè gray của Tailwind — chữ/viền/nền trung tính, nền app gray-50, sidebar trắng) và `brand` (hành động chính brand-600, hover brand-700, nền nhấn brand-50, chữ nhấn brand-700). Thang `accent` (teal) chỉ còn dùng cho màu biểu đồ/điểm nhấn AI nhỏ. **Không dùng thang `slate` nữa.**
+- Màu khác chỉ được dùng cho **trạng thái ngữ nghĩa** qua `Badge`/`Alert` tones theo bảng hex ở DESIGN.md mục 2.3 (success/warning/error/info/neutral). Không tự nghĩ mã hex mới trong page; cần biến CSS thì dùng token trong `tokens.css` (`--chart-*` dành riêng cho biểu đồ Recharts).
+- Cấm tuyệt đối (hợp đồng v4): mọi gradient, hero band/panel tối trang trí, glassmorphism/glow, bo góc thẻ quá `rounded-xl`, shadow nổi cho thẻ (thẻ chỉ border + `shadow-card` siêu nhẹ), màu neon, emoji làm icon, chữ tương phản thấp (giữ tương phản ≥ 4.5:1 cho text thường).
 
 ## 10. Quy tắc animation
 
-- **v3: chuyển động đi qua motion primitives trong `src/components/motion/`** (xem DESIGN.md mục 5) — PageTransition, StaggerList/StaggerItem, AnimatedNumber, ProgressRing, PulseBar, CheckMotion, Drawer, ActivePill. Page/feature không tự chế hiệu ứng mới. Tương tác ≤400ms, khoảnh khắc chính mỗi màn hình ≤800ms và chỉ một.
-- Thời lượng CSS phụ trợ trong khoảng **150–450ms**: dùng token `--motion-fast` (150ms), `--motion-base` (250ms), `--motion-slow` (400ms) hoặc các animation có sẵn trong config (`animate-fade-up`, `animate-fade-in`, `animate-scale-in`, `animate-slide-in`, `animate-shimmer`, `animate-pulse-soft`) với easing `ease-spring` (`cubic-bezier(.22,1,.36,1)`).
-- Hiệu ứng phục vụ phản hồi thao tác (hover nhấc nhẹ, modal scale-in, danh sách stagger khi xuất hiện, skeleton khi tải) — không animation trang trí lặp vô hạn ngoài `shimmer`/`pulse-soft` cho trạng thái tải.
+- **v4 — giảm liều: chuyển động đi qua motion primitives trong `src/components/motion/`** (xem DESIGN.md mục 7) — PageTransition (opacity + y 4px, 150ms), StaggerList/StaggerItem (tối đa 6 phần tử đầu, step 25ms), AnimatedNumber, ProgressRing, CheckMotion, Drawer (200ms ease-out), ActivePill. **`PulseBar` deprecated — không trang nào được dùng.** Page/feature không tự chế hiệu ứng mới.
+- Modal mở scale .98→1 + fade **160ms**; chuyển động chỉ đáp lại hành động của người dùng hoặc báo thay đổi dữ liệu — không "khoảnh khắc trình diễn", không hiệu ứng trang trí lặp vô hạn (shimmer chỉ còn trong Skeleton khi tải).
 - **Bắt buộc tôn trọng `prefers-reduced-motion`**: `base.css` đã tắt animation/transition toàn cục khi người dùng bật tùy chọn này — không ghi đè bằng `!important` hay inline style trong page.
-- Chuyển trang/mod
+- Chuyển trang/modal/drawer đều đi qua primitives ở trên; nếu một thao tác không cần chuyển động để người dùng hiểu chuyện gì vừa xảy ra thì để tĩnh.
 ...[truncated 2600 chars]

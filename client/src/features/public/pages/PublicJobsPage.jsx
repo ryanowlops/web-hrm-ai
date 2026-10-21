@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
 import { listOpenJobs, getPublicJob, applyToJob, friendlyError } from '../services';
 import {
   Alert,
@@ -12,7 +11,7 @@ import {
   Modal,
   Skeleton,
 } from '../../../components/ui';
-import { PulseBar, StaggerList, StaggerItem } from '../../../components/motion';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 
 /**
  * Trang Tuyển dụng CÔNG KHAI (route /jobs) — khách chưa đăng nhập (FR-08).
@@ -22,8 +21,9 @@ import { PulseBar, StaggerList, StaggerItem } from '../../../components/motion';
  *   validate kỹ tại client và hiển thị lỗi theo từng trường; backend vẫn
  *   kiểm tra lại độc lập. Kết quả thành công/lỗi đều thông báo rõ ràng.
  *
- * Trình bày: design system v2 (Tailwind + UI kit) — hero navy, thẻ vị trí
- * dùng Card/Badge, chi tiết + form ứng tuyển trong Modal/Card chuẩn.
+ * Trình bày: design v4 (careers kiểu Personio) — nền trắng, header border-b,
+ * thẻ vị trí border gray-200 phẳng dùng Card/Badge, chi tiết + form ứng
+ * tuyển trong Modal/Card chuẩn.
  */
 
 const CV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -50,14 +50,6 @@ function departmentName(job) {
 
 const emptyForm = { fullName: '', email: '', phone: '' };
 
-// Hành trình ứng tuyển — mốc cho PulseBar ở hero (chỉ trình bày).
-const APPLY_PULSE_MILESTONES = [
-  { at: 0.04, label: 'Nộp CV', done: true },
-  { at: 0.36, label: 'Sàng lọc', done: true },
-  { at: 0.66, label: 'Phỏng vấn', done: false },
-  { at: 0.94, label: 'Nhận việc', done: false },
-];
-
 /* ------------------------------- Icon dùng chung ------------------------------ */
 function BriefcaseIcon({ className = 'h-5 w-5' }) {
   return (
@@ -77,8 +69,25 @@ function SearchIcon({ className = 'h-5 w-5' }) {
   );
 }
 
+function BuildingIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="4" y="3.5" width="16" height="17" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 8h2m2 0h2M9 12h2m2 0h2M9 16h2m2 0h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function UsersIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="9" cy="8.5" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5M16 5.6a3.5 3.5 0 0 1 0 5.8m1.2 3.9c1.9.6 3 1.9 3.3 4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function PublicJobsPage() {
-  const reduce = useReducedMotion();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -227,24 +236,24 @@ export default function PublicJobsPage() {
   const cvInvalid = Boolean(fieldErrors.cv);
 
   return (
-    <div className="min-h-screen bg-canvas font-sans text-slate-800 antialiased">
-      {/* ------------------------------- Topbar ------------------------------- */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur-md">
+    <div className="min-h-screen bg-white font-sans text-gray-800 antialiased">
+      {/* ------------------------------- Header ------------------------------- */}
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-5 py-3 lg:px-8">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-sm font-extrabold tracking-wide text-white shadow-lift"
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-white"
             >
-              HR
+              H
             </span>
-            <span className="font-display text-[17px] font-bold tracking-[-0.01em] text-slate-900">
-              HRM AI <span className="font-medium text-slate-400">· Tuyển dụng</span>
+            <span className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900">
+              HRM AI <span className="font-normal text-gray-400">· Tuyển dụng</span>
             </span>
           </div>
           <a
             href="/login"
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:text-brand-800"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
             Đăng nhập nội bộ
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -254,57 +263,34 @@ export default function PublicJobsPage() {
         </div>
       </header>
 
-      {/* -------------------------------- Hero -------------------------------- */}
-      <section className="relative overflow-hidden bg-navy-950">
-        <div className="absolute inset-0 bg-gradient-to-br from-navy-950 via-navy-900 to-brand-900" aria-hidden="true" />
-        <div className="absolute -right-28 -top-28 h-80 w-80 rounded-full bg-brand-500/25 blur-3xl" aria-hidden="true" />
-        <div className="absolute -bottom-36 -left-20 h-72 w-72 rounded-full bg-accent-500/20 blur-3xl" aria-hidden="true" />
-        <div
-          className="absolute right-[16%] top-10 hidden h-40 w-40 rounded-full border border-white/10 lg:block"
-          aria-hidden="true"
-        />
-        <div className="relative mx-auto w-full max-w-[1200px] px-5 pb-14 pt-14 lg:px-8 lg:pb-16 lg:pt-[4.5rem]">
-          <motion.div
-            initial={reduce ? false : { opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={reduce ? { duration: 0 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <Badge tone="teal" dot className="bg-white/10 text-accent-300 ring-white/20">
-              Đang tuyển dụng
-            </Badge>
-            <h1 className="font-display mt-5 max-w-2xl text-4xl font-extrabold leading-[1.12] tracking-[-0.02em] text-white lg:text-[2.75rem]">
-              Cơ hội nghề nghiệp đang mở
-            </h1>
-            <p className="mt-4 max-w-2xl leading-relaxed text-slate-300">
-              Xem các vị trí đang tuyển và nộp CV trực tiếp tại đây. Hồ sơ của bạn sẽ được đội ngũ
-              HR xem xét — hệ thống có hỗ trợ AI phân tích mức phù hợp, nhưng quyết định cuối cùng
-              luôn do con người đưa ra.
-            </p>
-            <div className="mt-8 flex max-w-xl items-center gap-2 rounded-2xl bg-white p-2 pl-4 shadow-pop ring-1 ring-white/40 transition focus-within:ring-4 focus-within:ring-accent-400/50">
-              <SearchIcon className="h-5 w-5 shrink-0 text-slate-400" />
-              <label className="sr-only" htmlFor="pj-keyword">Tìm vị trí tuyển dụng</label>
-              <input
-                id="pj-keyword"
-                type="search"
-                placeholder="Tìm theo tên vị trí, phòng ban…"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="w-full min-w-0 bg-transparent py-2 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none"
-              />
-            </div>
-            {/* Khoảnh khắc lớn duy nhất của trang: đường nhịp hành trình ứng tuyển vẽ một lần khi tải (800ms) */}
-            <div className="mt-10 max-w-2xl" aria-hidden="true">
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                Hành trình ứng tuyển
-              </p>
-              <PulseBar value={52} milestones={APPLY_PULSE_MILESTONES} />
-            </div>
-          </motion.div>
+      {/* ---------------------------- Vùng đầu trang ---------------------------- */}
+      <section className="border-b border-gray-200 bg-white">
+        <div className="mx-auto w-full max-w-[1200px] px-5 pb-8 pt-10 lg:px-8 lg:pt-12">
+          <h1 className="max-w-2xl text-[30px] font-semibold leading-[1.2] tracking-[-0.01em] text-gray-900">
+            Cơ hội nghề nghiệp đang mở
+          </h1>
+          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-gray-500">
+            Xem các vị trí đang tuyển và nộp CV trực tiếp tại đây. Hồ sơ của bạn sẽ được đội ngũ
+            HR xem xét — hệ thống có hỗ trợ AI phân tích mức phù hợp, nhưng quyết định cuối cùng
+            luôn do con người đưa ra.
+          </p>
+          <div className="mt-6 flex h-12 max-w-xl items-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition focus-within:border-brand-600 focus-within:ring-4 focus-within:ring-brand-600/15">
+            <SearchIcon className="h-5 w-5 shrink-0 text-gray-400" />
+            <label className="sr-only" htmlFor="pj-keyword">Tìm vị trí tuyển dụng</label>
+            <input
+              id="pj-keyword"
+              type="search"
+              placeholder="Tìm theo tên vị trí, phòng ban…"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="w-full min-w-0 bg-transparent text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none"
+            />
+          </div>
         </div>
       </section>
 
       {/* ------------------------------ Danh sách ------------------------------ */}
-      <main className="mx-auto w-full max-w-[1200px] px-5 py-10 lg:px-8 lg:py-12">
+      <main className="mx-auto w-full max-w-[1200px] px-5 py-8 lg:px-8 lg:py-10">
         {loadError && (
           <Alert tone="error" className="mb-6">
             {loadError}
@@ -312,7 +298,7 @@ export default function PublicJobsPage() {
         )}
 
         {!loading && !loadError && (
-          <p className="mb-5 text-sm font-medium text-slate-500" role="status">
+          <p className="mb-5 text-sm text-gray-500" role="status">
             {visibleJobs.length > 0
               ? `Đang hiển thị ${visibleJobs.length} vị trí đang tuyển`
               : 'Không có vị trí nào khớp với tìm kiếm'}
@@ -344,7 +330,6 @@ export default function PublicJobsPage() {
               return (
                 <StaggerItem key={job.id} index={idx} className="h-full">
                 <Card
-                  hover
                   onClick={() => openJob(job)}
                   tabIndex={0}
                   role="button"
@@ -355,27 +340,32 @@ export default function PublicJobsPage() {
                       openJob(job);
                     }
                   }}
-                  className="group flex h-full cursor-pointer flex-col gap-3.5 p-5 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/30 sm:p-6"
+                  className="group flex h-full cursor-pointer flex-col gap-3 p-5 transition-colors hover:border-brand-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100 transition group-hover:bg-brand-100">
-                      <BriefcaseIcon />
-                    </span>
-                    <Badge tone={expired ? 'red' : 'green'} dot>
+                    <h2 className="text-base font-semibold leading-snug tracking-[-0.01em] text-gray-900 transition-colors group-hover:text-brand-700">
+                      {job.title}
+                    </h2>
+                    <Badge tone={expired ? 'red' : 'green'} dot className="shrink-0">
                       {expired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(job.deadline)}`}
                     </Badge>
                   </div>
-                  <h2 className="font-display text-lg font-bold leading-snug tracking-[-0.01em] text-slate-900 transition-colors group-hover:text-brand-700">
-                    {job.title}
-                  </h2>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge tone="slate">{departmentName(job)}</Badge>
-                    {job.quantity ? <Badge tone="blue">Tuyển {job.quantity} người</Badge> : null}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-gray-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <BuildingIcon className="h-4 w-4 text-gray-400" />
+                      {departmentName(job)}
+                    </span>
+                    {job.quantity ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <UsersIcon className="h-4 w-4 text-gray-400" />
+                        Tuyển {job.quantity} người
+                      </span>
+                    ) : null}
                   </div>
                   {job.description && (
-                    <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{job.description}</p>
+                    <p className="line-clamp-3 text-sm leading-relaxed text-gray-500">{job.description}</p>
                   )}
-                  <div className="mt-auto inline-flex items-center gap-1.5 pt-1 text-sm font-bold text-brand-700">
+                  <div className="mt-auto inline-flex items-center gap-1.5 pt-1 text-sm font-medium text-brand-700">
                     Xem chi tiết & ứng tuyển
                     <span aria-hidden="true" className="inline-block transition-transform duration-200 group-hover:translate-x-1">
                       →
@@ -389,37 +379,45 @@ export default function PublicJobsPage() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200/80 px-6 py-6 text-center text-xs leading-relaxed text-slate-400">
+      <footer className="border-t border-gray-200/80 px-6 py-6 text-center text-xs leading-relaxed text-gray-400">
         Mọi hồ sơ ứng tuyển được bảo mật và chỉ dùng cho mục đích tuyển dụng của công ty.
       </footer>
 
       {/* --------------------------- Modal chi tiết + ứng tuyển --------------------------- */}
       {selected && (
         <Modal open title={selected.title} onClose={closeJob} width="max-w-3xl">
-          <div className="flex flex-wrap gap-1.5">
-            <Badge tone="slate">{departmentName(selected)}</Badge>
-            {selected.quantity ? <Badge tone="blue">Tuyển {selected.quantity} người</Badge> : null}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-500">
+              <BuildingIcon className="h-4 w-4 text-gray-400" />
+              {departmentName(selected)}
+            </span>
+            {selected.quantity ? (
+              <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-500">
+                <UsersIcon className="h-4 w-4 text-gray-400" />
+                Tuyển {selected.quantity} người
+              </span>
+            ) : null}
             <Badge tone={selectedExpired ? 'red' : 'green'} dot>
               {selectedExpired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(selected.deadline)}`}
             </Badge>
           </div>
 
           {detailLoading && (
-            <p className="mt-4 text-sm text-slate-400">Đang tải mô tả đầy đủ…</p>
+            <p className="mt-4 text-sm text-gray-400">Đang tải mô tả đầy đủ…</p>
           )}
 
           {selected.description && (
             <>
-              <h3 className="mb-2 mt-6 text-[15px] font-bold text-slate-900">Mô tả công việc</h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere]">
+              <h3 className="mb-2 mt-6 text-[15px] font-semibold text-gray-900">Mô tả công việc</h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 [overflow-wrap:anywhere]">
                 {selected.description}
               </p>
             </>
           )}
           {selected.requirements && (
             <>
-              <h3 className="mb-2 mt-6 text-[15px] font-bold text-slate-900">Yêu cầu ứng viên</h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere]">
+              <h3 className="mb-2 mt-6 text-[15px] font-semibold text-gray-900">Yêu cầu ứng viên</h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 [overflow-wrap:anywhere]">
                 {selected.requirements}
               </p>
             </>
@@ -429,13 +427,13 @@ export default function PublicJobsPage() {
             <Alert tone="success" className="mt-8 px-6 py-8 text-center">
               <div
                 aria-hidden="true"
-                className="mx-auto mb-4 flex h-16 w-16 animate-scale-in items-center justify-center rounded-full bg-emerald-500 text-white shadow-lift"
+                className="mx-auto mb-4 flex h-16 w-16 animate-scale-in items-center justify-center rounded-full bg-emerald-500 text-white"
               >
                 <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none">
                   <path d="m4.5 12.5 5 5 10-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-emerald-900">Nộp hồ sơ thành công!</h3>
+              <h3 className="text-lg font-semibold text-emerald-900">Nộp hồ sơ thành công!</h3>
               <p className="mx-auto mb-5 mt-2 max-w-md text-sm font-normal leading-relaxed text-emerald-800/80">
                 Cảm ơn bạn đã ứng tuyển vị trí <strong>{selected.title}</strong>. Đội ngũ HR sẽ
                 xem xét hồ sơ và liên hệ qua email/số điện thoại bạn đã cung cấp nếu phù hợp.
@@ -445,9 +443,9 @@ export default function PublicJobsPage() {
               </Button>
             </Alert>
           ) : (
-            <Card className="mt-8 bg-slate-50/70 p-5 shadow-none sm:p-6">
+            <Card className="mt-8 bg-gray-50 p-5 shadow-none sm:p-6">
               <form onSubmit={handleSubmit} noValidate>
-                <h3 className="mb-5 text-base font-bold text-slate-900">Ứng tuyển vị trí này</h3>
+                <h3 className="mb-5 text-base font-semibold text-gray-900">Ứng tuyển vị trí này</h3>
 
                 {submitError && (
                   <Alert tone="error" className="mb-4">
@@ -522,8 +520,8 @@ export default function PublicJobsPage() {
                         cvInvalid
                           ? 'border-rose-300 bg-rose-50/60 hover:border-rose-400'
                           : dragOver
-                            ? 'border-brand-500 bg-brand-50 shadow-glow'
-                            : 'border-slate-300 bg-white hover:border-brand-400 hover:bg-brand-50/60'
+                            ? 'border-brand-500 bg-brand-50'
+                            : 'border-gray-300 bg-white hover:border-brand-400 hover:bg-brand-50/60'
                       }`}
                     >
                       <span
@@ -545,10 +543,10 @@ export default function PublicJobsPage() {
                           />
                         </svg>
                       </span>
-                      <span className="max-w-full truncate text-sm font-semibold text-slate-700">
+                      <span className="max-w-full truncate text-sm font-semibold text-gray-700">
                         {cvFile ? cvFile.name : 'Kéo thả file CV vào đây hoặc bấm để chọn file'}
                       </span>
-                      <span className="text-xs text-slate-400">Chỉ nhận file PDF, dung lượng tối đa 5 MB</span>
+                      <span className="text-xs text-gray-400">Chỉ nhận file PDF, dung lượng tối đa 5 MB</span>
                     </label>
                     <input
                       id="pj-cv"
@@ -575,7 +573,7 @@ export default function PublicJobsPage() {
                       ? 'Đang gửi hồ sơ…'
                       : 'Nộp hồ sơ ứng tuyển'}
                 </Button>
-                <p className="mt-3 text-center text-xs leading-relaxed text-slate-400">
+                <p className="mt-3 text-center text-xs leading-relaxed text-gray-400">
                   Bằng việc nộp hồ sơ, bạn đồng ý để công ty lưu trữ và xử lý thông tin cho mục
                   đích tuyển dụng vị trí này.
                 </p>

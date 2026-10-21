@@ -5,9 +5,9 @@ import {
 } from '../services';
 import {
   Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState,
-  FormField, Input, PageHeader, Select, Skeleton, TableSkeleton, Textarea,
+  FormField, Input, PageHeader, Select, Skeleton, StatCard, TableSkeleton, Textarea,
 } from '../../../components/ui';
-import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 
 /* ---------- Helpers ---------- */
 
@@ -66,35 +66,24 @@ function MonthNav({ cursor, onChange }) {
   return (
     <div className="flex items-center gap-2">
       <Button type="button" variant="secondary" size="sm" onClick={() => shift(-1)} aria-label="Tháng trước">←</Button>
-      <span className="min-w-28 text-center text-sm font-bold text-slate-800">Tháng {cursor.month}/{cursor.year}</span>
+      <span className="min-w-28 text-center text-sm font-semibold text-gray-800">Tháng {cursor.month}/{cursor.year}</span>
       <Button type="button" variant="secondary" size="sm" onClick={() => shift(1)} aria-label="Tháng sau">→</Button>
     </div>
   );
 }
 
-/* Thẻ số dư phép thu gọn: số ngày còn lại + thanh tiến độ đã dùng. */
+/* Thẻ số dư phép phẳng theo StatCard của UI kit: số ngày còn lại là giá trị
+   chính, dòng phụ ghi đã dùng / tổng số ngày của loại nghỉ. */
 function BalanceCard({ balance: b }) {
   const total = b.total_days ?? 0;
   const used = b.used_days ?? 0;
   const remaining = b.remaining_days ?? Math.max(total - used, 0);
-  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
   return (
-    <div className="ui-card ui-card-hover p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[13px] font-semibold text-slate-500">{b.leave_type_name || b.name}</p>
-        <p className="text-xs font-medium text-slate-400">Đã dùng {used} ngày</p>
-      </div>
-      <p className="mt-1.5 text-[26px] font-extrabold leading-none tracking-[-0.02em] text-slate-900">
-        <AnimatedNumber value={remaining} />
-        <span className="ml-1.5 text-[13px] font-semibold text-slate-400">/ {total} ngày còn lại</span>
-      </p>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-[width] duration-700 ease-spring"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
+    <StatCard
+      label={b.leave_type_name || b.name}
+      value={remaining}
+      sub={`ngày còn lại · Đã dùng ${used} / ${total} ngày`}
+    />
   );
 }
 
@@ -242,12 +231,21 @@ export default function LeavePage() {
 
   const todayISO = toISODate(new Date());
 
+  // Nút hành động ở PageHeader: cuộn tới biểu mẫu tạo đơn (chỉ trình bày).
+  const scrollToForm = () => {
+    document.getElementById('tao-don-nghi')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="page-shell">
       <PageHeader
-        eyebrow="Quản lý thời gian"
         title="Nghỉ phép"
         subtitle="Đơn nghỉ được duyệt 2 cấp: Quản lý trực tiếp → HR. Số dư phép cập nhật ngay khi HR duyệt."
+        actions={(
+          <Button type="button" variant="primary" onClick={scrollToForm}>
+            Tạo đơn nghỉ
+          </Button>
+        )}
       />
 
       {(error || notice) && (
@@ -260,7 +258,7 @@ export default function LeavePage() {
       <div className="grid items-start gap-6 lg:grid-cols-5">
         {/* === Cột trái: tạo đơn + số dư phép === */}
         <div className="space-y-6 lg:col-span-2">
-          <Card className="animate-fade-up">
+          <Card id="tao-don-nghi">
             <CardHeader title="Tạo đơn nghỉ mới" subtitle="Điền thông tin bên dưới để gửi đơn xin nghỉ." />
             <CardBody>
               <form onSubmit={submit} className="space-y-4" noValidate>
@@ -283,7 +281,7 @@ export default function LeavePage() {
                   </FormField>
                 </div>
                 {formDays > 0 && (
-                  <p className="animate-fade-in rounded-xl bg-brand-50 px-3.5 py-2.5 text-sm font-medium text-brand-700 ring-1 ring-inset ring-brand-100">
+                  <p className="rounded-lg bg-brand-50 px-3.5 py-2.5 text-sm font-medium text-brand-700">
                     Số ngày làm việc xin nghỉ: <b>{formDays}</b> ngày
                   </p>
                 )}
@@ -294,14 +292,14 @@ export default function LeavePage() {
                 <Button type="submit" variant="primary" loading={submitting} className="w-full">
                   {submitting ? 'Đang gửi…' : 'Gửi đơn nghỉ'}
                 </Button>
-                <p className="text-xs leading-relaxed text-slate-400">Đơn trùng ngày với đơn đang chờ/đã duyệt sẽ bị server từ chối.</p>
+                <p className="text-xs leading-relaxed text-gray-400">Đơn trùng ngày với đơn đang chờ/đã duyệt sẽ bị server từ chối.</p>
               </form>
             </CardBody>
           </Card>
 
-          {/* === Số dư phép của tôi (StatCard thu gọn) === */}
-          <div className="animate-fade-up" style={{ animationDelay: '70ms' }}>
-            <h3 className="font-display mb-3 text-sm font-bold tracking-[-0.01em] text-slate-800">Số dư phép năm {year} của tôi</h3>
+          {/* === Số dư phép của tôi (StatCard phẳng) === */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">Số dư phép năm {year} của tôi</h3>
             {balances.length === 0 ? (
               <div className="ui-card">
                 <EmptyState
@@ -322,7 +320,7 @@ export default function LeavePage() {
         </div>
 
         {/* === Cột phải: đơn của tôi === */}
-        <Card className="animate-fade-up lg:col-span-3" style={{ animationDelay: '120ms' }}>
+        <Card className="lg:col-span-3">
           <CardHeader
             title="Đơn nghỉ của tôi"
             subtitle="Theo dõi trạng thái duyệt 2 cấp của các đơn đã gửi."
@@ -346,21 +344,21 @@ export default function LeavePage() {
                   <tbody>
                     {myRequests.map((r) => (
                       <tr key={r.id} className="ui-tr">
-                        <td className="ui-td font-semibold text-slate-800">{r.leave_type_name || r.leave_type?.name || '—'}</td>
+                        <td className="ui-td font-medium text-gray-900">{r.leave_type_name || r.leave_type?.name || '—'}</td>
                         <td className="ui-td whitespace-nowrap">
                           {fmtDate(r.from_date)} → {fmtDate(r.to_date)}
-                          <p className="mt-0.5 max-w-56 truncate text-xs text-slate-400" title={r.reason}>{r.reason}</p>
+                          <p className="mt-0.5 max-w-56 truncate text-xs text-gray-400" title={r.reason}>{r.reason}</p>
                         </td>
-                        <td className="ui-td text-center font-semibold text-slate-800">{r.days_count ?? '—'}</td>
+                        <td className="ui-td tnum text-center font-medium text-gray-900">{r.days_count ?? '—'}</td>
                         <td className="ui-td">
                           <StatusBadge status={r.status} />
                           {r.status === 'rejected' && (r.hr_decision || r.manager_decision) && (
-                            <p className="mt-1.5 text-xs font-medium text-rose-500">Lý do: {r.hr_decision || r.manager_decision}</p>)}
+                            <p className="mt-1.5 text-xs font-medium text-[#B42318]">Lý do: {r.hr_decision || r.manager_decision}</p>)}
                         </td>
                         <td className="ui-td text-right">
                           {['pending', 'manager_approved'].includes(r.status) && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => cancel(r.id)}
-                              className="text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50 hover:text-rose-700">
+                              className="text-[#B42318] ring-1 ring-inset ring-[#FDA29B] hover:bg-[#FEF3F2] hover:text-[#B42318]">
                               Huỷ đơn
                             </Button>)}
                         </td>
@@ -375,10 +373,7 @@ export default function LeavePage() {
 
       {/* === Khu vực duyệt đơn === */}
       {isApprover && (
-        <Card
-          className="mt-6 animate-fade-up border-amber-200/90 bg-gradient-to-b from-amber-50/70 via-white to-white"
-          style={{ animationDelay: '160ms' }}
-        >
+        <Card className="mt-6">
           <CardHeader
             title={`Đơn chờ tôi duyệt ${user?.role === 'manager' ? '(cấp quản lý — phòng của tôi)' : '(cấp HR — duyệt cuối)'}`}
             subtitle="Danh sách do server lọc theo cấp duyệt và phạm vi phòng ban của bạn."
@@ -396,32 +391,32 @@ export default function LeavePage() {
               <StaggerList className="space-y-3">
               {pending.map((r, i) => (
                 <StaggerItem key={r.id} index={i}>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card transition duration-300 ease-spring hover:shadow-lift">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-800">
+                      <p className="font-medium text-gray-900">
                         {r.employee_name || r.employee?.full_name}
-                        <span className="ml-2 text-sm font-normal text-slate-400">{r.department_name || r.employee?.department_name || ''}</span>
+                        <span className="ml-2 text-sm font-normal text-gray-400">{r.department_name || r.employee?.department_name || ''}</span>
                       </p>
-                      <p className="mt-0.5 text-sm text-slate-600">
+                      <p className="mt-0.5 text-sm text-gray-600">
                         {r.leave_type_name || ''} · {fmtDate(r.from_date)} → {fmtDate(r.to_date)} · {r.days_count ?? '—'} ngày
                       </p>
-                      <p className="mt-1 text-sm leading-relaxed text-slate-500">Lý do: {r.reason}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-gray-500">Lý do: {r.reason}</p>
                       <div className="mt-2"><StatusBadge status={r.status} /></div>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <Button type="button" variant="accent" size="sm" loading={decidingId === r.id} onClick={() => decide(r.id, 'approve')}>
+                      <Button type="button" variant="primary" size="sm" loading={decidingId === r.id} onClick={() => decide(r.id, 'approve')}>
                         Duyệt
                       </Button>
                       <Button type="button" variant="ghost" size="sm" disabled={decidingId === r.id}
                         onClick={() => { setRejectingId(rejectingId === r.id ? null : r.id); setRejectReason(''); }}
-                        className="text-rose-600 ring-1 ring-inset ring-rose-300/70 hover:bg-rose-50 hover:text-rose-700">
+                        className="text-[#B42318] ring-1 ring-inset ring-[#FDA29B] hover:bg-[#FEF3F2] hover:text-[#B42318]">
                         Từ chối
                       </Button>
                     </div>
                   </div>
                   {rejectingId === r.id && (
-                    <div className="mt-3 flex animate-scale-in flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
                         placeholder="Nhập lý do từ chối (bắt buộc)" className="min-w-64 flex-1" />
                       <Button type="button" variant="danger" size="sm" loading={decidingId === r.id} onClick={() => decide(r.id, 'reject')}>
@@ -439,39 +434,39 @@ export default function LeavePage() {
       )}
 
       {/* === Lịch nghỉ tháng === */}
-      <Card className="mt-6 animate-fade-up" style={{ animationDelay: '200ms' }}>
+      <Card className="mt-6">
         <CardHeader
           title="Lịch nghỉ đã duyệt trong tháng"
           subtitle="Tổng quan ngày nghỉ đã duyệt của toàn công ty."
           actions={<MonthNav cursor={cursor} onChange={setCursor} />}
         />
         <CardBody>
-          <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+          <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-medium text-gray-500">
             {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => <div key={d} className="py-1">{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-1.5">
             {calendarCells.map((cell, i) => (
               <div
                 key={i}
-                className={`min-h-[76px] rounded-xl p-1.5 text-left transition-colors duration-200 ${
+                className={`min-h-[76px] rounded-lg p-1.5 text-left transition-colors ${
                   !cell
                     ? 'bg-transparent'
                     : cell.iso === todayISO
-                      ? 'border border-brand-300 bg-brand-50/70 ring-1 ring-brand-200'
-                      : 'border border-slate-100 bg-slate-50/60 hover:bg-slate-50'
+                      ? 'border border-brand-300 bg-brand-50'
+                      : 'border border-gray-100 bg-gray-50 hover:bg-gray-100'
                 }`}
               >
                 {cell && (
                   <>
-                    <p className={`text-xs font-bold ${cell.iso === todayISO ? 'text-brand-700' : 'text-slate-500'}`}>{cell.day}</p>
+                    <p className={`text-xs font-semibold ${cell.iso === todayISO ? 'text-brand-700' : 'text-gray-500'}`}>{cell.day}</p>
                     <div className="mt-1 space-y-1">
                       {cell.leaves.slice(0, 3).map((lv) => (
                         <p key={lv.id} title={`${lv.employee_name} — ${lv.leave_type_name || ''}`}
-                          className="truncate rounded-md bg-accent-50 px-1.5 py-0.5 text-[11px] font-medium text-accent-700 ring-1 ring-inset ring-accent-600/15">
+                          className="truncate rounded-md bg-accent-50 px-1.5 py-0.5 text-[11px] font-medium text-accent-700">
                           {lv.employee_name}
                         </p>
                       ))}
-                      {cell.leaves.length > 3 && <p className="px-1 text-[11px] font-medium text-slate-400">+{cell.leaves.length - 3} người nữa</p>}
+                      {cell.leaves.length > 3 && <p className="px-1 text-[11px] font-medium text-gray-400">+{cell.leaves.length - 3} người nữa</p>}
                     </div>
                   </>
                 )}

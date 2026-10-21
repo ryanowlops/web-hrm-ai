@@ -84,20 +84,20 @@ function daysUntil(dateStr) {
 
 // Class bổ sung khi ô nhập có lỗi (đè viền/focus của .ui-input).
 const errCls = (hasError) =>
-  hasError ? 'border-rose-400 hover:border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : '';
+  hasError ? 'border-red-400 hover:border-red-400 focus:border-red-500 focus:ring-red-500/15' : '';
 
 // Nhãn có dấu * cho trường bắt buộc (giữ đúng cách hiển thị cũ).
 const reqLabel = (text) => (
   <>
-    {text} <span className="text-rose-500">*</span>
+    {text} <span className="text-red-500">*</span>
   </>
 );
 
 function InfoRow({ label, children }) {
   return (
     <div>
-      <dt className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold leading-relaxed text-slate-800">{children || '—'}</dd>
+      <dt className="text-[13px] text-gray-500">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium leading-relaxed text-gray-900">{children || '—'}</dd>
     </div>
   );
 }
@@ -412,7 +412,7 @@ export default function EmployeeDetailPage() {
       <div className="page-shell" aria-busy="true">
         <Skeleton className="h-5 w-44" />
         <div className="ui-card mt-5 flex items-center gap-5 px-6 py-6">
-          <Skeleton className="h-20 w-20 shrink-0 rounded-[22px]" />
+          <Skeleton className="h-20 w-20 shrink-0 rounded-full" />
           <div className="w-full max-w-md space-y-3">
             <Skeleton className="h-7 w-2/3" />
             <Skeleton className="h-4 w-1/2" />
@@ -445,7 +445,7 @@ export default function EmployeeDetailPage() {
   if (error || !employee) {
     return (
       <div className="page-shell">
-        <Link to="/employees" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 transition hover:text-brand-700">← Quay lại danh sách nhân viên</Link>
+        <Link to="/employees" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 transition hover:text-brand-700">← Quay lại danh sách nhân viên</Link>
         <Alert tone="error" className="mt-5">{error || 'Không tải được hồ sơ nhân viên.'}</Alert>
       </div>
     );
@@ -455,35 +455,34 @@ export default function EmployeeDetailPage() {
 
   return (
     <div className="page-shell">
-      <Link to="/employees" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 transition hover:text-brand-700">← Danh sách nhân viên</Link>
+      <Link to="/employees" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 transition hover:text-brand-700">← Danh sách nhân viên</Link>
 
       {/* Header hồ sơ */}
       <Card className="mt-4">
-        <CardBody className="px-6 py-6">
+        <CardBody className="px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-wrap items-center gap-5">
+            <div className="flex min-w-0 flex-wrap items-center gap-4">
               {employee.avatar_url ? (
                 <img
                   src={employee.avatar_url}
                   alt={employee.full_name}
-                  className="h-20 w-20 shrink-0 rounded-[22px] object-cover shadow-card ring-1 ring-slate-200"
+                  className="h-20 w-20 shrink-0 rounded-full border border-gray-200 object-cover"
                 />
               ) : (
-                <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[22px] bg-gradient-to-br from-brand-500 via-brand-600 to-navy-800 text-[26px] font-extrabold tracking-wide text-white shadow-lift ring-1 ring-brand-700/30">
+                <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xl font-semibold text-white">
                   {initials}
                 </span>
               )}
               <div className="min-w-0">
-                <h1 className="font-display truncate text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+                <h1 className="truncate text-xl font-semibold leading-tight tracking-[-0.01em] text-gray-900">
                   {employee.full_name}
                 </h1>
-                <p className="mt-1 text-sm font-medium text-slate-500">{employee.code} · {posTitle} · {deptName}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <p className="mt-1 text-sm text-gray-500">{posTitle} · {deptName}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">Mã nhân viên: {employee.code}</p>
+                <div className="mt-2.5">
                   <Badge tone={STATUS_TONE[employee.status] || 'slate'} dot>
                     {STATUS_LABEL[employee.status] || employee.status}
                   </Badge>
-                  <Badge tone="blue">{deptName}</Badge>
-                  <Badge tone="slate">{posTitle}</Badge>
                 </div>
               </div>
             </div>
@@ -507,7 +506,7 @@ export default function EmployeeDetailPage() {
             type="button"
             onClick={() => setNotice('')}
             aria-label="Đóng thông báo"
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-emerald-600 transition hover:bg-emerald-100 hover:text-emerald-800"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-green-700 transition hover:bg-green-100"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" />
@@ -605,7 +604,7 @@ export default function EmployeeDetailPage() {
                   const expired = left !== null && left < 0;
                   return (
                     <tr key={c.id} className="ui-tr">
-                      <td className="ui-td font-semibold text-slate-800">{CONTRACT_TYPE_LABEL[c.contract_type] || c.contract_type}</td>
+                      <td className="ui-td font-medium text-gray-900">{CONTRACT_TYPE_LABEL[c.contract_type] || c.contract_type}</td>
                       <td className="ui-td">{formatDate(c.start_date)}</td>
                       <td className="ui-td">
                         <span className="inline-flex flex-wrap items-center gap-2">
@@ -614,7 +613,7 @@ export default function EmployeeDetailPage() {
                           {expired && <Badge tone="red">Đã hết hạn</Badge>}
                         </span>
                       </td>
-                      <td className="ui-td font-semibold tabular-nums text-slate-800">{formatMoney(c.base_salary)}</td>
+                      <td className="ui-td font-medium tabular-nums text-gray-900">{formatMoney(c.base_salary)}</td>
                       <td className="ui-td tabular-nums">{formatMoney(c.allowance)}</td>
                       <td className="ui-td">
                         <Badge tone={CONTRACT_STATUS_TONE[c.status] || 'slate'}>

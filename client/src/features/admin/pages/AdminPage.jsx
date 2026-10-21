@@ -22,7 +22,7 @@ import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/mo
  * - HR: chỉ xem được trong giới hạn backend trả về — mọi thao tác sửa đều do
  *   backend kiểm tra quyền lại; nếu backend từ chối (403), trang báo rõ.
  * Mọi thay đổi đều hỏi xác nhận trước (hộp thoại xác nhận) và hiển thị kết quả
- * thành công/lỗi. Trình bày theo design system v2 (UI kit dùng chung).
+ * thành công/lỗi. Trình bày theo design system v4 (UI kit dùng chung, phẳng).
  */
 
 const ROLES = [
@@ -199,7 +199,6 @@ export default function AdminPage() {
   return (
     <div className="page-shell">
       <PageHeader
-        eyebrow="Hệ thống"
         title="Quản trị tài khoản"
         subtitle="Quản lý tài khoản đăng nhập hệ thống: đổi vai trò và khoá/mở khoá tài khoản. Phân quyền được kiểm tra ở máy chủ — quản trị viên (Admin) thao tác được toàn bộ, HR chỉ xem trong giới hạn được cấp."
       />
@@ -212,7 +211,7 @@ export default function AdminPage() {
       )}
 
       {forbidden ? (
-        <Card className="animate-fade-up">
+        <Card>
           <EmptyState
             icon={LockIcon}
             title="Bạn không có quyền xem danh sách tài khoản"
@@ -221,7 +220,7 @@ export default function AdminPage() {
         </Card>
       ) : (
         <>
-          <Card className="animate-fade-up overflow-hidden">
+          <Card className="overflow-hidden">
             <CardHeader
               title="Tài khoản người dùng"
               subtitle="Đổi vai trò và khoá/mở khoá tài khoản trực tiếp trong bảng dưới đây."
@@ -233,9 +232,9 @@ export default function AdminPage() {
             />
 
             {/* Thanh công cụ: tìm kiếm + lọc vai trò */}
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-5 py-4">
               <div className="relative min-w-[240px] flex-1">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 [&>svg]:h-[18px] [&>svg]:w-[18px]">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 [&>svg]:h-[18px] [&>svg]:w-[18px]">
                   {SearchIcon}
                 </span>
                 <label className="sr-only" htmlFor="adm-search">
@@ -269,8 +268,8 @@ export default function AdminPage() {
                   </option>
                 ))}
               </Select>
-              <span className="text-sm text-slate-500">
-                Tổng cộng <strong className="font-semibold text-slate-700">{totalItems}</strong> tài khoản
+              <span className="text-sm text-gray-500">
+                Tổng cộng <strong className="font-semibold text-gray-900">{totalItems}</strong> tài khoản
               </span>
             </div>
 
@@ -306,12 +305,12 @@ export default function AdminPage() {
                         <tr key={u.id} className={`ui-tr ${active ? '' : 'opacity-60'}`}>
                           <td className="ui-td">
                             <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600/10 text-[13px] font-bold text-brand-700 ring-1 ring-inset ring-brand-600/15">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[13px] font-semibold text-gray-700">
                                 {initialsOf(u)}
                               </span>
                               <div className="min-w-0">
-                                <div className="font-semibold text-slate-800">{u.full_name || '—'}</div>
-                                <div className="text-xs text-slate-400">
+                                <div className="text-sm font-medium text-gray-900">{u.full_name || '—'}</div>
+                                <div className="text-[13px] text-gray-500">
                                   {u.employee_id ? `Liên kết hồ sơ NV #${u.employee_id}` : 'Chưa liên kết hồ sơ nhân viên'}
                                 </div>
                               </div>
@@ -354,8 +353,8 @@ export default function AdminPage() {
                               loading={busy}
                               className={
                                 active
-                                  ? 'border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50'
-                                  : 'border-emerald-200 text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50'
+                                  ? 'text-[#B42318] hover:bg-[#FEF3F2]'
+                                  : 'text-[#067647] hover:bg-[#ECFDF3]'
                               }
                               onClick={() => requestToggleActive(u)}
                             >
@@ -373,8 +372,8 @@ export default function AdminPage() {
             </div>
 
             {users.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3.5">
-                <span className="text-sm text-slate-500">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-5 py-3.5">
+                <span className="text-sm text-gray-500">
                   Trang {page} / {totalPages}
                 </span>
                 <div className="flex gap-2">
@@ -404,7 +403,7 @@ export default function AdminPage() {
           {/* Tài liệu tri thức (KB) — khu vực tải tài liệu dạng dropzone.
               Việc quản lý tài liệu KB đầy đủ nằm ở khu vực chatbot HR; hộp thả
               tệp ở đây là lối tắt giao diện trong trang quản trị. */}
-          <Card className="animate-fade-up mt-6 overflow-hidden">
+          <Card className="mt-6">
             <CardHeader
               title="Tài liệu tri thức (KB)"
               subtitle="Tài liệu quy chế, nội quy nội bộ để chatbot HR tra cứu và trích dẫn khi trả lời nhân viên."
@@ -412,15 +411,15 @@ export default function AdminPage() {
             <CardBody>
               <label
                 htmlFor="adm-kb-upload"
-                className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 px-6 py-9 text-center transition duration-200 ease-spring hover:border-brand-400 hover:bg-brand-50/50"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center transition-colors duration-150 hover:border-brand-600 hover:bg-brand-50"
               >
-                <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-brand-500 shadow-card ring-1 ring-inset ring-slate-200">
+                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-white text-gray-500 ring-1 ring-inset ring-gray-200">
                   {UploadIcon}
                 </span>
-                <span className="text-sm font-semibold text-slate-700">
+                <span className="text-sm font-medium text-gray-900">
                   Kéo thả tài liệu vào đây hoặc bấm để chọn tệp
                 </span>
-                <span className="mt-1 text-xs leading-relaxed text-slate-400">
+                <span className="mt-1 text-xs leading-relaxed text-gray-500">
                   Hỗ trợ tài liệu văn bản nội bộ (quy chế, nội quy, chính sách) dùng cho chatbot HR.
                 </span>
               </label>
@@ -482,14 +481,14 @@ export default function AdminPage() {
           }
         >
           {confirm.kind === 'role' ? (
-            <p className="text-sm leading-relaxed text-slate-600">
+            <p className="text-sm leading-relaxed text-gray-600">
               Đổi vai trò của “{confirmName}” từ{' '}
-              <strong className="font-semibold text-slate-800">{roleLabel(confirm.user.role)}</strong>{' '}
+              <strong className="font-semibold text-gray-900">{roleLabel(confirm.user.role)}</strong>{' '}
               thành{' '}
-              <strong className="font-semibold text-slate-800">{roleLabel(confirm.nextRole)}</strong>?
+              <strong className="font-semibold text-gray-900">{roleLabel(confirm.nextRole)}</strong>?
             </p>
           ) : (
-            <p className="text-sm leading-relaxed text-slate-600">
+            <p className="text-sm leading-relaxed text-gray-600">
               {confirm.nextActive
                 ? `Mở khoá tài khoản "${confirmName}"? Tài khoản sẽ đăng nhập lại được ngay.`
                 : `Khoá tài khoản "${confirmName}"? Tài khoản sẽ không đăng nhập được nữa cho tới khi được mở khoá. Dữ liệu nghiệp vụ liên quan vẫn được giữ nguyên.`}

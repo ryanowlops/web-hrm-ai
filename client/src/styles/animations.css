@@ -1,29 +1,31 @@
-/* Animations v2 — tiện ích chuyển động bổ sung ngoài tailwind.config.
-   Keyframes chính (fade-up, scale-in...) nằm trong tailwind.config.js. */
+/* Animations v4 — giảm liều theo hợp đồng frontend-design-v4 mục 6.
+   Fade tối đa 150ms, stagger tối đa 6 phần tử đầu với step 25ms,
+   KHÔNG hiệu ứng trang trí lặp vô hạn. Tên class cũ được giữ nguyên,
+   chỉ đổi thông số. Keyframes chính vẫn nằm trong tailwind.config.js. */
 
-/* Danh sách xuất hiện so le (stagger) — đặt class .stagger lên container. */
+/* Danh sách xuất hiện so le nhẹ (stagger) — đặt class .stagger lên container.
+   Chỉ 6 phần tử đầu có độ trễ; từ phần tử thứ 7 hiện cùng lúc. */
 .stagger > * {
-  animation: fade-up 0.45s cubic-bezier(0.21, 0.9, 0.35, 1) both;
+  animation: fade-up 0.15s ease-out both;
 }
-.stagger > *:nth-child(2) { animation-delay: 0.05s; }
-.stagger > *:nth-child(3) { animation-delay: 0.1s; }
-.stagger > *:nth-child(4) { animation-delay: 0.15s; }
-.stagger > *:nth-child(5) { animation-delay: 0.2s; }
-.stagger > *:nth-child(6) { animation-delay: 0.25s; }
-.stagger > *:nth-child(7) { animation-delay: 0.3s; }
-.stagger > *:nth-child(8) { animation-delay: 0.35s; }
+.stagger > *:nth-child(2) { animation-delay: 0.025s; }
+.stagger > *:nth-child(3) { animation-delay: 0.05s; }
+.stagger > *:nth-child(4) { animation-delay: 0.075s; }
+.stagger > *:nth-child(5) { animation-delay: 0.1s; }
+.stagger > *:nth-child(6) { animation-delay: 0.125s; }
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* Bong bóng chat xuất hiện */
 .msg-in {
-  animation: fade-up 0.3s cubic-bezier(0.21, 0.9, 0.35, 1) both;
+  animation: fade-up 0.15s ease-out both;
 }
 
-/* Chấm "đang nhập..." của chatbot */
+/* Chấm "đang nhập..." của chatbot — chỉ báo trạng thái đang xử lý
+   (không phải hiệu ứng trang trí), giữ nhịp mờ nhẹ. */
 .typing-dot {
   animation: pulse-soft 1.2s ease-in-out infinite;
 }
