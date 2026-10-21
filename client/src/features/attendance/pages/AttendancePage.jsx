@@ -5,6 +5,7 @@ import {
 import {
   Alert, Badge, Button, Card, CardHeader, EmptyState, PageHeader, Select, StatCard, TableSkeleton,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 
 /* ---------- Helpers dùng chung ---------- */
 
@@ -170,8 +171,9 @@ export default function AttendancePage() {
         </div>
       )}
 
-      <div className="stagger space-y-6">
+      <StaggerList className="space-y-6">
         {/* === Thẻ hôm nay (nổi bật) === */}
+        <StaggerItem index={0}>
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-950 via-navy-900 to-brand-900 text-white shadow-lift">
           <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand-500/25 blur-3xl" />
           <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-accent-500/20 blur-3xl" />
@@ -217,8 +219,10 @@ export default function AttendancePage() {
             </div>
           </div>
         </section>
+        </StaggerItem>
 
         {/* === Bảng công tháng của tôi === */}
+        <StaggerItem index={1}>
         <Card>
           <CardHeader
             title="Bảng công của tôi"
@@ -236,6 +240,7 @@ export default function AttendancePage() {
               <EmptyState
                 icon={CalendarIcon}
                 title="Chưa có dữ liệu chấm công trong tháng này."
+                description="Hãy check-in ở thẻ hôm nay phía trên khi bắt đầu giờ làm việc, hoặc chuyển sang tháng khác để xem dữ liệu đã có."
               />
             ) : (
               <div className="overflow-x-auto px-2 pb-2 pt-2">
@@ -259,9 +264,11 @@ export default function AttendancePage() {
               </div>
             )}
         </Card>
+        </StaggerItem>
 
         {/* === Bảng công đội ngũ (HR / Manager / Admin) === */}
         {canViewTeam && (
+          <StaggerItem index={2}>
           <Card>
             <CardHeader
               title={`Bảng công nhân viên ${user?.role === 'manager' ? '(phòng của tôi)' : ''}`}
@@ -284,6 +291,7 @@ export default function AttendancePage() {
                 <EmptyState
                   icon={CalendarIcon}
                   title="Không có dữ liệu theo bộ lọc hiện tại."
+                  description="Thử bỏ bộ lọc phòng ban / nhân viên hoặc chuyển sang tháng khác để xem bảng công của đội ngũ."
                 />
               ) : (
                 <div className="overflow-x-auto px-2 pb-2">
@@ -314,8 +322,9 @@ export default function AttendancePage() {
               )}
             <p className="border-t border-slate-100 px-5 py-3.5 text-xs text-slate-400">Phạm vi dữ liệu do server quyết định theo vai trò và phòng ban của bạn.</p>
           </Card>
+          </StaggerItem>
         )}
-      </div>
+      </StaggerList>
     </div>
   );
 }

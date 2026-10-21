@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { listOpenJobs, getPublicJob, applyToJob, friendlyError } from '../services';
 import {
   Alert,
@@ -11,6 +12,7 @@ import {
   Modal,
   Skeleton,
 } from '../../../components/ui';
+import { PulseBar, StaggerList, StaggerItem } from '../../../components/motion';
 
 /**
  * Trang Tuyển dụng CÔNG KHAI (route /jobs) — khách chưa đăng nhập (FR-08).
@@ -48,6 +50,14 @@ function departmentName(job) {
 
 const emptyForm = { fullName: '', email: '', phone: '' };
 
+// Hành trình ứng tuyển — mốc cho PulseBar ở hero (chỉ trình bày).
+const APPLY_PULSE_MILESTONES = [
+  { at: 0.04, label: 'Nộp CV', done: true },
+  { at: 0.36, label: 'Sàng lọc', done: true },
+  { at: 0.66, label: 'Phỏng vấn', done: false },
+  { at: 0.94, label: 'Nhận việc', done: false },
+];
+
 /* ------------------------------- Icon dùng chung ------------------------------ */
 function BriefcaseIcon({ className = 'h-5 w-5' }) {
   return (
@@ -68,6 +78,7 @@ function SearchIcon({ className = 'h-5 w-5' }) {
 }
 
 export default function PublicJobsPage() {
+  const reduce = useReducedMotion();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -227,7 +238,7 @@ export default function PublicJobsPage() {
             >
               HR
             </span>
-            <span className="text-[17px] font-bold tracking-[-0.01em] text-slate-900">
+            <span className="font-display text-[17px] font-bold tracking-[-0.01em] text-slate-900">
               HRM AI <span className="font-medium text-slate-400">· Tuyển dụng</span>
             </span>
           </div>
@@ -253,11 +264,15 @@ export default function PublicJobsPage() {
           aria-hidden="true"
         />
         <div className="relative mx-auto w-full max-w-[1200px] px-5 pb-14 pt-14 lg:px-8 lg:pb-16 lg:pt-[4.5rem]">
-          <div className="animate-fade-up">
+          <motion.div
+            initial={reduce ? false : { opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          >
             <Badge tone="teal" dot className="bg-white/10 text-accent-300 ring-white/20">
               Đang tuyển dụng
             </Badge>
-            <h1 className="mt-5 max-w-2xl text-4xl font-extrabold leading-[1.12] tracking-[-0.02em] text-white lg:text-[2.75rem]">
+            <h1 className="font-display mt-5 max-w-2xl text-4xl font-extrabold leading-[1.12] tracking-[-0.02em] text-white lg:text-[2.75rem]">
               Cơ hội nghề nghiệp đang mở
             </h1>
             <p className="mt-4 max-w-2xl leading-relaxed text-slate-300">
@@ -277,7 +292,14 @@ export default function PublicJobsPage() {
                 className="w-full min-w-0 bg-transparent py-2 text-[15px] text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
             </div>
-          </div>
+            {/* Khoảnh khắc lớn duy nhất của trang: đường nhịp hành trình ứng tuyển vẽ một lần khi tải (800ms) */}
+            <div className="mt-10 max-w-2xl" aria-hidden="true">
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Hành trình ứng tuyển
+              </p>
+              <PulseBar value={52} milestones={APPLY_PULSE_MILESTONES} />
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -316,12 +338,12 @@ export default function PublicJobsPage() {
             />
           </Card>
         ) : (
-          <div className="stagger grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {visibleJobs.map((job) => {
+          <StaggerList className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {visibleJobs.map((job, idx) => {
               const expired = isExpired(job);
               return (
+                <StaggerItem key={job.id} index={idx} className="h-full">
                 <Card
-                  key={job.id}
                   hover
                   onClick={() => openJob(job)}
                   tabIndex={0}
@@ -333,7 +355,7 @@ export default function PublicJobsPage() {
                       openJob(job);
                     }
                   }}
-                  className="group flex cursor-pointer flex-col gap-3.5 p-5 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/30 sm:p-6"
+                  className="group flex h-full cursor-pointer flex-col gap-3.5 p-5 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/30 sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100 transition group-hover:bg-brand-100">
@@ -343,7 +365,7 @@ export default function PublicJobsPage() {
                       {expired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(job.deadline)}`}
                     </Badge>
                   </div>
-                  <h2 className="text-lg font-bold leading-snug tracking-[-0.01em] text-slate-900 transition-colors group-hover:text-brand-700">
+                  <h2 className="font-display text-lg font-bold leading-snug tracking-[-0.01em] text-slate-900 transition-colors group-hover:text-brand-700">
                     {job.title}
                   </h2>
                   <div className="flex flex-wrap gap-1.5">
@@ -360,9 +382,10 @@ export default function PublicJobsPage() {
                     </span>
                   </div>
                 </Card>
+                </StaggerItem>
               );
             })}
-          </div>
+          </StaggerList>
         )}
       </main>
 

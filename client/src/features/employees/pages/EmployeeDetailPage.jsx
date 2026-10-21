@@ -19,6 +19,7 @@ import {
   Select,
   Skeleton,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 import {
   getEmployee,
   updateEmployee,
@@ -473,7 +474,7 @@ export default function EmployeeDetailPage() {
                 </span>
               )}
               <div className="min-w-0">
-                <h1 className="truncate text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+                <h1 className="font-display truncate text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
                   {employee.full_name}
                 </h1>
                 <p className="mt-1 text-sm font-medium text-slate-500">{employee.code} · {posTitle} · {deptName}</p>
@@ -528,7 +529,8 @@ export default function EmployeeDetailPage() {
       )}
 
       {/* Thông tin hồ sơ */}
-      <div className="mt-5 grid items-start gap-5 lg:grid-cols-2">
+      <StaggerList className="mt-5 grid items-start gap-5 lg:grid-cols-2">
+        <StaggerItem index={0}>
         <Card>
           <CardHeader title="Thông tin cá nhân" />
           <CardBody>
@@ -542,7 +544,9 @@ export default function EmployeeDetailPage() {
             </dl>
           </CardBody>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem index={1}>
         <Card>
           <CardHeader title="Thông tin công việc" />
           <CardBody>
@@ -559,7 +563,8 @@ export default function EmployeeDetailPage() {
             </dl>
           </CardBody>
         </Card>
-      </div>
+        </StaggerItem>
+      </StaggerList>
 
       {/* Hợp đồng */}
       <Card className="mt-5">
@@ -579,6 +584,8 @@ export default function EmployeeDetailPage() {
             description="Nhân viên này chưa có hợp đồng nào."
           />
         ) : (
+          <StaggerList>
+            <StaggerItem>
           <div className="overflow-x-auto">
             <table className="ui-table">
               <thead>
@@ -620,6 +627,8 @@ export default function EmployeeDetailPage() {
               </tbody>
             </table>
           </div>
+            </StaggerItem>
+          </StaggerList>
         )}
       </Card>
 

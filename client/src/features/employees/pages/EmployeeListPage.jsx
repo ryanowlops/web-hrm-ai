@@ -27,6 +27,7 @@ import {
   Input,
   Select,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
 
 const STATUS_OPTIONS = [
   { value: 'working', label: 'Đang làm việc' },
@@ -380,7 +381,7 @@ export default function EmployeeListPage() {
     <div className="page-shell">
       <PageHeader
         title="Nhân viên"
-        subtitle={meta ? `Tổng cộng ${meta.totalItems} nhân viên` : 'Quản lý hồ sơ nhân viên toàn công ty'}
+        subtitle={meta ? <>Tổng cộng <AnimatedNumber value={meta.totalItems} /> nhân viên</> : 'Quản lý hồ sơ nhân viên toàn công ty'}
         actions={
           canWrite ? (
             <Button type="button" onClick={() => setFormTarget('create')}>
@@ -461,6 +462,8 @@ export default function EmployeeListPage() {
             }
           />
         ) : (
+          <StaggerList>
+            <StaggerItem>
           <div className="overflow-x-auto">
             <table className="ui-table">
               <thead>
@@ -521,6 +524,8 @@ export default function EmployeeListPage() {
               </tbody>
             </table>
           </div>
+            </StaggerItem>
+          </StaggerList>
         )}
       </Card>
 

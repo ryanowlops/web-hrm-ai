@@ -1,4 +1,7 @@
+import AnimatedNumber from '../motion/AnimatedNumber.jsx';
+
 // Thẻ số liệu cho dashboard: icon trong ô màu, nhãn, giá trị lớn, dòng phụ.
+// v3: giá trị dạng số đếm lên bằng AnimatedNumber; chuỗi (vd "85%") giữ nguyên.
 const TONES = {
   blue: 'bg-brand-50 text-brand-600 ring-brand-100',
   teal: 'bg-accent-50 text-accent-600 ring-accent-100',
@@ -18,7 +21,9 @@ export default function StatCard({ icon, label, value, sub, tone = 'blue', class
       )}
       <div className="min-w-0">
         <p className="text-[13px] font-semibold text-slate-500">{label}</p>
-        <p className="mt-1 truncate text-[26px] font-extrabold leading-none tracking-[-0.02em] text-slate-900">{value}</p>
+        <p className="tnum mt-1 truncate font-display text-[26px] font-extrabold leading-none tracking-[-0.02em] text-slate-900">
+          {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
+        </p>
         {sub && <p className="mt-1.5 text-[13px] leading-snug text-slate-500">{sub}</p>}
       </div>
     </div>

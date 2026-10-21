@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'motion/react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../app/AuthContext.jsx';
 import { notificationsApi } from '../api/index.js';
+import PageTransition from '../components/motion/PageTransition.jsx';
+import ActivePill from '../components/motion/ActivePill.jsx';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 
-// Layout chính cho khu vực đã đăng nhập (design system v2 — enterprise):
-// sidebar navy (logo, menu theo role có nhóm + thanh chỉ thị active, thẻ
-// người dùng ở đáy) + topbar trắng mờ (tìm kiếm, chuông thông báo, chip
-// người dùng, nút Đăng xuất) + vùng nội dung nền canvas (.page-shell ở page).
+// Layout chính cho khu vực đã đăng nhập (design system v3 — "Nhịp nhân sự"):
+// sidebar Ink Navy (#081A3A) thu gọn 76px ↔ mở rộng 264px bằng spring,
+// mục đang chọn dùng ActivePill layoutId trượt theo điều hướng,
+// PageTransition bọc Outlet theo pathname. Topbar trắng mờ giữ nguyên
+// chức năng (tìm kiếm, chuông thông báo, chip người dùng, Đăng xuất).
 
 const ROLE_LABELS = {
   admin: 'Quản trị viên',
@@ -222,15 +228,21 @@ function getInitials(user) {
 const navLinkClass = ({ isActive }) =>
   [
     'group relative flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium',
-    'transition-all duration-200 ease-spring',
+    'transition-colors duration-200 ease-spring',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-900',
     isActive
-      ? 'bg-white/10 font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]'
-      : 'text-slate-300/85 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white',
+      ? 'font-semibold text-white'
+      : 'text-slate-300/85 hover:bg-white/[0.06] hover:text-white',
   ].join(' ');
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const reduceMotion = useReducedMotion();
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  // Sidebar thu gọn (chỉ áp dụng ở desktop lg+; mobile giữ dạng thanh ngang).
+  const [collapsed, setCollapsed] = useState(false);
+  const sidebarWidth = isDesktop ? (collapsed ? 76 : 264) : undefined;
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user?.role));
   const navSections = groupNavItems(visibleItems);
   const displayName = user?.fullName || user?.email || 'Người dùng';
@@ -263,7 +275,11 @@ export default function AppLayout() {
       </a>
 
       {/* ============================ SIDEBAR ============================ */}
-      <aside className="flex w-full flex-none flex-col bg-gradient-to-b from-navy-950 via-navy-900 to-navy-800 text-slate-200 shadow-lift lg:sticky lg:top-0 lg:h-dvh lg:w-[264px]">
+      <motion.aside
+        className="flex w-full flex-none flex-col bg-gradient-to-b from-navy-950 via-navy-900 to-navy-800 text-slate-200 shadow-lift lg:sticky lg:top-0 lg:h-dvh"
+        animate={sidebarWidth ? { width: sidebarWidth } : undefined}
+        transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 34 }}
+      >
         {/* Khối logo */}
         <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4 lg:py-5">
           <span
@@ -283,13 +299,23 @@ export default function AppLayout() {
               <path d="M4.5 20.5c1.2-4 4-6 7.5-6s6.3 2 7.5 6" />
             </svg>
           </span>
-          <span className="text-[17px] font-bold leading-tight tracking-tight text-white">
+          <span className={`font-display text-[17px] font-bold leading-tight tracking-tight text-white ${collapsed ? 'lg:hidden' : ''}`}>
             Web HRM AI
           </span>
           <span
-            className="ml-auto h-2 w-2 flex-none rounded-full bg-accent-400 shadow-[0_0_10px_rgba(39,207,169,0.9)] animate-pulse-soft lg:ml-0"
+            className={`ml-auto h-2 w-2 flex-none rounded-full bg-accent-400 shadow-[0_0_10px_rgba(39,207,169,0.9)] animate-pulse-soft lg:ml-0 ${collapsed ? 'lg:hidden' : ''}`}
             aria-hidden="true"
           />
+          {/* Nút thu/mở sidebar (desktop) */}
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+            title={collapsed ? 'Mở rộng' : 'Thu gọn'}
+            className={`ml-auto hidden h-8 w-8 flex-none items-center justify-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 lg:flex ${collapsed ? 'lg:ml-0' : ''}`}
+          >
+            {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
         </div>
 
         {/* Menu theo role, chia nhóm */}
@@ -299,28 +325,40 @@ export default function AppLayout() {
         >
           {navSections.map((section) => (
             <div key={section.label} className="flex items-start gap-1 lg:mt-4 lg:block lg:first:mt-0">
-              <p className="hidden px-3 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-slate-400/60 lg:block">
+              <p className={`hidden px-3 pb-1.5 text-[11px] font-semibold text-slate-400/70 lg:block ${collapsed ? 'lg:invisible' : ''}`}>
                 {section.label}
               </p>
               <div className="flex gap-1 lg:flex-col lg:gap-0.5">
                 {section.items.map((item) => (
-                  <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={navLinkClass}
+                    title={collapsed ? item.label : undefined}
+                  >
                     {({ isActive }) => (
                       <>
                         {isActive ? (
+                          <ActivePill
+                            layoutId="sidebar-active"
+                            className="absolute inset-0 rounded-xl bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-inset ring-white/10"
+                          />
+                        ) : null}
+                        {isActive ? (
                           <span
                             aria-hidden="true"
-                            className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-accent-400 shadow-[0_0_12px_rgba(39,207,169,0.85)] animate-fade-in"
+                            className="absolute left-0 top-1/2 z-10 h-6 w-1 -translate-y-1/2 rounded-full bg-accent-400 shadow-[0_0_12px_rgba(39,207,169,0.85)]"
                           />
                         ) : null}
                         <span
-                          className={`transition-colors duration-200 ${
+                          className={`relative z-10 transition-colors duration-200 ${
                             isActive ? 'text-accent-300' : 'text-slate-400 group-hover:text-slate-100'
                           }`}
                         >
                           {item.icon}
                         </span>
-                        <span className="truncate">{item.label}</span>
+                        <span className={`relative z-10 truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
                       </>
                     )}
                   </NavLink>
@@ -337,7 +375,7 @@ export default function AppLayout() {
             className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300/85 transition-all duration-200 ease-spring hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70"
           >
             <span className="text-slate-400">{globeIcon}</span>
-            Trang tuyển dụng công khai
+            <span className={collapsed ? 'lg:hidden' : ''}>Trang tuyển dụng công khai</span>
           </NavLink>
 
           <div className="flex items-center gap-3 rounded-xl bg-white/[0.06] px-3 py-2.5 ring-1 ring-white/10">
@@ -347,7 +385,7 @@ export default function AppLayout() {
             >
               {getInitials(user)}
             </span>
-            <span className="min-w-0">
+            <span className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
               <span className="block truncate text-sm font-semibold leading-tight text-white">
                 {displayName}
               </span>
@@ -359,7 +397,7 @@ export default function AppLayout() {
             </span>
           </div>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* ============================ THÂN TRANG ============================ */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -433,7 +471,9 @@ export default function AppLayout() {
         </header>
 
         <main id="main-content" className="min-w-0 flex-1" tabIndex={-1}>
-          <Outlet />
+          <PageTransition key={location.pathname}>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>

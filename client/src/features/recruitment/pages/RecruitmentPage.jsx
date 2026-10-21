@@ -25,6 +25,7 @@ import {
   StatCard,
   Textarea,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 import {
   IconBriefcase,
   IconBuilding,
@@ -424,14 +425,15 @@ export default function RecruitmentPage() {
           />
         </Card>
       ) : (
-        <div className="stagger space-y-4">
-          {jobs.map((job) => {
+        <StaggerList className="space-y-4">
+          {jobs.map((job, i) => {
             const st = JOB_STATUS[job.status] ?? JOB_STATUS.closed;
             const deptName = job.department_name ?? job.department?.name;
             const count = job.candidates_count ?? job.candidate_count ?? 0;
             const overdue = isOverdue(job);
             return (
-              <Card key={job.id} hover>
+              <StaggerItem key={job.id} index={i}>
+              <Card hover>
                 <CardBody className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -503,9 +505,10 @@ export default function RecruitmentPage() {
                   </div>
                 </CardBody>
               </Card>
+              </StaggerItem>
             );
           })}
-        </div>
+        </StaggerList>
       )}
 
       {/* Pagination */}

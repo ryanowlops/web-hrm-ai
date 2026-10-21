@@ -43,7 +43,7 @@ export default function NotFoundPage() {
         </div>
 
         <h1
-          className="mt-3 animate-fade-up text-2xl font-bold tracking-tight text-navy-950"
+          className="font-display mt-3 animate-fade-up text-2xl font-bold tracking-tight text-navy-950"
           style={{ animationDelay: '.08s' }}
         >
           Không tìm thấy trang

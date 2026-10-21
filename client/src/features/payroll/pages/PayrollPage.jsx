@@ -23,6 +23,7 @@ import {
   Skeleton,
   TableSkeleton,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
 
 /* ================= Helpers ================= */
 
@@ -282,6 +283,8 @@ function HrPayrollView() {
             description="Bấm “Tạo kỳ lương” để bắt đầu."
           />
         ) : (
+          <StaggerList>
+            <StaggerItem>
           <div className="overflow-x-auto">
             <table className="ui-table">
               <thead>
@@ -347,6 +350,8 @@ function HrPayrollView() {
               </tbody>
             </table>
           </div>
+            </StaggerItem>
+          </StaggerList>
         )}
       </Card>
 
@@ -354,7 +359,7 @@ function HrPayrollView() {
       <Card className="animate-fade-up">
         <CardHeader title={itemsTitle} />
         {!selectedPeriod ? (
-          <EmptyState title="Chọn một kỳ lương để xem chi tiết." />
+          <EmptyState title="Chọn một kỳ lương để xem chi tiết." description="Chọn một kỳ ở bảng phía trên, hoặc bấm “Tạo kỳ lương” nếu chưa có kỳ nào." />
         ) : loadingItems ? (
           <TableSkeleton rows={5} cols={6} />
         ) : items.length === 0 ? (
@@ -364,6 +369,8 @@ function HrPayrollView() {
           />
         ) : (
           <>
+            <StaggerList>
+              <StaggerItem>
             <div className="overflow-x-auto">
               <table className="ui-table">
                 <thead>
@@ -401,9 +408,11 @@ function HrPayrollView() {
                 </tbody>
               </table>
             </div>
+              </StaggerItem>
+            </StaggerList>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
               <span>
-                Tổng chi trang này: <strong className="font-bold tabular-nums text-slate-900">{formatVND(pageTotal)}</strong>
+                Tổng chi trang này: <strong className="font-bold tabular-nums text-slate-900"><AnimatedNumber value={pageTotal} format={(n) => formatVND(n)} /></strong>
                 {itemsMeta?.totalItems ? ` · ${itemsMeta.totalItems} nhân viên trong kỳ` : ''}
               </span>
               <span className="flex items-center gap-2">
@@ -655,7 +664,7 @@ function MyPayslipView() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-brand-300">
                   Web HRM AI · Phiếu lương
                 </p>
-                <h2 className="mt-1.5 text-xl font-extrabold tracking-[-0.01em]">
+                <h2 className="font-display mt-1.5 text-xl font-extrabold tracking-[-0.01em]">
                   PHIẾU LƯƠNG {periodLabel ? periodLabel.toUpperCase() : ''}
                 </h2>
                 {(empName || empCode) && (
@@ -716,7 +725,7 @@ function MyPayslipView() {
                 Tổng thực nhận
               </span>
               <span className="text-2xl font-extrabold tabular-nums tracking-[-0.01em] text-brand-700">
-                {formatVND(totalSalary)}
+                <AnimatedNumber value={Number(totalSalary) || 0} format={(n) => formatVND(n)} />
               </span>
             </div>
 

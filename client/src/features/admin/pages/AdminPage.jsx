@@ -14,6 +14,7 @@ import {
   Select,
   TableSkeleton,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
 
 /**
  * Trang Quản trị tài khoản (FR-01, route /admin).
@@ -226,7 +227,7 @@ export default function AdminPage() {
               subtitle="Đổi vai trò và khoá/mở khoá tài khoản trực tiếp trong bảng dưới đây."
               actions={
                 <Badge tone="blue" dot>
-                  Tổng cộng {totalItems} tài khoản
+                  Tổng cộng <AnimatedNumber value={totalItems} /> tài khoản
                 </Badge>
               }
             />
@@ -285,6 +286,8 @@ export default function AdminPage() {
                   description="Thử đổi từ khoá tìm kiếm hoặc bỏ bộ lọc vai trò."
                 />
               ) : (
+                <StaggerList>
+                  <StaggerItem>
                 <table className="ui-table min-w-[760px]">
                   <thead>
                     <tr>
@@ -364,6 +367,8 @@ export default function AdminPage() {
                     })}
                   </tbody>
                 </table>
+                  </StaggerItem>
+                </StaggerList>
               )}
             </div>
 

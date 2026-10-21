@@ -12,6 +12,16 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* v3: tiêu đề dùng Be Vietnam Pro (font-display) */
+h1, h2, h3 {
+  font-family: var(--font-display);
+}
+
+/* v3: số liệu thẳng cột (tabular numbers) cho bảng và số thống kê */
+table, .tnum {
+  font-variant-numeric: tabular-nums;
+}
+
 ::selection {
   background: rgba(61, 110, 245, 0.22);
 }

@@ -2,7 +2,7 @@
 
 Tài liệu này là **chuẩn cấu trúc** cho mọi dev làm việc trên `client/`. Mục tiêu: ai mới vào dự án cũng biết code nằm ở đâu, thêm tính năng mới đặt file vào đâu, và không phá vỡ kiến trúc. Quy tắc thiết kế giao diện xem thêm ở [DESIGN.md](./DESIGN.md).
 
-Stack: **React 18 + Vite 5 + React Router 6 + TanStack Query 5 + Axios + Tailwind CSS 3**. Không dùng Redux — dữ liệu server đi qua TanStack Query, phiên đăng nhập đi qua `AuthContext`.
+Stack: **React 18 + Vite 5 + React Router 6 + TanStack Query 5 + Axios + Tailwind CSS 3 + Motion (`motion` — Motion for React) + `lucide-react`**. Font: Inter Variable (nội dung) + Be Vietnam Pro (tiêu đề, qua `@fontsource/be-vietnam-pro`). Không dùng Redux — dữ liệu server đi qua TanStack Query, phiên đăng nhập đi qua `AuthContext`.
 
 ---
 
@@ -14,7 +14,7 @@ client/
 ├── tailwind.config.js          # Design tokens cho Tailwind (màu, font, shadow, animation)
 ├── postcss.config.js
 ├── vite.config.js              # Dev server + proxy /api -> backend Flask :5000
-├── DESIGN.md                   # Tài liệu design system v2
+├── DESIGN.md                   # Tài liệu design system v3 ("Nhịp nhân sự")
 ├── STRUCTURE.md                # Tài liệu này
 └── src/
     ├── main.jsx                # Điểm vào: QueryClient + AuthProvider + RouterProvider, import styles
@@ -26,8 +26,9 @@ client/
     │   ├── axiosClient.js      # Axios instance (baseURL /api/v1, gắn JWT, refresh token)
     │   └── index.js            # Barrel: export api + helper token + các API dùng chung (authApi...)
     ├── components/             # Component dùng lại trên toàn app
-    │   ├── ui/                 # UI KIT — design system v2 (xem mục 3)
-    │   └── icons.jsx           # Bộ icon SVG inline (kiểu Lucide/Feather, stroke, currentColor)
+    │   ├── ui/                 # UI KIT — design system v3 (xem mục 3)
+    │   ├── motion/             # Motion primitives v3 (PageTransition, StaggerList, AnimatedNumber, ProgressRing, PulseBar, CheckMotion, Drawer, ActivePill)
+    │   └── icons.jsx           # Bộ icon SVG inline (kiểu Lucide/Feather, stroke, currentColor); icon mới ưu tiên lucide-react
     ├── layouts/
     │   └── AppLayout.jsx       # Khung sau đăng nhập: sidebar navy + header + <Outlet/>
     ├── features/               # Mỗi nghiệp vụ một thư mục (xem mục 4)
@@ -145,7 +146,8 @@ Ví dụ thêm nghiệp vụ "Hợp đồng" (`contracts`):
 
 ## 10. Quy tắc animation
 
-- Thời lượng chỉ trong khoảng **150–450ms**: dùng token `--motion-fast` (150ms), `--motion-base` (250ms), `--motion-slow` (400ms) hoặc các animation có sẵn trong config (`animate-fade-up`, `animate-fade-in`, `animate-scale-in`, `animate-slide-in`, `animate-shimmer`, `animate-pulse-soft`) với easing `ease-spring` (`cubic-bezier(.21,.9,.35,1)`).
+- **v3: chuyển động đi qua motion primitives trong `src/components/motion/`** (xem DESIGN.md mục 5) — PageTransition, StaggerList/StaggerItem, AnimatedNumber, ProgressRing, PulseBar, CheckMotion, Drawer, ActivePill. Page/feature không tự chế hiệu ứng mới. Tương tác ≤400ms, khoảnh khắc chính mỗi màn hình ≤800ms và chỉ một.
+- Thời lượng CSS phụ trợ trong khoảng **150–450ms**: dùng token `--motion-fast` (150ms), `--motion-base` (250ms), `--motion-slow` (400ms) hoặc các animation có sẵn trong config (`animate-fade-up`, `animate-fade-in`, `animate-scale-in`, `animate-slide-in`, `animate-shimmer`, `animate-pulse-soft`) với easing `ease-spring` (`cubic-bezier(.22,1,.36,1)`).
 - Hiệu ứng phục vụ phản hồi thao tác (hover nhấc nhẹ, modal scale-in, danh sách stagger khi xuất hiện, skeleton khi tải) — không animation trang trí lặp vô hạn ngoài `shimmer`/`pulse-soft` cho trạng thái tải.
 - **Bắt buộc tôn trọng `prefers-reduced-motion`**: `base.css` đã tắt animation/transition toàn cục khi người dùng bật tùy chọn này — không ghi đè bằng `!important` hay inline style trong page.
 - Chuyển trang/mod

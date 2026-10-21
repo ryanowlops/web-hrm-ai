@@ -26,6 +26,7 @@ import {
   TableSkeleton,
   Textarea,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 import { IconFileText, IconSparkles, IconUsers, IconX } from '../../../components/icons.jsx';
 
 /* ------------------------------ Hằng số UI ------------------------------- */
@@ -211,7 +212,7 @@ function CandidateDrawer({
               {initials(candidate.full_name)}
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-[-0.01em] text-slate-900">{candidate.full_name}</h2>
+              <h2 className="font-display text-base font-bold tracking-[-0.01em] text-slate-900">{candidate.full_name}</h2>
               <p className="text-xs text-slate-500">Nộp ngày {formatDate(candidate.created_at)}</p>
             </div>
           </div>
@@ -702,7 +703,7 @@ export default function JobDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
+                <h1 className="font-display text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-slate-900">
                   {job.title}
                 </h1>
                 {job.status === 'open' ? (
@@ -808,7 +809,7 @@ export default function JobDetailPage() {
 
       {/* -------- Toolbar ứng viên -------- */}
       <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-bold tracking-[-0.01em] text-slate-900">
+        <h2 className="font-display text-lg font-bold tracking-[-0.01em] text-slate-900">
           Ứng viên <span className="text-sm font-medium text-slate-400">({counts.all})</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -904,6 +905,8 @@ export default function JobDetailPage() {
               {selected.size > 0 ? `Đã chọn ${selected.size} ứng viên` : 'Chọn ứng viên để phân tích AI'}
             </span>
           </div>
+          <StaggerList>
+            <StaggerItem>
           <div className="overflow-x-auto">
             <table className="ui-table min-w-[780px]">
               <thead>
@@ -981,6 +984,8 @@ export default function JobDetailPage() {
               </tbody>
             </table>
           </div>
+            </StaggerItem>
+          </StaggerList>
         </Card>
       )}
 

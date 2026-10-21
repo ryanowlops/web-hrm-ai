@@ -20,6 +20,7 @@ import {
   Skeleton,
   Textarea,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
 import {
   IconFileText,
   IconSend,
@@ -308,7 +309,7 @@ export default function ChatbotPage() {
                 <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <h2 className="truncate text-[15px] font-bold tracking-[-0.01em] text-slate-900">
+                <h2 className="font-display truncate text-[15px] font-bold tracking-[-0.01em] text-slate-900">
                   Chatbot HR
                 </h2>
                 <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
@@ -521,7 +522,7 @@ export default function ChatbotPage() {
 
                 <div className="mt-6">
                   <div className="ui-label mb-2">
-                    Tài liệu đã có ({kbDocs.length})
+                    Tài liệu đã có (<AnimatedNumber value={kbDocs.length} />)
                   </div>
                   {kbLoading && kbDocs.length === 0 && (
                     <div className="space-y-2.5" aria-hidden="true">
@@ -530,12 +531,16 @@ export default function ChatbotPage() {
                     </div>
                   )}
                   {!kbLoading && kbDocs.length === 0 && (
-                    <p className="text-sm leading-relaxed text-slate-400">
-                      Chưa có tài liệu nào. Tải quy chế nội bộ lên để chatbot bắt đầu trả lời được.
-                    </p>
+                    <EmptyState
+                      icon={<IconFileText size={26} />}
+                      title="Chưa có tài liệu nào"
+                      description="Tải quy chế nội bộ lên bằng biểu mẫu phía trên để chatbot bắt đầu trả lời được."
+                    />
                   )}
-                  {kbDocs.map((doc) => (
-                    <div key={doc.id} className="flex items-start gap-3 border-t border-slate-100 py-3 first:border-t-0">
+                  <StaggerList>
+                  {kbDocs.map((doc, i) => (
+                    <StaggerItem key={doc.id} index={i}>
+                    <div className="flex items-start gap-3 border-t border-slate-100 py-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-50 text-accent-600 ring-1 ring-inset ring-accent-100">
                         <IconFileText size={16} />
                       </div>
@@ -565,7 +570,9 @@ export default function ChatbotPage() {
                         <IconTrash size={16} />
                       </button>
                     </div>
+                    </StaggerItem>
                   ))}
+                  </StaggerList>
                 </div>
               </CardBody>
             </Card>

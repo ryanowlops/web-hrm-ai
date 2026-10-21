@@ -1,4 +1,7 @@
-// Button chuẩn design system v2.
+import { motion, useReducedMotion } from 'motion/react';
+
+// Button chuẩn design system v3 — chuyển động đáp lại hành động qua Motion:
+// hover nâng nhẹ, press co 0.98 (tôn trọng prefers-reduced-motion).
 // variant: primary | accent | secondary | ghost | danger | dark
 // size: sm | md | lg
 const VARIANTS = {
@@ -31,10 +34,14 @@ export default function Button({
   disabled,
   ...props
 }) {
+  const reduce = useReducedMotion();
   return (
-    <button
+    <motion.button
+      whileHover={reduce || disabled || loading ? undefined : { y: -1 }}
+      whileTap={reduce || disabled || loading ? undefined : { scale: 0.98 }}
+      transition={{ duration: 0.12 }}
       className={`inline-flex select-none items-center justify-center font-semibold tracking-[0.01em]
-        transition-all duration-200 ease-spring hover:-translate-y-px active:translate-y-0 active:scale-[.99]
+        transition-colors duration-200 ease-spring
         focus:outline-none focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-55
         ${VARIANTS[variant] || VARIANTS.primary} ${SIZES[size] || SIZES.md} ${className}`}
       disabled={disabled || loading}
@@ -47,6 +54,6 @@ export default function Button({
         </svg>
       )}
       {children}
-    </button>
+    </motion.button>
   );
 }

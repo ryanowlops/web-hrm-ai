@@ -7,6 +7,7 @@ import {
   Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState,
   FormField, Input, PageHeader, Select, Skeleton, TableSkeleton, Textarea,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
 
 /* ---------- Helpers ---------- */
 
@@ -84,7 +85,7 @@ function BalanceCard({ balance: b }) {
         <p className="text-xs font-medium text-slate-400">Đã dùng {used} ngày</p>
       </div>
       <p className="mt-1.5 text-[26px] font-extrabold leading-none tracking-[-0.02em] text-slate-900">
-        {remaining}
+        <AnimatedNumber value={remaining} />
         <span className="ml-1.5 text-[13px] font-semibold text-slate-400">/ {total} ngày còn lại</span>
       </p>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
@@ -300,13 +301,22 @@ export default function LeavePage() {
 
           {/* === Số dư phép của tôi (StatCard thu gọn) === */}
           <div className="animate-fade-up" style={{ animationDelay: '70ms' }}>
-            <h3 className="mb-3 text-sm font-bold tracking-[-0.01em] text-slate-800">Số dư phép năm {year} của tôi</h3>
+            <h3 className="font-display mb-3 text-sm font-bold tracking-[-0.01em] text-slate-800">Số dư phép năm {year} của tôi</h3>
             {balances.length === 0 ? (
-              <div className="ui-card p-4 text-sm text-slate-400">Chưa có thông tin số dư phép.</div>
-            ) : (
-              <div className="space-y-3">
-                {balances.map((b) => <BalanceCard key={b.leave_type_id} balance={b} />)}
+              <div className="ui-card">
+                <EmptyState
+                  title="Chưa có thông tin số dư phép."
+                  description="Số dư phép sẽ xuất hiện tại đây khi HR cấu hình hạn mức cho năm nay. Bạn vẫn có thể tạo đơn nghỉ ở biểu mẫu phía trên."
+                />
               </div>
+            ) : (
+              <StaggerList className="space-y-3">
+                {balances.map((b, i) => (
+                  <StaggerItem key={b.leave_type_id} index={i}>
+                    <BalanceCard balance={b} />
+                  </StaggerItem>
+                ))}
+              </StaggerList>
             )}
           </div>
         </div>
@@ -382,9 +392,11 @@ export default function LeavePage() {
           ) : pending.length === 0 ? (
             <EmptyState title="Không có đơn nào đang chờ bạn duyệt. 🎉" description="Khi có đơn nghỉ mới thuộc phạm vi duyệt của bạn, đơn sẽ xuất hiện tại đây." />
           ) : (
-            <CardBody className="space-y-3">
-              {pending.map((r) => (
-                <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-card transition duration-300 ease-spring hover:shadow-lift">
+            <CardBody>
+              <StaggerList className="space-y-3">
+              {pending.map((r, i) => (
+                <StaggerItem key={r.id} index={i}>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card transition duration-300 ease-spring hover:shadow-lift">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-800">
@@ -418,7 +430,9 @@ export default function LeavePage() {
                     </div>
                   )}
                 </div>
+                </StaggerItem>
               ))}
+              </StaggerList>
             </CardBody>
           )}
         </Card>

@@ -7,8 +7,12 @@ import router from './app/router.jsx';
 
 // Font Inter (đóng gói sẵn, không phụ thuộc CDN)
 import '@fontsource-variable/inter';
+// Font tiêu đề v3 — Be Vietnam Pro (đóng gói local, weight 600/700/800)
+import '@fontsource/be-vietnam-pro/600.css';
+import '@fontsource/be-vietnam-pro/700.css';
+import '@fontsource/be-vietnam-pro/800.css';
 
-// Design system v2 (enterprise): Tailwind → tokens → base → animations → motion
+// Design system v3 ("Nhịp nhân sự"): Tailwind → tokens → base → animations → motion
 import './styles/tailwind.css';
 import './styles/tokens.css';
 import './styles/base.css';

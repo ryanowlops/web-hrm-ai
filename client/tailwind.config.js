@@ -1,6 +1,7 @@
-/** Tailwind CSS — Web HRM AI design system v2 (enterprise).
+/** Tailwind CSS — Web HRM AI design system v3 ("Nhịp nhân sự").
  * Bảng màu + font + shadow + animation dùng chung toàn hệ thống.
  * Mọi trang KHÔNG tự chế màu ngoài bảng này (trừ màu trạng thái ngữ nghĩa).
+ * Đồng bộ với src/styles/tokens.css — sửa màu phải sửa cả hai nơi.
  */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
@@ -13,20 +14,26 @@ export default {
           400: '#6193FA', 500: '#3D6EF5', 600: '#274FEA', 700: '#1F3FD8',
           800: '#2134AE', 900: '#0F2160', 950: '#0A1638',
         },
-        // Navy cho sidebar / vùng tối
+        // Navy cho sidebar / vùng tối — 950 là Ink Navy v3 (#081A3A)
         navy: {
-          700: '#1B3358', 800: '#14294B', 900: '#0E1F3C', 950: '#0A1730',
+          700: '#1B3358', 800: '#12294D', 900: '#0C2144', 950: '#081A3A',
         },
+        // Ink Navy v3 — "nền sân khấu" cho sidebar / hero tối
+        ink: '#081A3A',
+        // Signal Amber v3 — cảnh báo / chờ duyệt (dùng tiết kiệm, đúng ngữ nghĩa)
+        signal: '#F59E0B',
         // Màu nhấn phụ (teal) cho AI / điểm nhấn
         accent: {
           50: '#EFFDF9', 100: '#C9F7EA', 300: '#5FE3C3', 400: '#27CFA9',
           500: '#0DB795', 600: '#02957B', 700: '#017763',
         },
-        // Nền ứng dụng
-        canvas: '#F4F7FB',
+        // Nền ứng dụng — Canvas Mist v3
+        canvas: '#EEF2F9',
       },
       fontFamily: {
         sans: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        // Font tiêu đề v3 — Be Vietnam Pro: dấu tiếng Việt cân đẹp, bản sắc Việt
+        display: ['"Be Vietnam Pro"', '"Inter Variable"', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         card: '0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06)',

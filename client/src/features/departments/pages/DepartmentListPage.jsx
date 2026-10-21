@@ -19,6 +19,7 @@ import {
   Select,
   Skeleton,
 } from '../../../components/ui';
+import { StaggerList, StaggerItem } from '../../../components/motion';
 import { IconBuilding, IconUser, IconEdit, IconTrash, IconBriefcase } from '../../../components/icons.jsx';
 import {
   getDepartments,
@@ -382,16 +383,17 @@ export default function DepartmentListPage() {
         </Card>
       ) : (
         <>
-          <div className="stagger grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {departments.map((dept) => (
-              <Card key={dept.id} hover className="flex flex-col p-5">
+          <StaggerList className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {departments.map((dept, i) => (
+              <StaggerItem key={dept.id} index={i} className="h-full">
+              <Card hover className="flex h-full flex-col p-5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-start gap-3.5">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
                       <IconBuilding size={20} />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="truncate text-base font-bold tracking-[-0.01em] text-slate-900">{dept.name}</h2>
+                      <h2 className="font-display truncate text-base font-bold tracking-[-0.01em] text-slate-900">{dept.name}</h2>
                       <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
                         <IconUser size={14} className="shrink-0 text-slate-400" />
                         <span className="truncate">
@@ -427,8 +429,9 @@ export default function DepartmentListPage() {
                   </div>
                 )}
               </Card>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerList>
 
           <Card className="mt-6 animate-fade-up">
             <CardHeader

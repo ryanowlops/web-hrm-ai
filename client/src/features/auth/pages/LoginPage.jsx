@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion } from 'motion/react';
 import { useAuth } from '../../../app/AuthContext.jsx';
 import { login } from '../services';
 import { Alert, Button } from '../../../components/ui';
+import { PulseBar } from '../../../components/motion';
 
 // ============================================================
 // Trang đăng nhập — route /login (giao diện enterprise 2 cột)
@@ -78,6 +80,28 @@ const HIGHLIGHTS = [
   },
 ];
 
+// Nhịp ngày làm việc — mốc cho PulseBar ở panel thương hiệu (chỉ trình bày).
+const LOGIN_PULSE_MILESTONES = [
+  { at: 0.06, label: '07:30', done: true },
+  { at: 0.34, label: '09:00', done: true },
+  { at: 0.6, label: '12:00', done: true },
+  { at: 0.88, label: '17:30', done: false },
+];
+
+const highlightContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.11, delayChildren: 0.3 } },
+};
+
+const highlightItem = {
+  hidden: { opacity: 0, y: 12 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
 function LogoMark({ className = 'h-11 w-11 rounded-xl text-[22px]' }) {
   return (
     <div
@@ -98,6 +122,7 @@ function LogoMark({ className = 'h-11 w-11 rounded-xl text-[22px]' }) {
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const reduce = useReducedMotion();
   const { user: authUser, loading: authLoading, refreshUser } = useAuth();
 
   const [values, setValues] = useState({ email: '', password: '' });
@@ -179,16 +204,26 @@ export default function LoginPage() {
         />
 
         <div className="relative z-10 flex w-full flex-col justify-between px-12 py-12 xl:px-16">
-          <div className="flex animate-fade-up items-center gap-3">
+          <motion.div
+            className="flex items-center gap-3"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
             <LogoMark />
             <div>
-              <p className="text-lg font-extrabold leading-tight tracking-tight text-white">Web HRM AI</p>
+              <p className="font-display text-lg font-extrabold leading-tight tracking-tight text-white">Web HRM AI</p>
               <p className="text-[13px] font-medium text-slate-300/90">Enterprise HR Platform</p>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="max-w-md animate-fade-up" style={{ animationDelay: '90ms' }}>
-            <h2 className="text-[34px] font-extrabold leading-[1.15] tracking-tight text-white xl:text-4xl">
+          <motion.div
+            className="max-w-md"
+            initial={reduce ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.35, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <h2 className="font-display text-[34px] font-extrabold leading-[1.15] tracking-tight text-white xl:text-4xl">
               Quản trị nhân sự
               <br />
               chuẩn doanh nghiệp,
@@ -202,12 +237,25 @@ export default function LoginPage() {
               tuyển dụng — dữ liệu tập trung, phân quyền chặt chẽ theo vai trò.
             </p>
 
-            <ul className="mt-10 space-y-6">
-              {HIGHLIGHTS.map((item, idx) => (
-                <li
+            {/* Khoảnh khắc lớn duy nhất của trang: đường nhịp vẽ một lần khi tải (800ms, PulseBar tự tôn trọng reduced-motion) */}
+            <div className="mt-9" aria-hidden="true">
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                Nhịp ngày làm việc
+              </p>
+              <PulseBar value={72} milestones={LOGIN_PULSE_MILESTONES} />
+            </div>
+
+            <motion.ul
+              className="mt-10 space-y-6"
+              variants={highlightContainer}
+              initial={reduce ? false : 'hidden'}
+              animate="show"
+            >
+              {HIGHLIGHTS.map((item) => (
+                <motion.li
                   key={item.title}
-                  className="flex animate-fade-up gap-4"
-                  style={{ animationDelay: `${180 + idx * 110}ms` }}
+                  className="flex gap-4"
+                  variants={highlightItem}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[.07] text-accent-300 ring-1 ring-inset ring-white/15">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-6 w-6">
@@ -218,10 +266,10 @@ export default function LoginPage() {
                     <span className="block text-[15px] font-bold text-white">{item.title}</span>
                     <span className="mt-0.5 block text-sm leading-relaxed text-slate-300/90">{item.text}</span>
                   </span>
-                </li>
+                </motion.li>
               ))}
-            </ul>
-          </div>
+            </motion.ul>
+          </motion.div>
 
           <p className="animate-fade-in text-[13px] text-slate-400" style={{ animationDelay: '520ms' }}>
             © 2026 Web HRM AI — Hệ thống quản lý nhân sự nội bộ. Truy cập dành cho nhân viên được cấp quyền.
@@ -236,12 +284,21 @@ export default function LoginPage() {
           className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 animate-pulse-soft rounded-full bg-brand-200/40 blur-3xl lg:hidden"
           style={{ animationDuration: '8s' }}
         />
-        <div className="relative w-full max-w-[430px] animate-scale-in rounded-2xl border border-slate-200/90 bg-white p-7 shadow-pop sm:p-9">
+        <motion.div
+          className="relative w-full max-w-[430px] rounded-2xl border border-slate-200/90 bg-white p-7 shadow-pop sm:p-9"
+          initial={reduce ? false : { opacity: 0, scale: 0.97, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={
+            reduce
+              ? { duration: 0 }
+              : { type: 'spring', stiffness: 320, damping: 28, mass: 0.9 }
+          }
+        >
           <div className="mb-7 text-center">
             <div className="mb-4 flex justify-center">
               <LogoMark className="h-12 w-12 rounded-2xl" />
             </div>
-            <h1 className="text-[24px] font-extrabold tracking-tight text-slate-900">
+            <h1 className="font-display text-[24px] font-extrabold tracking-tight text-slate-900">
               Web HRM tích hợp AI
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
@@ -323,7 +380,7 @@ export default function LoginPage() {
             Quên mật khẩu hoặc chưa có tài khoản? Vui lòng liên hệ phòng nhân sự (HR)
             để được cấp lại.
           </p>
-        </div>
+        </motion.div>
       </main>
     </div>
   );
