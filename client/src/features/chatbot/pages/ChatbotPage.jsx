@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   askChatbot,
+  executeChatAction,
   getChatHistory,
   listKbDocuments,
   uploadKbDocument,
@@ -54,6 +55,15 @@ const LIVE_SUGGESTIONS = [
   'Phiếu lương tháng này của tôi',
   'Hôm nay ai đang nghỉ phép?',
   'Chấm công tháng này của tôi',
+];
+
+/** Hành động chatbot có thể ĐỀ XUẤT (v5 mục A) — bấm chip là gửi câu mẫu;
+ * chatbot soạn THẺ HÀNH ĐỘNG, người dùng bấm "Xác nhận thực hiện" trên
+ * thẻ thì hệ thống mới thay đổi dữ liệu (luồng 2 bước an toàn). Chip
+ * duyệt đơn chỉ hiện với vai trò có cấp duyệt. */
+const ACTION_SUGGESTIONS = [
+  { text: 'Xin nghỉ phép giúp tôi…', roles: null },
+  { text: 'Duyệt đơn đang chờ của team tôi', roles: ['manager', 'hr', 'admin'] },
 ];
 
 const KB_MAX_SIZE_MB = 10;
@@ -164,6 +174,10 @@ export default function ChatbotPage() {
             text: log.answer || '',
             sources: Array.isArray(log.sources) ? log.sources.map(normalizeSource) : [],
             mode: log.mode || null,
+            // Thẻ hành động đã đề xuất trong lịch sử: hiển thị dạng chỉ
+            // đọc (không thực thi lại từ lịch sử — nhắn lại để soạn thẻ mới).
+            action: log.action || null,
+            actionState: log.action ? 'history' : undefined,
             createdAt: log.created_at,
           });
         });
@@ -312,7 +326,7 @@ export default function ChatbotPage() {
     ]);
     setSending(true);
     try {
-      const { answer, sources, mode, retrievalMode } = await askChatbot(question);
+      const { answer, sources, mode, retrievalMode, action } = await askChatbot(question);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === typingId
@@ -323,6 +337,9 @@ export default function ChatbotPage() {
                 sources: sources.map(normalizeSource),
                 mode: mode || null,
                 retrievalMode: retrievalMode || null,
+                action: action || null,
+                actionState: action ? 'pending' : undefined,
+                actionError: '',
               }
             : m,
         ),
@@ -345,6 +362,54 @@ export default function ChatbotPage() {
       e.preventDefault();
       sendQuestion();
     }
+  }
+
+  /* -------------------- Thẻ hành động (v5 mục A, 2 bước) ------------------ */
+  // Xác nhận: gọi execute — backend kiểm tra lại quyền + nghiệp vụ; thành
+  // công thì thẻ chuyển "Đã thực hiện" và chèn tin nhắn kết quả vào luồng
+  // chat; lỗi nghiệp vụ thì hiện Alert trong thẻ, giữ nút để thử lại.
+  async function handleActionConfirm(msg) {
+    if (!msg.action || msg.actionState === 'executing' || msg.actionState === 'done') return;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msg.id ? { ...m, actionState: 'executing', actionError: '' } : m,
+      ),
+    );
+    try {
+      const { resultText } = await executeChatAction(msg.action.type, msg.action.payload);
+      setMessages((prev) => [
+        ...prev.map((m) =>
+          m.id === msg.id ? { ...m, actionState: 'done', actionError: '' } : m,
+        ),
+        {
+          id: `r-${Date.now()}`,
+          role: 'bot',
+          text: resultText || 'Đã thực hiện xong hành động.',
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msg.id
+            ? {
+                ...m,
+                actionState: 'pending',
+                actionError: friendlyError(err, 'Thực hiện hành động thất bại, vui lòng thử lại.'),
+              }
+            : m,
+        ),
+      );
+    }
+  }
+
+  // Huỷ: chỉ đổi trạng thái ở FE — không gọi execute nên không có tác dụng phụ.
+  function handleActionCancel(msgId) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId ? { ...m, actionState: 'cancelled', actionError: '' } : m,
+      ),
+    );
   }
 
   const kbStatusLabel = { processing: 'Đang xử lý', ready: 'Sẵn sàng', failed: 'Lỗi xử lý' };
@@ -488,9 +553,69 @@ export default function ChatbotPage() {
                           </div>
                         )}
                       </div>
+                      {!m.typing && m.action && (
+                        <div className="mt-2 rounded-xl border border-gray-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {m.action.title}
+                            </span>
+                            {m.actionState === 'done' && <Badge tone="green">Đã thực hiện</Badge>}
+                            {m.actionState === 'cancelled' && <Badge tone="slate">Đã huỷ</Badge>}
+                            {m.actionState === 'history' && <Badge tone="slate">Từ lịch sử</Badge>}
+                          </div>
+                          {m.action.summary && (
+                            <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                              {m.action.summary}
+                            </p>
+                          )}
+                          {Array.isArray(m.action.details) && m.action.details.length > 0 && (
+                            <dl className="mt-3 space-y-1.5">
+                              {m.action.details.map((d, di) => (
+                                <div key={di} className="flex gap-2 text-sm">
+                                  <dt className="w-32 shrink-0 text-gray-500">{d.label}</dt>
+                                  <dd className="min-w-0 font-medium text-gray-900">{d.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          )}
+                          {m.actionError && (
+                            <Alert tone="error" className="mt-3">{m.actionError}</Alert>
+                          )}
+                          {(m.actionState === 'pending' || m.actionState === 'executing') && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="primary"
+                                loading={m.actionState === 'executing'}
+                                onClick={() => handleActionConfirm(m)}
+                              >
+                                Xác nhận thực hiện
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={m.actionState === 'executing'}
+                                onClick={() => handleActionCancel(m.id)}
+                              >
+                                Huỷ
+                              </Button>
+                            </div>
+                          )}
+                          {m.actionState === 'history' && (
+                            <p className="mt-3 text-xs leading-relaxed text-gray-500">
+                              Thẻ hành động từ lịch sử trò chuyện — không thực hiện lại
+                              từ đây. Muốn thực hiện, hãy nhắn lại yêu cầu để chatbot
+                              soạn thẻ mới.
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {!m.typing && (
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-gray-400">
                           <span>{formatTime(m.createdAt)}</span>
+                          {!m.error && m.mode === 'action' && (
+                            <Badge tone="violet">Hành động chờ xác nhận</Badge>
+                          )}
                           {!m.error && m.mode === 'live_data' && (
                             <Badge tone="teal">Dữ liệu trực tiếp</Badge>
                           )}
@@ -510,8 +635,30 @@ export default function ChatbotPage() {
               )}
             </div>
 
-            {/* Chips tra dữ liệu trực tiếp (tool layer) — ngay trên ô nhập */}
+            {/* Chips hành động (v5 mục A) — chatbot soạn thẻ, xác nhận mới chạy */}
             <div className="border-t border-gray-200 bg-white px-4 pt-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Hành động nhanh — chatbot soạn sẵn, bạn xác nhận mới thực hiện
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {ACTION_SUGGESTIONS.filter(
+                  (s) => !s.roles || s.roles.includes(role),
+                ).map((s) => (
+                  <button
+                    key={s.text}
+                    type="button"
+                    disabled={sending}
+                    className="rounded-lg border border-brand-600 bg-brand-50 px-2.5 py-1.5 text-[13px] font-medium text-brand-700 transition-colors duration-150 hover:bg-brand-600 hover:text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => sendQuestion(s.text)}
+                  >
+                    {s.text}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chips tra dữ liệu trực tiếp (tool layer) — ngay trên ô nhập */}
+            <div className="bg-white px-4 pt-3">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 Tra dữ liệu của bạn
               </div>

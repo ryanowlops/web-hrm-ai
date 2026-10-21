@@ -553,6 +553,12 @@ def main() -> None:
         seed_feed()
         seed_gamification()
 
+        # Dữ liệu demo mở rộng v5 — bản đồ năng lực (chạy sau offboarding
+        # để NV0005 cũng có mức kỹ năng; seed tự bỏ qua mã NV chưa có).
+        from app.blueprints.skills.seed_demo import seed_demo as seed_skills
+
+        seed_skills()
+
         db.session.commit()
         print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2 + v3.")
         print("Đăng nhập mẫu: admin@hrm.local / Admin@123")

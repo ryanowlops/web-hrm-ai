@@ -63,6 +63,11 @@
 - **Cột mốc**: sinh nhật và kỷ niệm ngày vào làm của toàn công ty theo tháng.
 - **Bảng tin nội bộ**: dòng bài viết kiểu mạng xã hội nội bộ — đăng bài, thả tim, bình luận, ghim bài quan trọng; cột hoạt động tổng hợp sự kiện mới nhất toàn công ty và hiển thị ngay trên Dashboard.
 - **Hành trình của tôi**: trang cá nhân nhìn lại chặng đường làm việc — bản đồ nhiệt chấm công cả năm kiểu GitHub, chuỗi ngày đi làm đúng giờ, điểm thưởng và huy hiệu của chính mình.
+- **Chatbot hành động**: chatbot không chỉ trả lời mà còn soạn sẵn đơn nghỉ phép / quyết định duyệt đơn ngay trong khung chat — chỉ thực thi khi người dùng bấm xác nhận, quyền được kiểm tra lại ở server.
+- **Phỏng vấn thử với AI**: ứng viên chọn vị trí đang tuyển, AI đặt 5 câu hỏi theo đúng mô tả công việc, chấm điểm và nhận xét từng câu, tổng kết điểm mạnh / cần cải thiện cuối buổi.
+- **Màn hình sảnh (chế độ TV)**: trang toàn màn hình tự luân chuyển để treo ở sảnh — vinh danh & bảng xếp hạng, sinh nhật và cột mốc, thông báo mới, nhịp hoạt động của công ty.
+- **Bản đồ năng lực**: ma trận kỹ năng toàn công ty (phòng ban × kỹ năng), hồ sơ năng lực từng nhân viên kèm biểu đồ radar, gợi ý khoá học lấp khoảng trống kỹ năng.
+- **AI kiểm tra CV công khai**: ngay trên trang tuyển dụng, ứng viên dán hoặc tải CV lên để nhận điểm phù hợp với vị trí và góp ý cải thiện trong vài giây — CV không được lưu lại.
 
 ### Game hoá & phúc lợi
 - **Điểm thưởng**: tự tích lũy từ hoạt động thật — nhận kudos (+10), hoàn thành khoá học (+50), mỗi ngày đi làm đúng giờ (+2); sổ điểm minh bạch, chống cộng trùng.

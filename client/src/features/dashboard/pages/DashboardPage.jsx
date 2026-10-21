@@ -430,6 +430,14 @@ export default function DashboardPage() {
       subtitle={`${formatToday()} · Vai trò: ${roleLabel}${scopeText ? ` · ${scopeText}` : ''}`}
       actions={
         <>
+          <Link
+            to="/display"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={LINK_BUTTON_SECONDARY}
+          >
+            Màn hình sảnh
+          </Link>
           <Link to="/attendance" className={LINK_BUTTON_SECONDARY}>
             Xem chấm công
           </Link>

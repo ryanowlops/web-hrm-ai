@@ -44,6 +44,8 @@ from app.models.engagement import (
 )
 from app.models.feed import FeedComment, FeedLike, FeedPost
 from app.models.gamification import PointsLedger, Redemption, Reward
+from app.models.skill import EmployeeSkill, Skill
+from app.models.interview import InterviewQA, InterviewSession
 
 __all__ = [
     # users / org
@@ -113,6 +115,12 @@ __all__ = [
     "PointsLedger",
     "Reward",
     "Redemption",
+    # skills (bản đồ năng lực) — v5
+    "Skill",
+    "EmployeeSkill",
+    # interviews (phỏng vấn thử AI) — v5
+    "InterviewSession",
+    "InterviewQA",
     # misc
     "Notification",
     "Setting",

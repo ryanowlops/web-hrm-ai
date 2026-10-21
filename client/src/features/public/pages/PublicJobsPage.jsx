@@ -12,6 +12,7 @@ import {
   Skeleton,
 } from '../../../components/ui';
 import { StaggerList, StaggerItem } from '../../../components/motion';
+import CvCheckModal from '../components/CvCheckModal';
 
 /**
  * Trang Tuyển dụng CÔNG KHAI (route /jobs) — khách chưa đăng nhập (FR-08).
@@ -95,6 +96,7 @@ export default function PublicJobsPage() {
 
   const [selected, setSelected] = useState(null); // tin đang mở chi tiết
   const [detailLoading, setDetailLoading] = useState(false);
+  const [checkJob, setCheckJob] = useState(null); // tin đang mở modal AI kiểm tra CV
 
   const [form, setForm] = useState(emptyForm);
   const [cvFile, setCvFile] = useState(null);
@@ -365,11 +367,32 @@ export default function PublicJobsPage() {
                   {job.description && (
                     <p className="line-clamp-3 text-sm leading-relaxed text-gray-500">{job.description}</p>
                   )}
-                  <div className="mt-auto inline-flex items-center gap-1.5 pt-1 text-sm font-medium text-brand-700">
-                    Xem chi tiết & ứng tuyển
-                    <span aria-hidden="true" className="inline-block transition-transform duration-200 group-hover:translate-x-1">
-                      →
-                    </span>
+                  <div className="mt-auto pt-1">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCheckJob(job);
+                        }}
+                        className="inline-flex h-9 items-center rounded-lg border border-brand-600 bg-white px-3 text-[13px] font-medium text-brand-700 transition hover:bg-brand-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
+                      >
+                        AI kiểm tra CV
+                      </button>
+                      <a
+                        href={`/mock-interview?job=${job.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-[13px] font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
+                      >
+                        Luyện phỏng vấn với AI
+                      </a>
+                    </div>
+                    <div className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700">
+                      Xem chi tiết & ứng tuyển
+                      <span aria-hidden="true" className="inline-block transition-transform duration-200 group-hover:translate-x-1">
+                        →
+                      </span>
+                    </div>
                   </div>
                 </Card>
                 </StaggerItem>
@@ -382,6 +405,18 @@ export default function PublicJobsPage() {
       <footer className="border-t border-gray-200/80 px-6 py-6 text-center text-xs leading-relaxed text-gray-400">
         Mọi hồ sơ ứng tuyển được bảo mật và chỉ dùng cho mục đích tuyển dụng của công ty.
       </footer>
+
+      {/* --------------------------- Modal AI kiểm tra CV --------------------------- */}
+      {checkJob && (
+        <CvCheckModal
+          job={checkJob}
+          onClose={() => setCheckJob(null)}
+          onApply={(job) => {
+            setCheckJob(null);
+            openJob(job);
+          }}
+        />
+      )}
 
       {/* --------------------------- Modal chi tiết + ứng tuyển --------------------------- */}
       {selected && (

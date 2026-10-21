@@ -8,6 +8,13 @@
                           retrieval_mode = hybrid_rerank/hybrid/embedding/
                           keyword/none).
     GET  /chat/history    Lịch sử hỏi đáp của chính mình (phân trang)
+    POST /chat/actions/execute
+                          Thực thi hành động chatbot đã ĐỀ XUẤT và được
+                          người dùng bấm xác nhận ở FE (v5 mục A):
+                          {"type", "payload"} -> {"result_text",
+                          "leave_request"}. Tầng execute kiểm tra lại
+                          toàn bộ quyền + nghiệp vụ qua leave services;
+                          lỗi giữ nguyên ApiError của leave.
 
 Mọi vai trò đã đăng nhập đều dùng được (A2); mỗi người chỉ xem được
 lịch sử của mình. Giới hạn độ dài câu hỏi ngay ở route để chặn lạm dụng.
@@ -35,6 +42,20 @@ def ask():
                        f"Câu hỏi quá dài (tối đa {MAX_QUESTION_CHARS} ký tự).",
                        [{"field": "question", "message": "Câu hỏi vượt quá độ dài cho phép."}])
     return jsonify(services.ask_question(user=user, question=question))
+
+
+@bp.post("/actions/execute")
+@require_roles()
+def execute_action():
+    user = load_current_user()
+    payload = request.get_json(silent=True) or {}
+    action_type = (payload.get("type") or "").strip()
+    if not action_type:
+        raise ApiError(400, "VALIDATION_ERROR", "Thiếu loại hành động cần thực hiện.",
+                       [{"field": "type", "message": "type không được để trống."}])
+    return jsonify(services.execute_action(
+        user=user, action_type=action_type,
+        payload=payload.get("payload") or {}))
 
 
 @bp.get("/history")

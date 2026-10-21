@@ -56,6 +56,27 @@ export async function askChatbot(question) {
     sources: Array.isArray(payload.sources) ? payload.sources : [],
     mode,
     retrievalMode,
+    // Thẻ hành động chatbot ĐỀ XUẤT (v5 mục A) — chỉ khi mode='action':
+    // { type, title, summary, details: [{label, value}], payload }.
+    // ask KHÔNG thay đổi dữ liệu; thực thi qua executeChatAction().
+    action: payload.action || null,
+  };
+}
+
+/**
+ * Thực thi hành động chatbot đã đề xuất SAU KHI người dùng bấm xác nhận.
+ * POST /chat/actions/execute { type, payload }
+ * -> { result_text, leave_request } (leave_request theo serializer leave).
+ * Backend kiểm tra lại toàn bộ quyền + nghiệp vụ bằng leave services —
+ * lỗi nghiệp vụ (không đủ phép, trùng lịch, không phải cấp duyệt, đơn
+ * đã xử lý) trả envelope { error: { code, message } } như trang Nghỉ phép.
+ */
+export async function executeChatAction(type, payload) {
+  const body = bodyOf(await api.post('/chat/actions/execute', { type, payload }));
+  const data = body?.data ?? body ?? {};
+  return {
+    resultText: data.result_text || '',
+    leaveRequest: data.leave_request || null,
   };
 }
 

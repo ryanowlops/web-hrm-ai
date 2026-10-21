@@ -39,6 +39,7 @@ import unicodedata
 
 from flask import current_app
 
+from app.blueprints.chat import actions as chat_actions
 from app.blueprints.chat import tools as chat_tools
 from app.blueprints.kb import services as kb_services
 from app.extensions import db
@@ -414,23 +415,46 @@ def _sources_of(contexts: list[dict]) -> list[dict]:
 # Nghiệp vụ chính
 # ---------------------------------------------------------------------------
 
+def execute_action(user, action_type: str, payload: dict) -> dict:
+    """Thực thi hành động chatbot đã xác nhận (v5 mục A) — xem actions.py."""
+    return chat_actions.execute_action(user, action_type, payload)
+
+
 def ask_question(user, question: str) -> dict:
     """Trả lời 1 câu hỏi + lưu ChatLog.
 
-    Luồng 2 tầng (feature-expansion-v3 mục 5.1):
-      1) Tool layer (chat/tools.py): câu hỏi về dữ liệu cá nhân/quản lý
-         ("còn bao nhiêu ngày phép", "phiếu lương tháng này"...) -> tra
-         DỮ LIỆU THẬT theo đúng quyền của người hỏi, mode = "live_data",
-         sources rỗng, retrieval_mode = None.
-      2) Ngoài phạm vi tool -> luồng RAG tài liệu như cũ, mode = "rag",
-         retrieval_mode là chế độ truy hồi chi tiết (hybrid_rerank/
-         hybrid/embedding/keyword/none) như trước đây.
+    Luồng 3 tầng:
+      0) Action layer (chat/actions.py — feature-expansion-v5 mục A):
+         câu mang ý định HÀNH ĐỘNG ("xin nghỉ thứ Sáu này...", "duyệt
+         đơn của Lan") -> chatbot chỉ ĐỀ XUẤT: trả thêm trường "action"
+         + mode = "action" (hoặc câu hỏi làm rõ/danh sách, mode =
+         "live_data"), TUYỆT ĐỐI không thay đổi dữ liệu ở bước này.
+         Thực thi chỉ qua POST /chat/actions/execute sau khi người
+         dùng bấm xác nhận trên thẻ hành động ở FE.
+      1) Tool layer (chat/tools.py — v3 mục 5.1): câu hỏi về dữ liệu
+         cá nhân/quản lý -> DỮ LIỆU THẬT theo quyền, mode = "live_data".
+      2) Ngoài phạm vi trên -> luồng RAG tài liệu như cũ, mode = "rag",
+         retrieval_mode là chế độ truy hồi chi tiết.
 
-    ChatLog không có cột mode riêng: với câu trả lời live_data, gắn thêm
-    phần tử đánh dấu {"_meta": {"mode": "live_data"}} vào cuối cột
-    sources (JSON) — get_history bóc phần tử này ra và trả mode riêng,
-    không để lọt vào danh sách trích dẫn hiển thị.
+    ChatLog không có cột mode/action riêng: gắn phần tử đánh dấu
+    {"_meta": {"mode": ...}} và (khi có) {"_action": {...}} vào cột
+    sources (JSON) — get_history bóc ra trả mode/action riêng, không
+    để lọt vào danh sách trích dẫn hiển thị.
     """
+    action_result = chat_actions.detect_action(user, question)
+    if action_result is not None:
+        action = action_result.get("action")
+        mode = "action" if action else "live_data"
+        markers = [{"_meta": {"mode": mode}}]
+        if action:
+            markers.append({"_action": action})
+        log = ChatLog(user_id=user.id, question=question,
+                      answer=action_result["answer"], sources=markers)
+        db.session.add(log)
+        db.session.commit()
+        return {"answer": action_result["answer"], "sources": [],
+                "mode": mode, "retrieval_mode": None, "action": action}
+
     live_answer = chat_tools.try_answer(user, question)
     if live_answer is not None:
         log = ChatLog(
@@ -440,7 +464,7 @@ def ask_question(user, question: str) -> dict:
         db.session.add(log)
         db.session.commit()
         return {"answer": live_answer, "sources": [],
-                "mode": "live_data", "retrieval_mode": None}
+                "mode": "live_data", "retrieval_mode": None, "action": None}
 
     contexts, retrieval_mode = retrieve_contexts(question)
     if contexts:
@@ -455,7 +479,7 @@ def ask_question(user, question: str) -> dict:
     db.session.add(log)
     db.session.commit()
     return {"answer": answer, "sources": sources,
-            "mode": "rag", "retrieval_mode": retrieval_mode}
+            "mode": "rag", "retrieval_mode": retrieval_mode, "action": None}
 
 
 def get_history(user_id: int, page: int = 1, limit: int = 20) -> dict:
@@ -468,15 +492,22 @@ def get_history(user_id: int, page: int = 1, limit: int = 20) -> dict:
     rows = query.offset((page - 1) * limit).limit(limit).all()
 
     def _split_sources(row):
-        """Tách phần tử đánh dấu {"_meta": ...} khỏi trích dẫn hiển thị."""
+        """Tách {"_meta"}/{"_action"} khỏi trích dẫn hiển thị.
+
+        Trả (sources hiển thị, mode, action|None) — action là thẻ hành
+        động chatbot đã đề xuất cho tin nhắn đó (v5 mục A.3).
+        """
         mode = "rag"
+        action = None
         visible = []
         for item in row.sources or []:
             if isinstance(item, dict) and "_meta" in item:
                 mode = (item.get("_meta") or {}).get("mode", mode)
+            elif isinstance(item, dict) and "_action" in item:
+                action = item.get("_action")
             else:
                 visible.append(item)
-        return visible, mode
+        return visible, mode, action
 
     return {
         "data": [{
@@ -485,6 +516,7 @@ def get_history(user_id: int, page: int = 1, limit: int = 20) -> dict:
             "answer": row.answer,
             "sources": _split_sources(row)[0],
             "mode": _split_sources(row)[1],
+            "action": _split_sources(row)[2],
             "createdAt": row.created_at.isoformat() if row.created_at else None,
         } for row in rows],
         "meta": {

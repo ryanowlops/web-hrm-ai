@@ -10,6 +10,7 @@ Bảng route (blueprint ``recruitment``, tiền tố ``/api/v1``):
 | PATCH  | /jobs/<id>                    | Admin, HR    | Cập nhật tin (đổi status open/closed tại đây) |
 | DELETE | /jobs/<id>                    | Admin, HR    | Xóa tin (chặn 409 nếu đã có ứng viên) |
 | POST   | /jobs/<id>/apply              | Công khai    | Nộp CV (multipart: full_name, email, phone, cv=PDF) |
+| POST   | /public/cv-check              | Công khai**  | AI kiểm tra CV theo JD (KHÔNG lưu DB; rate limit riêng) |
 | GET    | /candidates                   | Admin, HR    | Danh sách ứng viên (lọc job_id/status/search, sort) |
 | GET    | /candidates/<id>              | Admin, HR    | Chi tiết ứng viên + phân tích AI mới nhất |
 | PATCH  | /candidates/<id>/status       | Admin, HR    | Đổi trạng thái + ghi chú HR |
@@ -25,7 +26,10 @@ from flask import jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from app.extensions import limiter
+
 from . import bp
+from . import cvcheck
 from . import services
 from .schemas import (
     CandidateApplySchema,
@@ -214,6 +218,29 @@ def apply_to_job(job_id):
         ),
         201,
     )
+
+
+@bp.route("/public/cv-check", methods=["POST"])
+@limiter.limit("10 per minute")
+@limiter.limit("30 per hour")
+@handle_errors
+def public_cv_check():
+    """AI kiểm tra CV theo JD — không cần đăng nhập, KHÔNG lưu vào DB.
+
+    Nhận JSON ``{job_id, cv_text}`` hoặc multipart (field ``job_id`` +
+    file ``cv``/``file`` — PDF/TXT). CV chỉ phân tích tức thời trong bộ
+    nhớ rồi bỏ. Rate limit riêng chặt hơn mặc định toàn app (600/giờ)
+    vì mỗi lần gọi có thể tốn một lượt AI.
+    """
+    file_storage = request.files.get("cv") or request.files.get("file")
+    if file_storage is not None and (file_storage.filename or "").strip():
+        result = cvcheck.check_cv(
+            request.form.get("job_id"), file_storage=file_storage
+        )
+    else:
+        payload = request.get_json(silent=True) or {}
+        result = cvcheck.check_cv(payload.get("job_id"), cv_text=payload.get("cv_text"))
+    return jsonify({"data": result}), 200
 
 
 # --------------------------------------------------------------------------- #

@@ -44,6 +44,8 @@ _MODULE_BLUEPRINTS = [
     "people_ai",
     "feed",
     "gamification",
+    "skills",
+    "interviews",
     "ai",
     "kb",
     "chat",

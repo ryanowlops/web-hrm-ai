@@ -12,6 +12,7 @@ import {
   ChatbotPage,
   DashboardPage,
   DepartmentListPage,
+  DisplayPage,
   DocumentsPage,
   EmployeeDetailPage,
   EmployeeListPage,
@@ -22,6 +23,7 @@ import {
   KudosPage,
   LeavePage,
   LoginPage,
+  MockInterviewPage,
   NotificationsPage,
   OffboardingPage,
   OnboardingPage,
@@ -32,6 +34,7 @@ import {
   ReportsPage,
   RewardsPage,
   ShiftsPage,
+  SkillsPage,
   SurveysPage,
   TeamCalendarPage,
   TrainingPage,
@@ -105,6 +108,14 @@ const router = createBrowserRouter([
   // --- Công khai ---
   { path: '/login', element: lazyPage(LoginPage) },
   { path: '/jobs', element: lazyPage(PublicJobsPage) },
+  // --- Mở rộng v5: phỏng vấn thử AI (công khai như /jobs) ---
+  { path: '/mock-interview', element: lazyPage(MockInterviewPage) },
+
+  // --- Mở rộng v5: màn hình sảnh TV (đã đăng nhập, không AppLayout) ---
+  {
+    path: '/display',
+    element: <ProtectedRoute>{lazyPage(DisplayPage)}</ProtectedRoute>,
+  },
 
   // --- Khu vực đã đăng nhập (AppLayout: sidebar + header + Outlet) ---
   {
@@ -159,6 +170,8 @@ const router = createBrowserRouter([
       { path: 'feed', element: lazyPage(FeedPage) },
       { path: 'rewards', element: lazyPage(RewardsPage) },
       { path: 'my-journey', element: lazyPage(JourneyPage) },
+      // --- Mở rộng v5 ---
+      { path: 'skills', element: lazyPage(SkillsPage) },
     ],
   },
 

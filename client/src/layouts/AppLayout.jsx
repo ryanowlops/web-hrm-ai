@@ -364,6 +364,31 @@ const globeIcon = (
   />
 );
 
+const SkillsIcon = (
+  <Icon
+    paths={
+      <>
+        <path d="M4 20V10" />
+        <path d="M10 20V4" />
+        <path d="M16 20v-8" />
+        <path d="M22 20H2" />
+      </>
+    }
+  />
+);
+
+const InterviewIcon = (
+  <Icon
+    paths={
+      <>
+        <path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Z" />
+        <path d="M5 11a7 7 0 0 0 14 0" />
+        <path d="M12 18v3" />
+      </>
+    }
+  />
+);
+
 const NAV_ITEMS = [
   { to: '/', label: 'Tổng quan', icon: ICONS.dashboard, end: true },
   { to: '/employees', label: 'Nhân viên', icon: ICONS.employees },
@@ -382,6 +407,8 @@ const NAV_ITEMS = [
   { to: '/documents', label: 'Hồ sơ & giấy tờ', icon: ICONS.documents },
   { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: ICONS.orgChart },
   { to: '/team-calendar', label: 'Lịch team', icon: ICONS.teamCalendar },
+  { to: '/skills', label: 'Bản đồ năng lực', icon: SkillsIcon },
+  { to: '/mock-interview', label: 'Phỏng vấn thử AI', icon: InterviewIcon },
   { to: '/offboarding', label: 'Nghỉ việc', icon: ICONS.offboarding },
   { to: '/assets', label: 'Tài sản', icon: ICONS.assets },
   { to: '/training', label: 'Đào tạo', icon: ICONS.training },
@@ -415,9 +442,12 @@ const NAV_GROUPS = [
     label: 'Quản lý',
     paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
   },
-  { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding'] },
+  { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding', '/skills'] },
   { label: 'Vận hành', paths: ['/assets', '/training'] },
-  { label: 'Tuyển dụng & AI', paths: ['/recruitment', '/chatbot', '/attrition-risk'] },
+  {
+    label: 'Tuyển dụng & AI',
+    paths: ['/recruitment', '/chatbot', '/attrition-risk', '/mock-interview'],
+  },
   { label: 'Truyền thông', paths: ['/announcements', '/reports', '/kudos', '/surveys', '/feed'] },
   { label: 'Trải nghiệm', paths: ['/my-journey', '/rewards'] },
   { label: 'Hệ thống', paths: ['/admin'] },
