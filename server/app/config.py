@@ -33,11 +33,15 @@ class Config:
     # --- Database ---
     # Mặc định SQLite cho dev local; production dùng PostgreSQL qua DATABASE_URL,
     # ví dụ: postgresql+psycopg2://user:pass@db:5432/hrm
-    # Neon/Heroku cấp URL dạng postgres:// — SQLAlchemy 2.x chỉ nhận
-    # postgresql:// nên chuẩn hoá tại đây.
+    # Neon/Heroku cấp URL dạng postgres:// hoặc postgresql:// — chuẩn hoá
+    # tại đây và GHIM driver psycopg2: SQLAlchemy 2.x mặc định chọn psycopg
+    # (v3) cho scheme postgresql://, mà image chỉ cài psycopg2-binary nên
+    # sẽ văng ModuleNotFoundError khi tạo engine (đã gặp trên Render).
     _db_url = os.environ.get("DATABASE_URL", "sqlite:///hrm.db")
     if _db_url.startswith("postgres://"):
-        _db_url = "postgresql://" + _db_url[len("postgres://"):]
+        _db_url = "postgresql+psycopg2://" + _db_url[len("postgres://"):]
+    elif _db_url.startswith("postgresql://"):
+        _db_url = "postgresql+psycopg2://" + _db_url[len("postgresql://"):]
     SQLALCHEMY_DATABASE_URI = _db_url
     # Bật khi deploy (Koyeb): tự tạo bảng khi khởi động nếu DB còn trống.
     AUTO_CREATE_TABLES = os.environ.get("AUTO_CREATE_TABLES", "0") == "1"
