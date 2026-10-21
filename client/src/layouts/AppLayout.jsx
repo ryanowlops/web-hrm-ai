@@ -2,8 +2,13 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../app/AuthContext.jsx';
+import { prefetchRoute } from '../app/pages.js';
 import { notificationsApi } from '../api/index.js';
+import { fetchOverview } from '../features/dashboard/services';
+import { getAnnouncements } from '../features/announcements/services';
+import { getEmployees } from '../features/employees/services';
 import PageTransition from '../components/motion/PageTransition.jsx';
 import ActivePill from '../components/motion/ActivePill.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
@@ -349,6 +354,28 @@ export default function AppLayout() {
   const displayName = user?.fullName || user?.email || 'Người dùng';
   const roleLabel = user?.role ? ROLE_LABELS[user.role] || user.role : null;
 
+  // Nạp trước dữ liệu của trang Tổng quan ngay khi layout hiện (tức ngay sau
+  // đăng nhập) — dùng đúng queryKey/queryFn của DashboardPage nên khi người
+  // dùng vào trang chủ, số liệu đã có sẵn trong cache, hiện gần như tức thì.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    queryClient.prefetchQuery({
+      queryKey: ['stats', 'overview'],
+      queryFn: fetchOverview,
+      staleTime: 60_000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['announcements', 'latest'],
+      queryFn: async () => (await getAnnouncements({ limit: 3 })).items,
+      staleTime: 60_000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['employees', 'dashboard-this-month'],
+      queryFn: async () => (await getEmployees({ limit: 100 })).items,
+      staleTime: 60_000,
+    });
+  }, [queryClient]);
+
   // Số thông báo chưa đọc cho chấm đỏ trên chuông (chỉ hiển thị, lỗi thì ẩn).
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
@@ -427,6 +454,8 @@ export default function AppLayout() {
                     end={item.end}
                     className={navLinkClass}
                     title={collapsed ? item.label : undefined}
+                    onMouseEnter={() => prefetchRoute(item.to)}
+                    onFocus={() => prefetchRoute(item.to)}
                   >
                     {({ isActive }) => (
                       <>
@@ -457,6 +486,8 @@ export default function AppLayout() {
         <div className="mt-auto hidden border-t border-gray-200 p-3 lg:block">
           <NavLink
             to="/jobs"
+            onMouseEnter={() => prefetchRoute('/jobs')}
+            onFocus={() => prefetchRoute('/jobs')}
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30"
           >
             <span className="text-gray-400">{globeIcon}</span>

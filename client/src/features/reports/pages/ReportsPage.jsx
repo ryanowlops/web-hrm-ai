@@ -1,19 +1,7 @@
 // Trang Báo cáo tháng (Đội F) — hợp đồng thiết kế v4: phẳng, không gradient.
 // Dữ liệu: GET /stats/reports/summary (xem features/reports/services.js).
 // Biểu đồ Recharts màu phẳng; xuất CSV 3 loại qua blob kèm token.
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Badge,
@@ -29,6 +17,16 @@ import {
 } from '../../../components/ui';
 import { downloadReportCsv, getReportSummary, parseApiError } from '../services';
 import { formatNumber, formatVND } from '../../../lib/format';
+import DeferredMount from '../../../components/motion/DeferredMount.jsx';
+
+// Biểu đồ (recharts) nạp lazy + gắn sau khi trang đã vẽ xong (DeferredMount)
+// để trang Báo cáo hiện số liệu trước, biểu đồ theo sau.
+const HeadcountChart = lazy(() =>
+  import('../components/ReportsCharts.jsx').then((m) => ({ default: m.HeadcountChart })),
+);
+const PayrollPieChart = lazy(() =>
+  import('../components/ReportsCharts.jsx').then((m) => ({ default: m.PayrollPieChart })),
+);
 
 const CHART_COLORS = ['#274FEA', '#0DB795', '#F59E0B', '#D0D5DD', '#7C8DB0', '#B54708'];
 
@@ -167,15 +165,11 @@ export default function ReportsPage() {
                 {headcountData.length === 0 ? (
                   <EmptyState title="Chưa có dữ liệu phòng ban" description="Chưa có phòng ban nào trong phạm vi báo cáo." />
                 ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={headcountData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-                      <CartesianGrid stroke="#EAECF0" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="departmentName" tick={{ fontSize: 12, fill: '#667085' }} axisLine={{ stroke: '#EAECF0' }} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#667085' }} axisLine={false} tickLine={false} />
-                      <Tooltip formatter={(value) => [`${value} nhân viên`, 'Số nhân viên']} />
-                      <Bar dataKey="employeeCount" name="Số nhân viên" fill="#274FEA" radius={[4, 4, 0, 0]} maxBarSize={48} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <DeferredMount fallback={<Skeleton className="h-[300px] w-full" />}>
+                    <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+                      <HeadcountChart data={headcountData} />
+                    </Suspense>
+                  </DeferredMount>
                 )}
               </CardBody>
             </Card>
@@ -191,24 +185,11 @@ export default function ReportsPage() {
                 {payrollData.length === 0 ? (
                   <EmptyState title="Chưa có dữ liệu lương" description="Chưa có kỳ lương nào để tổng hợp chi phí theo phòng ban." />
                 ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={payrollData}
-                        dataKey="totalCost"
-                        nameKey="departmentName"
-                        innerRadius={64}
-                        outerRadius={104}
-                        paddingAngle={2}
-                        stroke="#FFFFFF"
-                      >
-                        {payrollData.map((entry, index) => (
-                          <Cell key={entry.departmentId ?? entry.departmentName} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name) => [formatVND(value), name]} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DeferredMount fallback={<Skeleton className="h-[300px] w-full" />}>
+                    <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+                      <PayrollPieChart data={payrollData} colors={CHART_COLORS} />
+                    </Suspense>
+                  </DeferredMount>
                 )}
                 {payrollData.length > 0 && (
                   <ul className="mt-2 space-y-2 border-t border-gray-100 pt-3">

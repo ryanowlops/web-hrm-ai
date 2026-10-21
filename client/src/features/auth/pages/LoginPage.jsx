@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { useAuth } from '../../../app/AuthContext.jsx';
+import { prefetchRoute } from '../../../app/pages.js';
+import api from '../../../api/axiosClient';
 import { login } from '../services';
 import { Alert, Button, Input } from '../../../components/ui';
 
@@ -77,6 +79,15 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     }
   }, [authLoading, authUser, navigate]);
+
+  // Đánh thức server ngay khi trang mở: bản online chạy gói miễn phí, server
+  // "ngủ" khi không ai dùng nên request đầu tiên có thể mất 30–90 giây. Gọi
+  // /health từ sớm (trong lúc người dùng gõ email/mật khẩu) + tải trước chunk
+  // trang Tổng quan để đăng nhập xong là vào thẳng, giảm hẳn cảm giác chờ.
+  useEffect(() => {
+    api.get('/health').catch(() => {});
+    prefetchRoute('/');
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

@@ -1,8 +1,32 @@
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
+import {
+  AdminPage,
+  AnnouncementsPage,
+  AssetsPage,
+  AttendancePage,
+  ChatbotPage,
+  DashboardPage,
+  DepartmentListPage,
+  EmployeeDetailPage,
+  EmployeeListPage,
+  JobDetailPage,
+  JobListPage,
+  LeavePage,
+  LoginPage,
+  NotificationsPage,
+  OnboardingPage,
+  OrgChartPage,
+  PayrollPage,
+  PerformancePage,
+  PublicJobsPage,
+  ReportsPage,
+  TeamCalendarPage,
+  TrainingPage,
+} from './pages.js';
 
 // ---------------------------------------------------------------------------
 // QUY ƯỚC ROUTE → PAGE (các worker FE khác phải tạo page đúng path này)
@@ -37,41 +61,19 @@ import NotFoundPage from '../pages/NotFoundPage.jsx';
 //   *                       -> pages/NotFoundPage.jsx
 // ---------------------------------------------------------------------------
 
-const LoginPage = lazy(() => import('../features/auth/pages/LoginPage.jsx'));
-const PublicJobsPage = lazy(() => import('../features/public/pages/PublicJobsPage.jsx'));
-const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPage.jsx'));
-const EmployeeListPage = lazy(() => import('../features/employees/pages/EmployeeListPage.jsx'));
-const EmployeeDetailPage = lazy(
-  () => import('../features/employees/pages/EmployeeDetailPage.jsx'),
-);
-const DepartmentListPage = lazy(
-  () => import('../features/departments/pages/DepartmentListPage.jsx'),
-);
-const AttendancePage = lazy(() => import('../features/attendance/pages/AttendancePage.jsx'));
-const LeavePage = lazy(() => import('../features/leave/pages/LeavePage.jsx'));
-const PayrollPage = lazy(() => import('../features/payroll/pages/PayrollPage.jsx'));
-const JobListPage = lazy(() => import('../features/recruitment/pages/RecruitmentPage.jsx'));
-const JobDetailPage = lazy(() => import('../features/recruitment/pages/JobDetailPage.jsx'));
-const ChatbotPage = lazy(() => import('../features/chatbot/pages/ChatbotPage.jsx'));
-const AdminPage = lazy(() => import('../features/admin/pages/AdminPage.jsx'));
-const PerformancePage = lazy(() => import('../features/performance/pages/PerformancePage.jsx'));
-const OnboardingPage = lazy(() => import('../features/onboarding/pages/OnboardingPage.jsx'));
-const OrgChartPage = lazy(() => import('../features/orgchart/pages/OrgChartPage.jsx'));
-const TeamCalendarPage = lazy(() => import('../features/calendar/pages/TeamCalendarPage.jsx'));
-const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage.jsx'));
-const TrainingPage = lazy(() => import('../features/training/pages/TrainingPage.jsx'));
-const AnnouncementsPage = lazy(
-  () => import('../features/announcements/pages/AnnouncementsPage.jsx'),
-);
-const NotificationsPage = lazy(
-  () => import('../features/notifications/pages/NotificationsPage.jsx'),
-);
-const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage.jsx'));
-
 function PageLoading() {
+  // Khung chờ dạng skeleton (pulse nhẹ) — giữ bố cục ổn định trong lúc chunk
+  // của trang đang tải, tránh cảm giác trang trắng/nhảy hình.
   return (
-    <div role="status" aria-live="polite" style={{ padding: '2rem', textAlign: 'center' }}>
-      Đang tải trang…
+    <div role="status" aria-live="polite" aria-label="Đang tải trang" className="animate-pulse">
+      <div className="mb-2 h-6 w-56 rounded-md bg-gray-200" />
+      <div className="mb-6 h-4 w-80 max-w-full rounded-md bg-gray-100" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-28 rounded-xl border border-gray-200 bg-white" />
+        ))}
+      </div>
+      <div className="mt-5 h-64 rounded-xl border border-gray-200 bg-white" />
     </div>
   );
 }

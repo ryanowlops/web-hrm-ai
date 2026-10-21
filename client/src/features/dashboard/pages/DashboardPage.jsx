@@ -1,17 +1,6 @@
+import { Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import { useAuth } from '../../../app/AuthContext.jsx';
 import {
   IconBell,
@@ -39,10 +28,20 @@ import {
   StatCard,
 } from '../../../components/ui';
 import StaggerList, { StaggerItem } from '../../../components/motion/StaggerList.jsx';
+import DeferredMount from '../../../components/motion/DeferredMount.jsx';
 import { getCurrentUser } from '../../auth/services';
 import { getAnnouncements } from '../../announcements/services';
 import { getEmployees } from '../../employees/services';
 import { fetchOverview } from '../services';
+
+// Biểu đồ (recharts, chunk ~109KB gzip) nạp lazy + gắn sau khi trang đã vẽ
+// xong khung (DeferredMount) — trang hiện số liệu trước, biểu đồ theo sau.
+const AttendanceChart = lazy(() =>
+  import('../components/DashboardCharts.jsx').then((m) => ({ default: m.AttendanceChart })),
+);
+const DepartmentChart = lazy(() =>
+  import('../components/DashboardCharts.jsx').then((m) => ({ default: m.DepartmentChart })),
+);
 
 // ============================================================
 // Trang Dashboard — route "/" — Design v4 (mẫu Overview của shadcn-admin)
@@ -74,16 +73,6 @@ const LEAVE_STATUS_TONES = {
   approved: 'green',
   rejected: 'red',
 };
-
-// Màu biểu đồ phẳng theo hợp đồng v4 (fill đặc, không hiệu ứng màu chuyển):
-// brand-600, teal accent-500, amber-500, gray-300.
-const ATTENDANCE_COLORS = {
-  'Đúng giờ': '#274FEA',
-  'Đi muộn': '#F59E0B',
-  'Nghỉ phép': '#0DB795',
-  Vắng: '#D0D5DD',
-};
-const DEPARTMENT_COLORS = ['#274FEA', '#0DB795', '#F59E0B', '#98A2B3', '#667085', '#D0D5DD'];
 
 function formatDate(value) {
   if (!value) return '';
@@ -504,19 +493,11 @@ export default function DashboardPage() {
               <CardBody>
                 {data.attendanceChart.some((item) => item.value > 0) ? (
                   <div style={{ width: '100%', height: 280 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={data.attendanceChart} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                        <CartesianGrid stroke="#EAECF0" strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#667085' }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#667085' }} />
-                        <Tooltip formatter={(value) => [`${value} người`, 'Số lượng']} />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={800}>
-                          {data.attendanceChart.map((entry) => (
-                            <Cell key={entry.name} fill={ATTENDANCE_COLORS[entry.name] || '#274FEA'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <DeferredMount fallback={<Skeleton className="h-full w-full" />}>
+                      <Suspense fallback={<Skeleton className="h-full w-full" />}>
+                        <AttendanceChart data={data.attendanceChart} />
+                      </Suspense>
+                    </DeferredMount>
                   </div>
                 ) : (
                   <EmptyState
@@ -611,26 +592,11 @@ export default function DashboardPage() {
               <CardBody>
                 {data.byDepartment.length > 0 ? (
                   <div style={{ width: '100%', height: 260 }}>
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <Pie
-                          data={data.byDepartment}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={56}
-                          outerRadius={88}
-                          paddingAngle={1}
-                          isAnimationActive
-                          animationDuration={800}
-                          label={({ name, value }) => `${name}: ${value}`}
-                        >
-                          {data.byDepartment.map((entry, index) => (
-                            <Cell key={entry.name} fill={DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => [`${value} nhân viên`, 'Số lượng']} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <DeferredMount fallback={<Skeleton className="h-full w-full" />}>
+                      <Suspense fallback={<Skeleton className="h-full w-full" />}>
+                        <DepartmentChart data={data.byDepartment} />
+                      </Suspense>
+                    </DeferredMount>
                   </div>
                 ) : (
                   <EmptyState
