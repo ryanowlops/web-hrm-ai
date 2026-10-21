@@ -180,10 +180,14 @@ def create_app(config=None) -> Flask:
 
     @app.get("/")
     def index():
+        # Render tự cấp RENDER_GIT_COMMIT — hiển thị để kiểm tra nhanh từ
+        # bên ngoài xem bản deploy đang chạy là commit nào (rỗng khi local).
+        commit = (os.environ.get("RENDER_GIT_COMMIT") or "")[:7] or None
         return jsonify({
             "service": "hrm-ai-api",
             "health": "/api/v1/health",
             "api_prefix": "/api/v1",
+            "commit": commit,
         })
 
     @app.shell_context_processor
