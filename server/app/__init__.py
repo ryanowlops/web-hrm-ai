@@ -42,6 +42,8 @@ _MODULE_BLUEPRINTS = [
     "offboarding",
     "engagement",
     "people_ai",
+    "feed",
+    "gamification",
     "ai",
     "kb",
     "chat",

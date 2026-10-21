@@ -544,6 +544,15 @@ def main() -> None:
         seed_engagement()
         seed_offboarding()
 
+        # Dữ liệu demo mở rộng v4 — bảng tin chạy sau engagement (dùng user
+        # demo sẵn có, tự bổ sung tài khoản cho NV0004); game hoá chạy cuối
+        # vì đồng bộ điểm đọc kudo + đào tạo đã seed ở trên.
+        from app.blueprints.feed.seed_demo import seed_demo as seed_feed
+        from app.blueprints.gamification.seed_demo import seed_demo as seed_gamification
+
+        seed_feed()
+        seed_gamification()
+
         db.session.commit()
         print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2 + v3.")
         print("Đăng nhập mẫu: admin@hrm.local / Admin@123")

@@ -83,6 +83,19 @@ def my_attendance():
     ), 200
 
 
+@bp.get("/attendance/my-year")
+@jwt_required()
+def my_year():
+    """Chấm công cả năm của chính mình — cho trang "Hành trình của tôi".
+
+    Query: ?year=YYYY (mặc định năm hiện tại).
+    Trả { data: { year, days: [{date, status, check_in, check_out}],
+    summary: {total_days, on_time_days, late_days, current_streak,
+    best_streak} } } — luôn chỉ dữ liệu của người gọi.
+    """
+    return jsonify({"data": services.get_my_year(request.args.get("year"))}), 200
+
+
 @bp.get("/attendance/monthly")
 @jwt_required()
 @require_roles(*MONTHLY_ROLES)

@@ -61,6 +61,13 @@
 - **Kudos**: tặng lời khen kèm huy hiệu cho đồng nghiệp, tường vinh danh, bảng xếp hạng tháng, tiện ích vinh danh mới nhất trên Dashboard.
 - **Khảo sát xung & eNPS**: HR tạo khảo sát (câu eNPS 0–10, thang 1–5, trắc nghiệm, tự luận); đáp án **ẩn danh ở mức dữ liệu** — hệ thống lưu riêng phần "đã tham gia" chỉ để chống trả lời trùng, kết quả tổng hợp không gắn với danh tính.
 - **Cột mốc**: sinh nhật và kỷ niệm ngày vào làm của toàn công ty theo tháng.
+- **Bảng tin nội bộ**: dòng bài viết kiểu mạng xã hội nội bộ — đăng bài, thả tim, bình luận, ghim bài quan trọng; cột hoạt động tổng hợp sự kiện mới nhất toàn công ty và hiển thị ngay trên Dashboard.
+- **Hành trình của tôi**: trang cá nhân nhìn lại chặng đường làm việc — bản đồ nhiệt chấm công cả năm kiểu GitHub, chuỗi ngày đi làm đúng giờ, điểm thưởng và huy hiệu của chính mình.
+
+### Game hoá & phúc lợi
+- **Điểm thưởng**: tự tích lũy từ hoạt động thật — nhận kudos (+10), hoàn thành khoá học (+50), mỗi ngày đi làm đúng giờ (+2); sổ điểm minh bạch, chống cộng trùng.
+- **Cửa hàng quà**: đổi điểm lấy quà (voucher, áo thun, thiết bị, thêm ngày phép…); HR quản lý danh mục và duyệt yêu cầu, điểm chỉ trừ khi duyệt thành công.
+- **Huy hiệu thành tích**: các cột mốc như "Đúng giờ 7 ngày liên tiếp", "Chiến binh học tập", "Ngôi sao gắn kết" tự sáng lên từ dữ liệu thật, kèm bảng xếp hạng điểm toàn công ty.
 
 ### Trí tuệ nhân tạo
 - **Sàng lọc CV**: đọc PDF, trích xuất kỹ năng/kinh nghiệm, chấm điểm phù hợp với mô tả công việc và xếp hạng ứng viên. AI chỉ gợi ý — quyết định cuối luôn thuộc về HR.

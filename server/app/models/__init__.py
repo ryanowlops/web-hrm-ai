@@ -42,6 +42,8 @@ from app.models.engagement import (
     SurveyParticipation,
     SurveyResponse,
 )
+from app.models.feed import FeedComment, FeedLike, FeedPost
+from app.models.gamification import PointsLedger, Redemption, Reward
 
 __all__ = [
     # users / org
@@ -103,6 +105,14 @@ __all__ = [
     "Survey",
     "SurveyResponse",
     "SurveyParticipation",
+    # feed (bảng tin nội bộ) — v4
+    "FeedPost",
+    "FeedLike",
+    "FeedComment",
+    # gamification (điểm thưởng / cửa hàng quà) — v4
+    "PointsLedger",
+    "Reward",
+    "Redemption",
     # misc
     "Notification",
     "Setting",

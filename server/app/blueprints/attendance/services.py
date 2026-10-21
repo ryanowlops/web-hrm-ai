@@ -343,6 +343,92 @@ def get_my_month(month_value):
     return records, summarize(records), first
 
 
+def parse_year(value):
+    """Parse năm 'YYYY' -> int. Mặc định năm hiện tại (giờ Việt Nam)."""
+    if value is None or str(value).strip() == "":
+        return _now().date().year
+    try:
+        year = int(str(value).strip())
+    except (TypeError, ValueError):
+        raise ApiError(
+            400,
+            "VALIDATION_ERROR",
+            "Tham số year phải là năm dạng YYYY.",
+            details=[{"field": "year", "message": "Định dạng YYYY"}],
+        )
+    if year < 2000 or year > 2100:
+        raise ApiError(
+            400,
+            "VALIDATION_ERROR",
+            "Tham số year nằm ngoài khoảng hỗ trợ (2000–2100).",
+            details=[{"field": "year", "message": "Từ 2000 đến 2100"}],
+        )
+    return year
+
+
+def compute_streaks(records):
+    """(current_streak, best_streak) từ bản ghi đã sắp xếp theo ngày tăng dần.
+
+    Chuỗi đúng giờ = các bản ghi liên tiếp có status "present" (đi làm đúng
+    giờ theo đúng quy ước trạng thái của module: check-in không muộn).
+    Bất kỳ trạng thái nào khác (late / absent / on_leave) đều ngắt chuỗi.
+    current_streak là chuỗi đang chạy tính tới ngày công gần nhất.
+    """
+    best = run = 0
+    for record in records:
+        if getattr(record, "status", None) == "present":
+            run += 1
+            if run > best:
+                best = run
+        else:
+            run = 0
+    return run, best
+
+
+def get_my_year(year_value):
+    """Chấm công cả năm của chính người gọi — cho bản đồ nhiệt "Hành trình".
+
+    Trả { year, days, summary }:
+    - days: mọi ngày có bản ghi trong năm [{date, status, check_in, check_out}]
+      (check_in/check_out là ISO datetime hoặc null).
+    - summary: total_days = số ngày thực công (có check-in), on_time_days =
+      số ngày "present", late_days = số ngày "late", current_streak /
+      best_streak = chuỗi ngày đúng giờ liên tiếp (hiện tại / dài nhất).
+    """
+    employee = get_current_employee()
+    year = parse_year(year_value)
+    first = date(year, 1, 1)
+    next_first = date(year + 1, 1, 1)
+    records = (
+        db.session.query(Attendance)
+        .filter(
+            Attendance.employee_id == employee.id,
+            Attendance.work_date >= first,
+            Attendance.work_date < next_first,
+        )
+        .order_by(Attendance.work_date.asc())
+        .all()
+    )
+    days = [
+        {
+            "date": record.work_date.isoformat(),
+            "status": record.status,
+            "check_in": record.check_in_at.isoformat() if record.check_in_at else None,
+            "check_out": record.check_out_at.isoformat() if record.check_out_at else None,
+        }
+        for record in records
+    ]
+    current_streak, best_streak = compute_streaks(records)
+    summary = {
+        "total_days": sum(1 for r in records if r.check_in_at is not None),
+        "on_time_days": sum(1 for r in records if r.status == "present"),
+        "late_days": sum(1 for r in records if r.status == "late"),
+        "current_streak": current_streak,
+        "best_streak": best_streak,
+    }
+    return {"year": year, "days": days, "summary": summary}
+
+
 def _manager_department_ids(employee, user_identity):
     """Phòng ban mà Manager quản lý (departments.manager_id khớp employee/user)."""
     ids = set()

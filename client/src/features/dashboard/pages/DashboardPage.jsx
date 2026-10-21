@@ -32,6 +32,7 @@ import DeferredMount from '../../../components/motion/DeferredMount.jsx';
 import { getCurrentUser } from '../../auth/services';
 import { getAnnouncements } from '../../announcements/services';
 import LatestKudosWidget from '../../kudos/components/LatestKudosWidget.jsx';
+import LatestActivityWidget from '../../feed/components/LatestActivityWidget.jsx';
 import { getEmployees } from '../../employees/services';
 import { fetchOverview } from '../services';
 
@@ -373,6 +374,9 @@ function DashboardExtras() {
 
     {/* Vinh danh mới nhất (mở rộng v3 — module Engagement) */}
     <LatestKudosWidget />
+
+    {/* Hoạt động mới nhất (mở rộng v4 — module Feed) */}
+    <LatestActivityWidget />
     </>
   );
 }

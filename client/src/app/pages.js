@@ -40,6 +40,9 @@ const importOffboardingPage = () =>
 const importKudosPage = () => import('../features/kudos/pages/KudosPage.jsx');
 const importSurveysPage = () => import('../features/surveys/pages/SurveysPage.jsx');
 const importAttritionPage = () => import('../features/attrition/pages/AttritionPage.jsx');
+const importFeedPage = () => import('../features/feed/pages/FeedPage.jsx');
+const importRewardsPage = () => import('../features/rewards/pages/RewardsPage.jsx');
+const importJourneyPage = () => import('../features/journey/pages/JourneyPage.jsx');
 
 export const LoginPage = lazy(importLoginPage);
 export const PublicJobsPage = lazy(importPublicJobsPage);
@@ -69,6 +72,9 @@ export const OffboardingPage = lazy(importOffboardingPage);
 export const KudosPage = lazy(importKudosPage);
 export const SurveysPage = lazy(importSurveysPage);
 export const AttritionPage = lazy(importAttritionPage);
+export const FeedPage = lazy(importFeedPage);
+export const RewardsPage = lazy(importRewardsPage);
+export const JourneyPage = lazy(importJourneyPage);
 
 // Map đường dẫn menu → các chunk cần tải trước khi điều hướng tới.
 const ROUTE_PREFETCHERS = {
@@ -95,6 +101,9 @@ const ROUTE_PREFETCHERS = {
   '/kudos': [importKudosPage],
   '/surveys': [importSurveysPage],
   '/attrition-risk': [importAttritionPage],
+  '/feed': [importFeedPage],
+  '/rewards': [importRewardsPage],
+  '/my-journey': [importJourneyPage],
   '/admin': [importAdminPage],
   '/jobs': [importPublicJobsPage],
   '/login': [importLoginPage],

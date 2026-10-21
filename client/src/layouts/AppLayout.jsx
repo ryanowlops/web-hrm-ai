@@ -278,6 +278,38 @@ const ICONS = {
       }
     />
   ),
+  feed: (
+    <Icon
+      paths={
+        <>
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M7 9.5h4M7 13.5h10M7 17.5h10" />
+        </>
+      }
+    />
+  ),
+  rewards: (
+    <Icon
+      paths={
+        <>
+          <rect x="3.5" y="8" width="17" height="4" />
+          <path d="M5 12v7.5A1.5 1.5 0 0 0 6.5 21h11A1.5 1.5 0 0 0 19 19.5V12M12 8v13" />
+          <path d="M12 8c-2.8 0-4.2-1-4.2-2.4C7.8 4 9.2 3.2 10.3 3.7 12 4.4 12 8 12 8ZM12 8c2.8 0 4.2-1 4.2-2.4 0-1.6-1.4-2.4-2.5-1.9C12 4.4 12 8 12 8Z" />
+        </>
+      }
+    />
+  ),
+  journey: (
+    <Icon
+      paths={
+        <>
+          <circle cx="6" cy="19" r="2.5" />
+          <circle cx="18" cy="5" r="2.5" />
+          <path d="M8.5 19H15a3 3 0 0 0 0-6h-6a3 3 0 0 1 0-6h.6" />
+        </>
+      }
+    />
+  ),
   admin: (
     <Icon
       paths={
@@ -369,6 +401,9 @@ const NAV_ITEMS = [
   { to: '/announcements', label: 'Thông báo', icon: ICONS.announcements },
   { to: '/kudos', label: 'Vinh danh', icon: ICONS.kudos },
   { to: '/surveys', label: 'Khảo sát', icon: ICONS.surveys },
+  { to: '/feed', label: 'Bảng tin', icon: ICONS.feed },
+  { to: '/my-journey', label: 'Hành trình của tôi', icon: ICONS.journey },
+  { to: '/rewards', label: 'Cửa hàng quà', icon: ICONS.rewards },
   { to: '/reports', label: 'Báo cáo', icon: ICONS.reports },
   { to: '/admin', label: 'Quản trị', icon: ICONS.admin, roles: ['admin'] },
 ];
@@ -383,7 +418,8 @@ const NAV_GROUPS = [
   { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding'] },
   { label: 'Vận hành', paths: ['/assets', '/training'] },
   { label: 'Tuyển dụng & AI', paths: ['/recruitment', '/chatbot', '/attrition-risk'] },
-  { label: 'Truyền thông', paths: ['/announcements', '/reports', '/kudos', '/surveys'] },
+  { label: 'Truyền thông', paths: ['/announcements', '/reports', '/kudos', '/surveys', '/feed'] },
+  { label: 'Trải nghiệm', paths: ['/my-journey', '/rewards'] },
   { label: 'Hệ thống', paths: ['/admin'] },
 ];
 
