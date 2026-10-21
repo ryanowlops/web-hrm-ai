@@ -12,18 +12,31 @@ hợp đồng, và 4 tài khoản demo theo 4 vai trò:
 Đây là mật khẩu MẪU cho môi trường demo — tuyệt đối không dùng ở production.
 Script chạy lại nhiều lần an toàn: đã có dữ liệu thì không tạo trùng.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from werkzeug.security import generate_password_hash
 
 from app import create_app
 from app.extensions import db
 from app.models import (
+    Announcement,
+    Asset,
+    AssetAssignment,
     Contract,
+    Course,
+    CourseEnrollment,
     Department,
     Employee,
+    GoalCheckin,
+    KeyResult,
     LeaveBalance,
     LeaveType,
+    Objective,
+    OnboardingPlan,
+    OnboardingTask,
+    OnboardingTemplate,
+    OnboardingTemplateTask,
+    PerformanceCycle,
     Position,
     User,
 )
@@ -78,6 +91,7 @@ def main() -> None:
         pos_manager = get_position("Trưởng phòng", kd)
         pos_hr = get_position("Chuyên viên nhân sự", kt)
         pos_staff = get_position("Nhân viên kinh doanh", kd)
+        pos_dev = get_position("Kỹ sư phần mềm", kt)
 
         # Nhân viên mẫu
         employees = {}
@@ -106,6 +120,24 @@ def main() -> None:
             if mgr_code and employees.get(mgr_code):
                 employees[code].manager_id = employees[mgr_code].id
         kd.manager_id = employees["NV0001"].id
+
+        # Nhân viên mới nhất (đi làm gần đây) — chủ kế hoạch onboarding mẫu.
+        new_hire = Employee.query.filter_by(code="NV0004").first()
+        if new_hire is None:
+            new_hire = Employee(
+                code="NV0004",
+                full_name="Lê Văn Đức",
+                email="duc.lv@hrm.local",
+                phone="0900000004",
+                department_id=kt.id,
+                position_id=pos_dev.id,
+                start_date=date.today() - timedelta(days=5),
+                status="working",
+            )
+            db.session.add(new_hire)
+            db.session.flush()
+        new_hire.manager_id = employees["NV0002"].id
+        employees["NV0004"] = new_hire
 
         # Hợp đồng mẫu (lương cơ bản + phụ cấp) nếu chưa có
         for code, salary, allowance in [
@@ -146,6 +178,343 @@ def main() -> None:
                     )
                 )
 
+        # ------------------------------------------------------------------
+        # Dữ liệu mẫu đợt mở rộng v2 (Performance / Onboarding / Assets /
+        # Training / Announcements) — cùng nguyên tắc: có rồi thì không tạo lại.
+        # ------------------------------------------------------------------
+        emp_manager = employees["NV0001"]
+        emp_hr = employees["NV0002"]
+        emp_staff = employees["NV0003"]
+
+        def as_dt(d):
+            """date -> datetime 09:00 cho các cột DateTime (assigned_at/completed_at)."""
+            return datetime.combine(d, time(9, 0))
+
+        # --- Performance: 1 chu kỳ đang active của quý hiện tại ---
+        today = date.today()
+        quarter = (today.month - 1) // 3 + 1
+        cycle_start = date(today.year, 3 * (quarter - 1) + 1, 1)
+        if quarter == 4:
+            cycle_end = date(today.year, 12, 31)
+        else:
+            cycle_end = date(today.year, 3 * quarter + 1, 1) - timedelta(days=1)
+        cycle_name = f"Q{quarter}/{today.year}"
+        cycle = PerformanceCycle.query.filter_by(name=cycle_name).first()
+        if cycle is None:
+            cycle = PerformanceCycle(
+                name=cycle_name,
+                start_date=cycle_start,
+                end_date=cycle_end,
+                status="active",
+            )
+            db.session.add(cycle)
+            db.session.flush()
+
+        # 2 Objective cho nhân viên mẫu NV0003, mỗi Objective 2-3 KR.
+        objective_samples = [
+            (
+                "Tăng doanh số bán hàng quý",
+                "Đạt và vượt chỉ tiêu doanh số cá nhân trong quý.",
+                [
+                    ("Doanh thu cá nhân (triệu VND)", "triệu VND", 500, 320, 50),
+                    ("Số khách hàng mới", "khách hàng", 20, 13, 30),
+                    ("Tỉ lệ chốt đơn (%)", "%", 30, 24, 20),
+                ],
+            ),
+            (
+                "Nâng cao chất lượng chăm sóc khách hàng",
+                "Giữ chân khách hàng cũ và giảm phản hồi tiêu cực.",
+                [
+                    ("Điểm hài lòng khách hàng (CSAT)", "điểm", 90, 84, 60),
+                    ("Tỉ lệ khách quay lại (%)", "%", 40, 31, 40),
+                ],
+            ),
+        ]
+        for obj_title, obj_desc, krs in objective_samples:
+            obj = Objective.query.filter_by(
+                cycle_id=cycle.id, employee_id=emp_staff.id, title=obj_title
+            ).first()
+            if obj is None:
+                obj = Objective(
+                    cycle_id=cycle.id,
+                    employee_id=emp_staff.id,
+                    department_id=kd.id,
+                    title=obj_title,
+                    description=obj_desc,
+                    weight=1,
+                    status="active",
+                    created_by=emp_manager.id,
+                )
+                db.session.add(obj)
+                db.session.flush()
+            for kr_title, unit, target, current, weight in krs:
+                kr = KeyResult.query.filter_by(
+                    objective_id=obj.id, title=kr_title
+                ).first()
+                if kr is None:
+                    kr = KeyResult(
+                        objective_id=obj.id,
+                        title=kr_title,
+                        unit=unit,
+                        target_value=target,
+                        current_value=current,
+                        weight=weight,
+                        direction="increase",
+                    )
+                    db.session.add(kr)
+                    db.session.flush()
+                # Vài check-in mẫu dẫn tới giá trị hiện tại của KR.
+                if GoalCheckin.query.filter_by(key_result_id=kr.id).count() == 0:
+                    step1 = round(current * 0.4)
+                    step2 = round(current * 0.75)
+                    for old, new in [(0, step1), (step1, step2), (step2, current)]:
+                        db.session.add(
+                            GoalCheckin(
+                                key_result_id=kr.id,
+                                author_id=emp_staff.id,
+                                old_value=old,
+                                new_value=new,
+                                note="Cập nhật tiến độ mẫu (seed).",
+                            )
+                        )
+            db.session.flush()
+
+        # --- Onboarding: template chung + template phòng Kỹ thuật ---
+        general_tasks = [
+            ("Tạo tài khoản hệ thống + email công ty", "hr", -1, "task", 1),
+            ("Chuẩn bị máy tính & chỗ ngồi", "it", -1, "task", 2),
+            ("Nộp CCCD, bằng cấp, ảnh thẻ", "employee", 0, "document", 3),
+            ("Ký hợp đồng thử việc", "hr", 0, "document", 4),
+            ("Đọc quy chế nội bộ & hỏi chatbot KB", "employee", 0, "task", 5),
+            ("Gặp Manager: nhận mục tiêu thử việc", "manager", 3, "meeting", 6),
+            ("Buddy hướng dẫn công việc & team", "buddy", 5, "task", 7),
+            ("Hoàn thành đào tạo hội nhập", "employee", 7, "training", 8),
+            ("Đánh giá kết thúc thử việc", "manager", 60, "meeting", 9),
+        ]
+
+        def get_template(name, dept, tasks):
+            tpl = OnboardingTemplate.query.filter_by(name=name).first()
+            if tpl is None:
+                tpl = OnboardingTemplate(
+                    name=name,
+                    department_id=dept.id if dept else None,
+                    position_id=None,
+                    is_active=True,
+                )
+                db.session.add(tpl)
+                db.session.flush()
+            for title, role, offset, task_type, order in tasks:
+                exists = OnboardingTemplateTask.query.filter_by(
+                    template_id=tpl.id, title=title
+                ).first()
+                if exists is None:
+                    db.session.add(
+                        OnboardingTemplateTask(
+                            template_id=tpl.id,
+                            title=title,
+                            description=None,
+                            assignee_role=role,
+                            due_offset_days=offset,
+                            task_type=task_type,
+                            sort_order=order,
+                        )
+                    )
+            db.session.flush()
+            return tpl
+
+        tpl_general = get_template("Hội nhập tiêu chuẩn", None, general_tasks)
+        tpl_tech = get_template(
+            "Hội nhập phòng Kỹ thuật",
+            kt,
+            general_tasks
+            + [
+                ("Cài đặt môi trường phát triển & cấp quyền repo", "it", 1, "task", 10),
+                ("Review quy trình Git & CI/CD của team", "buddy", 4, "training", 11),
+            ],
+        )
+
+        # 1 plan cho nhân viên mới nhất (NV0004): ~40% xong, 1 task quá hạn.
+        plan = OnboardingPlan.query.filter_by(employee_id=new_hire.id).first()
+        if plan is None:
+            plan = OnboardingPlan(
+                employee_id=new_hire.id,
+                template_id=tpl_tech.id,
+                start_date=new_hire.start_date or (today - timedelta(days=5)),
+                status="in_progress",
+            )
+            db.session.add(plan)
+            db.session.flush()
+            role_owner = {
+                "hr": emp_hr,
+                "manager": emp_hr,  # NV0002 là quản lý trực tiếp của NV0004
+                "it": emp_hr,
+                "buddy": emp_staff,
+                "employee": new_hire,
+            }
+            plan_task_status = {
+                "Tạo tài khoản hệ thống + email công ty": "done",
+                "Chuẩn bị máy tính & chỗ ngồi": "done",
+                "Nộp CCCD, bằng cấp, ảnh thẻ": "verified",
+                "Ký hợp đồng thử việc": "verified",
+                "Đọc quy chế nội bộ & hỏi chatbot KB": "overdue",
+                "Gặp Manager: nhận mục tiêu thử việc": "in_progress",
+            }
+            tech_template_tasks = (
+                OnboardingTemplateTask.query.filter_by(template_id=tpl_tech.id)
+                .order_by(OnboardingTemplateTask.sort_order)
+                .all()
+            )
+            for tpl_task in tech_template_tasks:
+                title = tpl_task.title
+                role = tpl_task.assignee_role
+                offset = tpl_task.due_offset_days
+                task_type = tpl_task.task_type
+                owner = role_owner.get(role)
+                status = plan_task_status.get(title, "pending")
+                due = plan.start_date + timedelta(days=offset)
+                db.session.add(
+                    OnboardingTask(
+                        plan_id=plan.id,
+                        title=title,
+                        description=None,
+                        assignee_id=owner.id if owner else None,
+                        assignee_role=role,
+                        due_date=due,
+                        task_type=task_type,
+                        status=status,
+                        completed_at=(
+                            as_dt(plan.start_date + timedelta(days=max(offset, 0)))
+                            if status in ("done", "verified")
+                            else None
+                        ),
+                        completed_by=owner.id if owner and status in ("done", "verified") else None,
+                        note=None,
+                    )
+                )
+            db.session.flush()
+
+        # --- Assets: 6 tài sản, 3 đã cấp phát (assignment đang active) ---
+        asset_samples = [
+            ("TS0001", "Laptop Dell Latitude 5440", "laptop", "DL5440-0001", "assigned", emp_manager),
+            ("TS0002", "Laptop MacBook Pro 14 M3", "laptop", "MBP14-0002", "assigned", emp_staff),
+            ("TS0003", "Màn hình Dell P2422H 24 inch", "monitor", "DLP24-0003", "assigned", emp_hr),
+            ("TS0004", "Chuột Logitech MX Master 3S", "accessory", "LG-MX3S-0004", "available", None),
+            ("TS0005", "Bàn phím cơ Keychron K8", "accessory", "KC-K8-0005", "available", None),
+            ("TS0006", "Laptop HP ProBook 440 G10", "laptop", "HP440-0006", "maintenance", None),
+        ]
+        for code, name, category, serial, status, holder in asset_samples:
+            asset = Asset.query.filter_by(code=code).first()
+            if asset is None:
+                asset = Asset(
+                    code=code,
+                    name=name,
+                    category=category,
+                    serial=serial,
+                    status=status,
+                    purchase_date=date(2024, 6, 1),
+                    notes=None,
+                )
+                db.session.add(asset)
+                db.session.flush()
+            if holder is not None:
+                assignment = AssetAssignment.query.filter_by(
+                    asset_id=asset.id, employee_id=holder.id, status="active"
+                ).first()
+                if assignment is None:
+                    db.session.add(
+                        AssetAssignment(
+                            asset_id=asset.id,
+                            employee_id=holder.id,
+                            assigned_at=as_dt(today - timedelta(days=30)),
+                            returned_at=None,
+                            status="active",
+                            note="Cấp phát mẫu (seed).",
+                        )
+                    )
+        db.session.flush()
+
+        # --- Training: 3 khoá học + vài enrollment ---
+        course_samples = [
+            ("An toàn thông tin cơ bản", "Bắt buộc cho toàn bộ nhân viên.", "Tuân thủ", 2, True),
+            ("Kỹ năng giao tiếp & làm việc nhóm", "Khoá mềm cho nhân viên mới.", "Kỹ năng mềm", 4, False),
+            ("Quy trình bán hàng B2B", "Quy trình chuẩn của phòng Kinh doanh.", "Nghiệp vụ", 6, False),
+        ]
+        courses = {}
+        for title, desc, category, hours, mandatory in course_samples:
+            course = Course.query.filter_by(title=title).first()
+            if course is None:
+                course = Course(
+                    title=title,
+                    description=desc,
+                    category=category,
+                    duration_hours=hours,
+                    is_mandatory=mandatory,
+                    is_active=True,
+                )
+                db.session.add(course)
+                db.session.flush()
+            courses[title] = course
+
+        enrollment_samples = [
+            ("An toàn thông tin cơ bản", emp_staff, "completed", 100),
+            ("An toàn thông tin cơ bản", emp_manager, "completed", 100),
+            ("Kỹ năng giao tiếp & làm việc nhóm", emp_staff, "in_progress", 40),
+            ("Quy trình bán hàng B2B", emp_staff, "in_progress", 65),
+            ("An toàn thông tin cơ bản", new_hire, "assigned", 0),
+        ]
+        for course_title, emp, status, progress in enrollment_samples:
+            course = courses[course_title]
+            exists = CourseEnrollment.query.filter_by(
+                course_id=course.id, employee_id=emp.id
+            ).first()
+            if exists is None:
+                db.session.add(
+                    CourseEnrollment(
+                        course_id=course.id,
+                        employee_id=emp.id,
+                        status=status,
+                        progress=progress,
+                        enrolled_by=emp_hr.id,
+                        completed_at=as_dt(today - timedelta(days=2)) if status == "completed" else None,
+                    )
+                )
+        db.session.flush()
+
+        # --- Announcements: 3 thông báo, 1 ghim ---
+        announcement_samples = [
+            (
+                "Chính sách làm việc linh hoạt từ tháng này",
+                "Công ty áp dụng chính sách làm việc linh hoạt: mỗi tuần được chọn 1 ngày làm việc từ xa, đăng ký trước với quản lý trực tiếp.",
+                "policy",
+                True,
+            ),
+            (
+                "Lịch nghỉ lễ sắp tới",
+                "Phòng Nhân sự thông báo lịch nghỉ lễ chính thức và hướng dẫn đăng ký nghỉ phép bù trên hệ thống.",
+                "general",
+                False,
+            ),
+            (
+                "Team building quý này",
+                "Chương trình team building quý này sẽ tổ chức vào cuối tháng; chi tiết địa điểm và đăng ký sẽ được cập nhật sớm.",
+                "event",
+                False,
+            ),
+        ]
+        for title, content, category, pinned in announcement_samples:
+            exists = Announcement.query.filter_by(title=title).first()
+            if exists is None:
+                db.session.add(
+                    Announcement(
+                        title=title,
+                        content=content,
+                        category=category,
+                        is_pinned=pinned,
+                        author_id=emp_hr.id,
+                    )
+                )
+        db.session.flush()
+
         # Tài khoản demo
         for email, password, full_name, role, emp_code in DEMO_USERS:
             if User.query.filter_by(email=email).first() is not None:
@@ -162,7 +531,7 @@ def main() -> None:
             )
 
         db.session.commit()
-        print("Seed xong: 4 tài khoản demo, 2 phòng ban, 3 nhân viên mẫu.")
+        print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2.")
         print("Đăng nhập mẫu: admin@hrm.local / Admin@123")
 
 

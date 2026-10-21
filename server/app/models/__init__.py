@@ -12,6 +12,22 @@ from app.models.payroll import PayrollItem, PayrollPeriod
 from app.models.recruitment import AiJob, Candidate, CvAnalysis, JobPosting
 from app.models.kb import ChatLog, KbChunk, KbDocument
 from app.models.misc import AuditLog, Notification, Setting
+from app.models.performance import (
+    GoalCheckin,
+    KeyResult,
+    Objective,
+    PerformanceCycle,
+    PerformanceReview,
+)
+from app.models.onboarding import (
+    OnboardingPlan,
+    OnboardingTask,
+    OnboardingTemplate,
+    OnboardingTemplateTask,
+)
+from app.models.assets import Asset, AssetAssignment
+from app.models.training import Course, CourseEnrollment
+from app.models.announcements import Announcement
 
 __all__ = [
     # users / org
@@ -38,6 +54,25 @@ __all__ = [
     "KbDocument",
     "KbChunk",
     "ChatLog",
+    # performance (KPI/OKR)
+    "PerformanceCycle",
+    "Objective",
+    "KeyResult",
+    "GoalCheckin",
+    "PerformanceReview",
+    # onboarding
+    "OnboardingTemplate",
+    "OnboardingTemplateTask",
+    "OnboardingPlan",
+    "OnboardingTask",
+    # assets
+    "Asset",
+    "AssetAssignment",
+    # training
+    "Course",
+    "CourseEnrollment",
+    # announcements
+    "Announcement",
     # misc
     "Notification",
     "Setting",

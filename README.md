@@ -13,6 +13,8 @@ Hệ thống quản lý nhân sự (HRM) trên web, tích hợp AI sàng lọc C
 
 Đã có mã nguồn chạy được: backend Flask (`server/`), frontend React JS (`client/`), Docker Compose, CI, tài liệu hiệu năng và bảo mật (kèm kế hoạch quét Strix trong `docs/security-test-plan.md`).
 
+Đợt mở rộng tính năng v2 (xem `docs/feature-expansion-v2.md`): **Hiệu suất KPI/OKR** (chu kỳ, mục tiêu, Key Result, check-in, đánh giá, gợi ý mục tiêu mẫu), **Hội nhập nhân viên mới** (template, kế hoạch tự sinh khi tạo nhân viên, checklist theo giai đoạn), **Sơ đồ tổ chức**, **Lịch team** (nghỉ phép/sinh nhật/ngày bắt đầu), **Quản lý tài sản** (cấp phát/thu hồi), **Đào tạo nội bộ** (khoá học + tiến độ học viên), **Thông báo nội bộ** + trung tâm thông báo, **Báo cáo nhân sự** (biểu đồ + xuất CSV).
+
 ## Cách chạy nhanh nhất — 1 lệnh duy nhất
 
 Máy cần có sẵn: Git, Python 3.10+, Node.js 18+.

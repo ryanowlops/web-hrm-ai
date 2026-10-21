@@ -25,6 +25,15 @@ import NotFoundPage from '../pages/NotFoundPage.jsx';
 //                               (danh sách ứng viên + AI sàng lọc CV nằm trong trang này)
 //   /chatbot                -> features/chatbot/pages/ChatbotPage.jsx
 //   /admin                  -> features/admin/pages/AdminPage.jsx                  [admin]
+//   /performance            -> features/performance/pages/PerformancePage.jsx     (mở rộng v2)
+//   /onboarding             -> features/onboarding/pages/OnboardingPage.jsx       (mở rộng v2)
+//   /org-chart              -> features/orgchart/pages/OrgChartPage.jsx           (mở rộng v2)
+//   /team-calendar          -> features/calendar/pages/TeamCalendarPage.jsx       (mở rộng v2)
+//   /assets                 -> features/assets/pages/AssetsPage.jsx               (mở rộng v2)
+//   /training               -> features/training/pages/TrainingPage.jsx           (mở rộng v2)
+//   /announcements          -> features/announcements/pages/AnnouncementsPage.jsx (mở rộng v2)
+//   /notifications          -> features/notifications/pages/NotificationsPage.jsx (mở rộng v2)
+//   /reports                -> features/reports/pages/ReportsPage.jsx             (mở rộng v2)
 //   *                       -> pages/NotFoundPage.jsx
 // ---------------------------------------------------------------------------
 
@@ -45,6 +54,19 @@ const JobListPage = lazy(() => import('../features/recruitment/pages/Recruitment
 const JobDetailPage = lazy(() => import('../features/recruitment/pages/JobDetailPage.jsx'));
 const ChatbotPage = lazy(() => import('../features/chatbot/pages/ChatbotPage.jsx'));
 const AdminPage = lazy(() => import('../features/admin/pages/AdminPage.jsx'));
+const PerformancePage = lazy(() => import('../features/performance/pages/PerformancePage.jsx'));
+const OnboardingPage = lazy(() => import('../features/onboarding/pages/OnboardingPage.jsx'));
+const OrgChartPage = lazy(() => import('../features/orgchart/pages/OrgChartPage.jsx'));
+const TeamCalendarPage = lazy(() => import('../features/calendar/pages/TeamCalendarPage.jsx'));
+const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage.jsx'));
+const TrainingPage = lazy(() => import('../features/training/pages/TrainingPage.jsx'));
+const AnnouncementsPage = lazy(
+  () => import('../features/announcements/pages/AnnouncementsPage.jsx'),
+);
+const NotificationsPage = lazy(
+  () => import('../features/notifications/pages/NotificationsPage.jsx'),
+);
+const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage.jsx'));
 
 function PageLoading() {
   return (
@@ -102,6 +124,16 @@ const router = createBrowserRouter([
       },
       { path: 'chatbot', element: lazyPage(ChatbotPage) },
       { path: 'admin', element: guardedPage(AdminPage, ['admin']) },
+      // --- Mở rộng v2 (mở cho mọi user đã đăng nhập, scope xử lý ở trang/API) ---
+      { path: 'performance', element: lazyPage(PerformancePage) },
+      { path: 'onboarding', element: lazyPage(OnboardingPage) },
+      { path: 'org-chart', element: lazyPage(OrgChartPage) },
+      { path: 'team-calendar', element: lazyPage(TeamCalendarPage) },
+      { path: 'assets', element: lazyPage(AssetsPage) },
+      { path: 'training', element: lazyPage(TrainingPage) },
+      { path: 'announcements', element: lazyPage(AnnouncementsPage) },
+      { path: 'notifications', element: lazyPage(NotificationsPage) },
+      { path: 'reports', element: lazyPage(ReportsPage) },
     ],
   },
 

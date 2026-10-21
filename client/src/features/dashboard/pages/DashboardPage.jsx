@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../../../app/AuthContext.jsx';
 import {
+  IconBell,
   IconBriefcase,
   IconBuilding,
   IconCalendar,
@@ -39,6 +40,8 @@ import {
 } from '../../../components/ui';
 import StaggerList, { StaggerItem } from '../../../components/motion/StaggerList.jsx';
 import { getCurrentUser } from '../../auth/services';
+import { getAnnouncements } from '../../announcements/services';
+import { getEmployees } from '../../employees/services';
 import { fetchOverview } from '../services';
 
 // ============================================================
@@ -202,11 +205,180 @@ function EmployeeHome({ user }) {
           );
         })}
       </StaggerList>
+      <DashboardExtras />
       <p className="mt-5 text-[13px] text-gray-500">
         Số liệu thống kê toàn công ty chỉ hiển thị cho Quản trị viên, phòng HR và Trưởng
         phòng theo đúng phạm vi phân quyền.
       </p>
     </div>
+  );
+}
+
+// ---------- Widget bổ sung (đội E): Thông báo mới nhất + Tháng này ----------
+// Hai thẻ phẳng v4 gắn thêm vào cuối Dashboard, không đổi các khối cũ.
+// Dữ liệu: announcements qua features/announcements/services; sinh nhật +
+// nhân viên mới lọc tại client từ danh sách employees hiện có (theo scope
+// của người gọi do backend áp sẵn).
+
+const ANNOUNCEMENT_CATEGORY_LABELS = {
+  general: 'Chung',
+  policy: 'Chính sách',
+  event: 'Sự kiện',
+};
+
+function parseLocalDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function DashboardExtras() {
+  const announcementsQuery = useQuery({
+    queryKey: ['announcements', 'latest'],
+    queryFn: async () => (await getAnnouncements({ limit: 3 })).items,
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const employeesQuery = useQuery({
+    queryKey: ['employees', 'dashboard-this-month'],
+    queryFn: async () => (await getEmployees({ limit: 100 })).items,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  const announcements = announcementsQuery.data || [];
+  const employees = employeesQuery.data || [];
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  const monthLabel = `Tháng ${month + 1}/${year}`;
+
+  const birthdays = employees
+    .map((e) => ({ employee: e, date: parseLocalDate(e.date_of_birth || e.dateOfBirth) }))
+    .filter((x) => x.date && x.date.getMonth() === month)
+    .sort((a, b) => a.date.getDate() - b.date.getDate());
+  const newJoiners = employees
+    .map((e) => ({ employee: e, date: parseLocalDate(e.start_date || e.startDate) }))
+    .filter((x) => x.date && x.date.getMonth() === month && x.date.getFullYear() === year)
+    .sort((a, b) => a.date - b.date);
+
+  return (
+    <section className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      {/* Thông báo mới nhất */}
+      <Card className="lg:col-span-2">
+        <CardHeader
+          title="Thông báo mới nhất"
+          subtitle="Thông báo chính thức mới nhất của công ty"
+          actions={
+            <Link to="/announcements" className={LINK_BUTTON_SECONDARY}>
+              Xem tất cả
+            </Link>
+          }
+        />
+        {announcementsQuery.isLoading ? (
+          <div className="space-y-3 px-5 py-4" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-4 w-full" />
+            ))}
+          </div>
+        ) : announcements.length > 0 ? (
+          <ul className="divide-y divide-gray-100">
+            {announcements.map((item) => (
+              <li key={item.id}>
+                <Link
+                  to="/announcements"
+                  className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
+                    <IconBell size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-medium text-gray-900">{item.title}</span>
+                      {item.isPinned ? (
+                        <Badge tone="amber" dot>
+                          Đã ghim
+                        </Badge>
+                      ) : null}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[13px] text-gray-500">
+                      {ANNOUNCEMENT_CATEGORY_LABELS[item.category] || 'Chung'}
+                      {item.createdAt ? ` · ${formatDate(item.createdAt)}` : ''}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <CardBody>
+            <p className="text-sm text-gray-500">Chưa có thông báo nào.</p>
+          </CardBody>
+        )}
+      </Card>
+
+      {/* Tháng này: sinh nhật + nhân viên mới */}
+      <Card>
+        <CardHeader title={monthLabel} subtitle="Sinh nhật và nhân viên mới trong tháng" />
+        {employeesQuery.isLoading ? (
+          <div className="space-y-3 px-5 py-4" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-4 w-full" />
+            ))}
+          </div>
+        ) : (
+          <div className="px-5 py-2">
+            <p className="pt-2 text-[13px] font-medium text-gray-500">
+              Sinh nhật ({birthdays.length})
+            </p>
+            {birthdays.length > 0 ? (
+              birthdays.slice(0, 4).map(({ employee, date }) => (
+                <div key={`bd-${employee.id}`} className="flex items-center gap-3 py-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">
+                    {initialsOf(employee.full_name || employee.fullName)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+                    {employee.full_name || employee.fullName}
+                  </span>
+                  <span className="shrink-0 text-[13px] tabular-nums text-gray-500">
+                    {String(date.getDate()).padStart(2, '0')}/{String(month + 1).padStart(2, '0')}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="py-2 text-sm text-gray-500">Không có sinh nhật nào trong tháng.</p>
+            )}
+            <p className="border-t border-gray-100 pt-3 text-[13px] font-medium text-gray-500">
+              Nhân viên mới ({newJoiners.length})
+            </p>
+            {newJoiners.length > 0 ? (
+              newJoiners.slice(0, 4).map(({ employee, date }) => (
+                <div key={`nj-${employee.id}`} className="flex items-center gap-3 py-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-50 text-[13px] font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
+                    {initialsOf(employee.full_name || employee.fullName)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-gray-900">
+                      {employee.full_name || employee.fullName}
+                    </span>
+                    {employee.department_name || employee.departmentName ? (
+                      <span className="block truncate text-[13px] text-gray-500">
+                        {employee.department_name || employee.departmentName}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-[13px] tabular-nums text-gray-500">
+                    {formatDate(date.toISOString())}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="py-2 text-sm text-gray-500">Chưa có nhân viên mới trong tháng.</p>
+            )}
+          </div>
+        )}
+      </Card>
+    </section>
   );
 }
 
@@ -528,6 +700,9 @@ export default function DashboardPage() {
               )}
             </Card>
           </section>
+
+          {/* Hàng 4 (đội E): thông báo mới nhất + tháng này */}
+          <DashboardExtras />
         </>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../app/AuthContext.jsx';
@@ -126,6 +126,92 @@ const ICONS = {
       }
     />
   ),
+  performance: (
+    <Icon
+      paths={
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="5" />
+          <circle cx="12" cy="12" r="1" />
+        </>
+      }
+    />
+  ),
+  onboarding: (
+    <Icon
+      paths={
+        <>
+          <circle cx="10" cy="8" r="3.5" />
+          <path d="M3.5 20c.8-3.4 3.2-5.2 6.5-5.2 1.3 0 2.5.3 3.5.8" />
+          <path d="M18.5 8.5v6M15.5 11.5h6" />
+        </>
+      }
+    />
+  ),
+  orgChart: (
+    <Icon
+      paths={
+        <>
+          <rect x="9" y="2.5" width="6" height="5" rx="1" />
+          <rect x="2.5" y="16.5" width="6" height="5" rx="1" />
+          <rect x="15.5" y="16.5" width="6" height="5" rx="1" />
+          <path d="M12 7.5v4M5.5 16.5v-5h13v5" />
+        </>
+      }
+    />
+  ),
+  teamCalendar: (
+    <Icon
+      paths={
+        <>
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M3 10h18M8 3v4M16 3v4" />
+          <path d="m9 15.5 2 2 4-4" />
+        </>
+      }
+    />
+  ),
+  assets: (
+    <Icon
+      paths={
+        <>
+          <rect x="3" y="4.5" width="18" height="11" rx="1.5" />
+          <path d="M2 19.5h20" />
+        </>
+      }
+    />
+  ),
+  training: (
+    <Icon
+      paths={
+        <>
+          <path d="M2.5 9.5 12 4l9.5 5.5L12 15 2.5 9.5Z" />
+          <path d="M6.5 11.8V16c0 1.7 2.5 3 5.5 3s5.5-1.3 5.5-3v-4.2" />
+          <path d="M21.5 9.5V15" />
+        </>
+      }
+    />
+  ),
+  announcements: (
+    <Icon
+      paths={
+        <>
+          <path d="m3 11 18-6v14L3 13v-2Z" />
+          <path d="M11.6 12.4v5.1a1.9 1.9 0 0 1-3.8 0v-4.2" />
+        </>
+      }
+    />
+  ),
+  reports: (
+    <Icon
+      paths={
+        <>
+          <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+          <path d="M7 15v3M12 10v8M17 6v12" />
+        </>
+      }
+    />
+  ),
   admin: (
     <Icon
       paths={
@@ -192,6 +278,12 @@ const NAV_ITEMS = [
   { to: '/attendance', label: 'Chấm công', icon: ICONS.attendance },
   { to: '/leave', label: 'Nghỉ phép', icon: ICONS.leave },
   { to: '/payroll', label: 'Bảng lương', icon: ICONS.payroll },
+  { to: '/performance', label: 'Hiệu suất', icon: ICONS.performance },
+  { to: '/onboarding', label: 'Hội nhập', icon: ICONS.onboarding },
+  { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: ICONS.orgChart },
+  { to: '/team-calendar', label: 'Lịch team', icon: ICONS.teamCalendar },
+  { to: '/assets', label: 'Tài sản', icon: ICONS.assets },
+  { to: '/training', label: 'Đào tạo', icon: ICONS.training },
   {
     to: '/recruitment',
     label: 'Tuyển dụng',
@@ -199,14 +291,22 @@ const NAV_ITEMS = [
     roles: ['admin', 'hr', 'manager'],
   },
   { to: '/chatbot', label: 'Chatbot HR', icon: ICONS.chatbot },
+  { to: '/announcements', label: 'Thông báo', icon: ICONS.announcements },
+  { to: '/reports', label: 'Báo cáo', icon: ICONS.reports },
   { to: '/admin', label: 'Quản trị', icon: ICONS.admin, roles: ['admin'] },
 ];
 
 // Nhóm menu hiển thị trong sidebar (giữ nguyên thứ tự của NAV_ITEMS).
 const NAV_GROUPS = [
   { label: 'Menu chính', paths: ['/'] },
-  { label: 'Quản lý', paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll'] },
+  {
+    label: 'Quản lý',
+    paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll', '/performance', '/onboarding'],
+  },
+  { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar'] },
+  { label: 'Vận hành', paths: ['/assets', '/training'] },
   { label: 'Tuyển dụng & AI', paths: ['/recruitment', '/chatbot'] },
+  { label: 'Truyền thông', paths: ['/announcements', '/reports'] },
   { label: 'Hệ thống', paths: ['/admin'] },
 ];
 
@@ -238,6 +338,7 @@ const navLinkClass = ({ isActive }) =>
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   // Sidebar thu gọn (chỉ áp dụng ở desktop lg+; mobile giữ dạng thanh ngang).
@@ -422,9 +523,10 @@ export default function AppLayout() {
             </div>
 
             <div className="ml-auto flex items-center gap-2.5 sm:gap-3.5">
-              {/* Chuông thông báo */}
+              {/* Chuông thông báo — bấm vào mở trang Thông báo đầy đủ */}
               <button
                 type="button"
+                onClick={() => navigate('/notifications')}
                 aria-label={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
                 className="relative flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20"
               >

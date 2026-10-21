@@ -331,6 +331,21 @@ def create_employee(data):
             pass
     db.session.add(employee)
     db.session.commit()
+    # Onboarding: tu sinh ke hoach hoi nhap tu template khop nhat.
+    # Import tre trong ham de tranh vong lap import (onboarding services
+    # import models/auth guards). Loi sinh plan KHONG duoc lam hong viec
+    # tao nhan vien — nuot loi, rollback session phu cua onboarding.
+    try:
+        from app.blueprints.onboarding.services import (
+            generate_plan_for_employee,
+        )
+
+        generate_plan_for_employee(employee)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     return employee
 
 
