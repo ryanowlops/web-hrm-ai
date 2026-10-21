@@ -65,3 +65,13 @@ Seed là get-or-create (chạy lại an toàn). Sau đó đăng nhập web bằn
 - **File tải lên** (CV, tài liệu KB) lưu trên đĩa tạm của Koyeb — mất khi service restart/redeploy. Muốn bền vững cần chuyển sang object storage (S3/Cloudinary) ở giai đoạn sau.
 - Gói miễn phí: Neon tự ngủ khi không dùng (lần gọi đầu sau ngủ chậm vài giây), Koyeb free instance cũng có thể ngủ — demo nên mở sẵn web trước vài phút.
 - JWT secret và DATABASE_URL chỉ đặt ở biến môi trường Koyeb, tuyệt đối không commit vào repo.
+
+---
+
+## Phụ lục 2026-10-21: phương án đang dùng thực tế — Render (Docker) thay Koyeb
+
+Koyeb sau khi sáp nhập Mistral đã gỡ toàn bộ giao diện deploy và cả trang tạo API token (trang `user/settings/api` chỉ còn thông báo), CLI cũng không đăng nhập được nếu không có token — không deploy mới được ở thời điểm này. Backend chuyển sang **Render (gói Free, region Singapore)**, vẫn giữ Neon + Vercel.
+
+- Cấu hình dạng code: `render.yaml` ở gốc repo (runtime Docker, rootDir `server`, healthCheckPath `/api/v1/health`; `DATABASE_URL` và `CORS_ORIGINS` để `sync: false` — Render hỏi khi tạo; `JWT_SECRET_KEY` để Render tự sinh).
+- Tạo thủ công cũng được: New + → Web Service → repo này → Root Directory `server` → Runtime **Docker** (Render tự nhận Dockerfile) → Instance Free → env: `DATABASE_URL` (Neon), `AUTO_CREATE_TABLES=1`, `CORS_ORIGINS=<domain Vercel>`; JWT: đặt tay hoặc dùng Blueprint để được tự sinh.
+- `server/Dockerfile` đã tối ưu cho 512 MB RAM: python:3.12-slim 2 stage (venv build riêng, image chạy không chứa công cụ biên dịch), Gunicorn **1 worker × 8 threads (gthread)** + `MALLOC_ARENA_MAX=2`, bind theo `$PORT`. Đo thực tế tại máy dev (SQLite local): master ~23 MB + worker ~81 MB sau 24 request xác thực đồng thời ≈ **103 MB tổng** — dư ~400 MB so với giới hạn 512 MB.

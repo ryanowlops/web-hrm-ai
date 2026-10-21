@@ -1,0 +1,22 @@
+# Render Blueprint — backend HRM API (phương án đang dùng: Render thay Koyeb)
+# Tạo lại nhanh: Render Dashboard -> New + -> Blueprint -> chọn repo này.
+# DATABASE_URL (Neon) là bí mật: Render sẽ hỏi khi tạo Blueprint (sync: false).
+# JWT_SECRET_KEY để Render tự sinh (generateValue) — không lưu trong repo.
+services:
+  - type: web
+    name: hrm-ai-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: AUTO_CREATE_TABLES
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
