@@ -90,6 +90,13 @@ class Config:
     EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
     AI_MAX_CANDIDATES_PER_RUN = int(os.environ.get("AI_MAX_CANDIDATES_PER_RUN", "20"))
     AI_REQUEST_TIMEOUT = int(os.environ.get("AI_REQUEST_TIMEOUT", "60"))
+    # Nhiệt độ sinh văn cho chatbot hỏi đáp (hội thoại tự nhiên, giống
+    # người thật). Các tác vụ cấu trúc (CV, rerank, phân loại ý định)
+    # không dùng giá trị này — chúng giữ mặc định nghiêm 0.2 ở provider.
+    try:
+        AI_CHAT_TEMPERATURE = float(os.environ.get("AI_CHAT_TEMPERATURE", "0.7"))
+    except ValueError:
+        AI_CHAT_TEMPERATURE = 0.7
 
     # --- Nghiệp vụ mặc định (có thể ghi đè bằng bảng settings) ---
     WORK_START_TIME = os.environ.get("WORK_START_TIME", "08:30")

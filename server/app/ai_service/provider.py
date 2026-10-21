@@ -105,8 +105,17 @@ class AIProvider(ABC):
             )
 
     @abstractmethod
-    def chat_completion(self, system_prompt: str, user_prompt: str) -> str:
-        """Gửi 1 lượt chat, trả về nội dung text của câu trả lời."""
+    def chat_completion(self, system_prompt: str, user_prompt: str, *,
+                        temperature: float | None = None,
+                        json_mode: bool = True) -> str:
+        """Gửi 1 lượt chat, trả về nội dung text của câu trả lời.
+
+        `temperature=None` giữ mặc định nghiêm (0.2) cho các tác vụ cấu
+        trúc (phân tích CV, rerank, phân loại ý định). `json_mode=True`
+        (mặc định) ép provider trả JSON — các luồng hội thoại tự nhiên
+        (chatbot hỏi đáp) truyền `json_mode=False` + temperature cao hơn
+        để câu trả lời mềm, giống người thật.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -132,7 +141,9 @@ class UnavailableProvider(AIProvider):
     def is_available(self) -> bool:
         return False
 
-    def chat_completion(self, system_prompt: str, user_prompt: str) -> str:
+    def chat_completion(self, system_prompt: str, user_prompt: str, *,
+                        temperature: float | None = None,
+                        json_mode: bool = True) -> str:
         self.ensure_available()
         raise AIUnavailableError("AI chưa được cấu hình.")  # không bao giờ tới đây
 
@@ -189,7 +200,9 @@ class OpenAICompatibleProvider(AIProvider):
         except (ValueError, UnicodeDecodeError) as exc:
             raise AIResponseError("AI provider trả về dữ liệu không đọc được.") from exc
 
-    def chat_completion(self, system_prompt: str, user_prompt: str) -> str:
+    def chat_completion(self, system_prompt: str, user_prompt: str, *,
+                        temperature: float | None = None,
+                        json_mode: bool = True) -> str:
         self.ensure_available()
         payload = {
             "model": self.model,
@@ -197,11 +210,15 @@ class OpenAICompatibleProvider(AIProvider):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.2,
-            # Ép định dạng JSON ở mức API khi provider hỗ trợ; cv_analysis vẫn
-            # validate lại toàn bộ ở phía server, không tin tưởng tuyệt đối.
-            "response_format": {"type": "json_object"},
+            # Mặc định 0.2 cho tác vụ cấu trúc; luồng hội thoại truyền
+            # temperature cao hơn để câu trả lời tự nhiên.
+            "temperature": 0.2 if temperature is None else temperature,
         }
+        if json_mode:
+            # Ép định dạng JSON ở mức API khi provider hỗ trợ; cv_analysis
+            # vẫn validate lại toàn bộ ở phía server, không tin tưởng
+            # tuyệt đối. Luồng chat văn bản thuần tắt chế độ này.
+            payload["response_format"] = {"type": "json_object"}
         body = self._post_json("/chat/completions", payload)
 
         try:

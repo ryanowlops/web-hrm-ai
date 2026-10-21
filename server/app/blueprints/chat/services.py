@@ -57,12 +57,22 @@ NO_INFO_ANSWER = (
 )
 
 SYSTEM_PROMPT = (
-    "Bạn là trợ lý HR nội bộ của công ty. Chỉ trả lời DỰA TRÊN các đoạn "
-    "tài liệu được cung cấp dưới đây; tuyệt đối không suy diễn hay bịa "
-    "chính sách không có trong tài liệu. Trả lời ngắn gọn, rõ ràng bằng "
-    "tiếng Việt và gắn trích dẫn nguồn dạng [Tên tài liệu, trang X] cho "
-    "các ý chính (chỉ ghi số trang khi tài liệu có ghi trang). Nếu tài "
-    "liệu không đủ để trả lời, hãy nói rõ điều đó."
+    "Bạn là một đồng nghiệp phụ trách nhân sự (HR) thân thiện của công "
+    "ty, đang trò chuyện trực tiếp với nhân viên qua khung chat nội bộ. "
+    "Hãy trả lời như một con người thật: tự nhiên, gần gũi, dùng tiếng "
+    "Việt đời thường, câu văn đa dạng; đi thẳng vào điều người hỏi cần "
+    "biết trước rồi mới bổ sung chi tiết nếu cần. Có thể dùng đoạn ngắn "
+    "hoặc gạch đầu dòng khi liệt kê, xưng hô lịch sự kiểu mình/bạn, "
+    "tránh văn phong hành chính khô khan, tránh lặp một khuôn mẫu mở "
+    "đầu/kết thúc máy móc và không xin lỗi dài dòng.\n"
+    "Nguyên tắc bắt buộc về nội dung: chỉ dựa vào các đoạn tài liệu "
+    "được cung cấp dưới đây, tuyệt đối không suy diễn hay bịa chính "
+    "sách, con số không có trong tài liệu. Gắn trích dẫn nguồn dạng "
+    "[Tên tài liệu, trang X] cho các ý chính (chỉ ghi số trang khi tài "
+    "liệu có ghi trang). Nếu tài liệu không đủ để trả lời, cứ nói "
+    "thẳng một cách thân thiện rằng mình chưa có thông tin này và gợi "
+    "ý liên hệ phòng Nhân sự. Trả lời bằng văn bản thuần, không dùng "
+    "định dạng JSON."
 )
 
 RERANK_SYSTEM_PROMPT = (
@@ -332,7 +342,15 @@ def _ask_ai(question: str, contexts: list[dict]) -> str | None:
         "Tài liệu tham khảo:\n" + "\n\n---\n\n".join(references)
     )
     try:
-        raw = provider.chat_completion(SYSTEM_PROMPT, user_prompt)
+        chat_temperature = float(current_app.config.get("AI_CHAT_TEMPERATURE", 0.7))
+    except (TypeError, ValueError):
+        chat_temperature = 0.7
+    try:
+        # Hội thoại tự nhiên: tắt ép JSON + temperature ấm hơn mặc định
+        # nghiêm 0.2 của các tác vụ cấu trúc (CV/rerank/phân loại).
+        raw = provider.chat_completion(
+            SYSTEM_PROMPT, user_prompt,
+            temperature=chat_temperature, json_mode=False)
     except Exception:  # AIError và mọi lỗi mạng/provider khác
         current_app.logger.warning("Chatbot: gọi AI thất bại, dùng trích đoạn thay thế.",
                                    exc_info=True)
