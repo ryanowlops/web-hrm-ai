@@ -39,5 +39,8 @@ USER appuser
 
 # Render cấp cổng qua biến $PORT (mặc định của họ là 10000); local/compose
 # không đặt $PORT thì dùng 5000 như cũ.
+# AUTO_SEED=1 (chỉ đặt trên môi trường demo): chạy seed.py trước khi mở
+# server — seed là get-or-create nên chạy lại mỗi lần khởi động vẫn an toàn,
+# lỗi seed cũng không chặn server lên.
 EXPOSE 5000
-CMD ["sh", "-c", "gunicorn run:app --bind 0.0.0.0:${PORT:-5000} --worker-class gthread --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout 120 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "if [ \"$AUTO_SEED\" = \"1\" ]; then echo 'AUTO_SEED=1 -> seed du lieu mau (idempotent)'; python seed.py || echo 'Seed loi — van khoi dong server'; fi; exec gunicorn run:app --bind 0.0.0.0:${PORT:-5000} --worker-class gthread --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout 120 --max-requests 1000 --max-requests-jitter 100 --access-logfile - --error-logfile -"]

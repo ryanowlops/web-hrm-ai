@@ -14,6 +14,8 @@ services:
     envVars:
       - key: AUTO_CREATE_TABLES
         value: "1"
+      - key: AUTO_SEED
+        value: "1"
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET_KEY
