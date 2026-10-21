@@ -1,0 +1,38 @@
+name: CD
+
+# Triển khai backend lên Render sau khi CI xanh trên nhánh main.
+#
+# Vì sao cần workflow này: Render Auto-Deploy (On Commit) không kích hoạt
+# được trên service hrm-ai-api (đã kiểm chứng 2026-10-21: hai commit liên
+# tiếp không sinh bản deploy nào, trong khi Vercel tự deploy bình thường),
+# nên CD đi qua Render Deploy Hook cho chắc chắn. Frontend do Vercel tự
+# deploy từ Git — không cần workflow.
+#
+# Điều kiện chạy được: repo phải có secret RENDER_DEPLOY_HOOK
+# (Settings → Secrets and variables → Actions). URL hook lấy ở Render:
+# service hrm-ai-api → Settings → Deploy Hook. Khi chưa có secret,
+# workflow kết thúc êm (không báo đỏ) kèm thông báo hướng dẫn.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kích hoạt Render Deploy Hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Chưa có secret RENDER_DEPLOY_HOOK — bỏ qua bước deploy."
+            echo "Lấy URL ở Render (service hrm-ai-api → Settings → Deploy Hook) rồi thêm vào GitHub repo → Settings → Secrets and variables → Actions."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+          echo "Đã kích hoạt deploy backend trên Render."
