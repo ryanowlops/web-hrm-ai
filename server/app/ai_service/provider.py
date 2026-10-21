@@ -189,9 +189,18 @@ class OpenAICompatibleProvider(AIProvider):
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            # Không đưa nội dung lỗi thô (có thể chứa dữ liệu nhạy cảm) ra ngoài.
+            # Gắn thêm chi tiết lỗi của provider (tối đa 300 ký tự) để log
+            # server tự chẩn đoán được — vd "model ... is not found".
+            # Body lỗi của provider chỉ chứa thông điệp/trạng thái lỗi,
+            # không chứa API key (key chỉ đi ở header request).
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8", "replace").strip()[:300]
+            except Exception:
+                detail = ""
             raise AIResponseError(
                 f"AI provider trả lỗi HTTP {exc.code}. Vui lòng thử lại sau."
+                + (f" Chi tiết: {detail}" if detail else "")
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise AIUnavailableError(
