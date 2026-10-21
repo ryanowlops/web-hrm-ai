@@ -559,6 +559,43 @@ def main() -> None:
 
         seed_skills()
 
+        # Tin tuyển demo công khai — trang /jobs, AI kiểm tra CV và phỏng
+        # vấn thử cần ít nhất 1 vị trí đang mở trên mọi bản cài mới
+        # (idempotent theo tiêu đề).
+        from datetime import date as _date
+
+        from app.models.recruitment import JobPosting as _JobPosting
+
+        _demo_job_title = "Lập trình viên Python (Flask + React)"
+        if (
+            _JobPosting.query.filter_by(title=_demo_job_title).first()
+            is None
+        ):
+            _tech_dept = Department.query.filter_by(name="Kỹ thuật").first()
+            db.session.add(
+                _JobPosting(
+                    title=_demo_job_title,
+                    department_id=_tech_dept.id if _tech_dept else None,
+                    description=(
+                        "Phát triển API Flask cho hệ thống HRM, làm việc với "
+                        "PostgreSQL, viết unit test, phối hợp frontend React "
+                        "JS. Tham gia thiết kế kiến trúc hệ thống, tối ưu "
+                        "hiệu năng truy vấn, xây dựng quy trình CI/CD và "
+                        "review code cùng nhóm."
+                    ),
+                    requirements=(
+                        "Kinh nghiệm lập trình Python từ 1 năm, thành thạo "
+                        "Flask hoặc Django, hiểu REST API, PostgreSQL, Git. "
+                        "Biết React/JavaScript là lợi thế. Có kinh nghiệm "
+                        "viết kiểm thử tự động (pytest), Docker và CI/CD. "
+                        "Kỹ năng làm việc nhóm, giao tiếp tốt."
+                    ),
+                    quantity=1,
+                    deadline=_date(2026, 11, 30),
+                    status=_JobPosting.STATUS_OPEN,
+                )
+            )
+
         db.session.commit()
         print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2 + v3.")
         print("Đăng nhập mẫu: admin@hrm.local / Admin@123")
