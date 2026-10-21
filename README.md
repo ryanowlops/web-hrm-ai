@@ -7,6 +7,7 @@ Hệ thống quản lý nhân sự (HRM) trên web, tích hợp AI sàng lọc C
 ## Tài liệu
 
 - [Phân tích & Kiến trúc hệ thống](docs/architecture.md) — phân tích nghiệp vụ chi tiết (tác nhân, phân quyền, quy trình chấm công / nghỉ phép / tính lương / tuyển dụng), phân tích AI (sàng lọc CV, chatbot RAG), mô hình dữ liệu, và kiến trúc Flask + React JS (C4, blueprint, API, bảo mật, triển khai Docker, lộ trình 6 tuần).
+- [Phân tích & Phạm vi: KPI/OKR + Onboarding](docs/kpi-okr-onboarding.md) — đợt mở rộng ưu tiên tiếp theo: quản trị hiệu suất (chu kỳ, mục tiêu, Key Result, check-in, đánh giá) và hội nhập nhân viên mới (template, kế hoạch tự sinh từ tuyển dụng, checklist theo giai đoạn), gồm mô hình dữ liệu, API, phân quyền, lộ trình và tiêu chí nghiệm thu.
 
 ## Trạng thái
 
