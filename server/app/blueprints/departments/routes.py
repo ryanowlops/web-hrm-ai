@@ -51,9 +51,10 @@ def _json_body():
 def list_departments():
     try:
         items, meta = services.list_departments(request.args)
+        counts = services.employee_counts()
         data = [
             schemas.department_to_dict(
-                d, employee_total=services.employee_count(d.id)
+                d, employee_total=counts.get(d.id, 0)
             )
             for d in items
         ]

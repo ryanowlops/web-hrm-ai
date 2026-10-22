@@ -187,6 +187,13 @@ def create_app(config=None) -> Flask:
     from .health import bp as health_bp
     app.register_blueprint(health_bp)
 
+    # --- Cache phản hồi GET cho endpoint nóng (tối ưu tốc độ 2026-10-23) ---
+    try:
+        from .http_cache import init_http_cache
+        init_http_cache(app)
+    except Exception:  # noqa: BLE001
+        app.logger.warning("Chưa gắn được HTTP cache", exc_info=True)
+
     # --- Blueprint nghiệp vụ (đăng ký module nào đã tồn tại) ---
     registered = _register_module_blueprints(app)
     app.logger.info("Blueprints đã đăng ký: health, %s",

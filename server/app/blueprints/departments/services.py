@@ -105,6 +105,24 @@ def employee_count(department_id):
     return Employee.query.filter_by(department_id=department_id).count()
 
 
+def employee_counts():
+    """Số nhân viên của MỌI phòng ban trong MỘT truy vấn GROUP BY.
+
+    Thay cho employee_count() gọi lặp theo từng phòng (N+1 — danh sách
+    phòng ban từng tốn ~1,8s trên production vì mỗi count là một vòng
+    khứ hồi tới Neon). Trả {department_id: count}; phòng chưa có nhân
+    viên thì vắng mặt trong dict (coi như 0).
+    """
+    from app.extensions import db
+
+    rows = (
+        db.session.query(Employee.department_id, db.func.count(Employee.id))
+        .group_by(Employee.department_id)
+        .all()
+    )
+    return {dept_id: count for dept_id, count in rows if dept_id is not None}
+
+
 # ---------------------------------------------------------------------------
 # Departments
 # ---------------------------------------------------------------------------

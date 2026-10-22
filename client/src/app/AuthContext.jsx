@@ -108,6 +108,13 @@ export function AuthProvider({ children }) {
       // Bỏ qua lỗi mạng/không còn phiên: vẫn phải xóa phiên ở client.
     }
     clearTokens();
+    // Xoá cache truy vấn đã lưu (main.jsx) để tài khoản sau trên cùng
+    // trình duyệt không thấy dữ liệu của người trước khi nạp lại trang.
+    try {
+      window.localStorage.removeItem('hrm-rq-cache-v1');
+    } catch {
+      // localStorage không khả dụng (private mode...) — bỏ qua.
+    }
     setUser(null);
     if (window.location.pathname !== '/login') {
       window.location.assign('/login');
