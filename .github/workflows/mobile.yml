@@ -55,3 +55,5 @@ jobs:
           body: APK debug mới nhất của ứng dụng HRM AI Android + log build đi kèm.
           files: out/*
           fail_on_unmatched_files: false
+
+# Build cache duoc bat trong mobile/gradle.properties (org.gradle.caching=true)
