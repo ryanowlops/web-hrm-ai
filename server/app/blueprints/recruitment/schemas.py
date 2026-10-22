@@ -71,6 +71,46 @@ class JobPostingSchema(Schema):
 
 
 # --------------------------------------------------------------------------- #
+# AI tạo JD (v6 mục 2) + Bộ câu hỏi phỏng vấn (v6 mục 3)
+# --------------------------------------------------------------------------- #
+JD_LEVELS = ("intern", "fresher", "junior", "middle", "senior", "lead", "manager")
+
+
+class JdGenerateSchema(Schema):
+    """Đầu vào sinh JD bằng AI: chức danh bắt buộc, còn lại tuỳ chọn."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    title = fields.String(required=True, validate=validate.Length(min=1, max=200))
+    department_id = fields.Integer(allow_none=True)
+    department_name = fields.String(allow_none=True, validate=validate.Length(max=200))
+    level = fields.String(
+        allow_none=True,
+        validate=validate.OneOf(
+            JD_LEVELS, error="Cấp bậc phải thuộc: " + ", ".join(JD_LEVELS)
+        ),
+    )
+    skills = fields.List(
+        fields.String(validate=validate.Length(max=80)), load_default=list
+    )
+    salary_note = fields.String(allow_none=True, validate=validate.Length(max=300))
+
+
+class InterviewKitSchema(Schema):
+    """Serialize bộ câu hỏi phỏng vấn (questions giữ nguyên JSON đã chuẩn hoá)."""
+
+    id = fields.Integer()
+    job_posting_id = fields.Integer()
+    questions = fields.Raw()
+    generated_by = fields.String()
+    version = fields.Integer()
+    updated_by = fields.Integer(allow_none=True)
+    created_at = fields.DateTime(allow_none=True)
+    updated_at = fields.DateTime(allow_none=True)
+
+
+# --------------------------------------------------------------------------- #
 # Ứng viên
 # --------------------------------------------------------------------------- #
 class CandidateApplySchema(Schema):

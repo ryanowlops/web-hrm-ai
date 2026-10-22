@@ -13,6 +13,12 @@ Toàn bộ lời gọi LLM đi qua module này. Cấu hình bằng biến môi t
                   Embeddings tương thích OpenAI (POST {base}/embeddings).
     AI_BASE_URL   Base URL tùy chọn cho endpoint OpenAI-compatible.
     AI_TIMEOUT    Timeout mỗi lần gọi (giây), mặc định 60.
+    AI_FALLBACK_BASE_URL / AI_FALLBACK_API_KEY / AI_FALLBACK_MODEL
+                  Provider dự phòng cho CHAT: khi provider chính lỗi (điển
+                  hình: hết quota free-tier -> HTTP 429), chat_completion tự
+                  chuyển sang provider dự phòng thay vì chết hẳn. Chỉ cấu
+                  hình khi cả 3 biến đều có. Embedding KHÔNG dùng dự phòng
+                  (vector phải đồng nhất trong cùng kho tri thức).
 
 Nguyên tắc bắt buộc (architecture A6.1/A6.4):
 - Nếu chưa cấu hình AI_API_KEY, provider ở chế độ "unavailable": mọi lời gọi
@@ -25,10 +31,13 @@ Nguyên tắc bắt buộc (architecture A6.1/A6.4):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "AIError",
@@ -37,6 +46,7 @@ __all__ = [
     "AIProvider",
     "OpenAICompatibleProvider",
     "UnavailableProvider",
+    "FallbackProvider",
     "get_provider",
     "get_ai_config",
 ]
@@ -79,6 +89,8 @@ def get_ai_config() -> dict:
         "base_url": _config_value("AI_BASE_URL") or None,
         "timeout": int(_config_value("AI_TIMEOUT", 60) or 60),
         "has_api_key": bool(os.environ.get("AI_API_KEY") or _config_value("AI_API_KEY")),
+        "has_fallback": bool(os.environ.get("AI_FALLBACK_API_KEY")
+                             or _config_value("AI_FALLBACK_API_KEY")),
     }
 
 
@@ -270,22 +282,84 @@ class OpenAICompatibleProvider(AIProvider):
         return vectors
 
 
+class FallbackProvider(AIProvider):
+    """Bọc provider chính + provider dự phòng cho CHAT.
+
+    chat_completion: gọi provider chính; nếu nó raise AIError (429 hết
+    quota, 5xx, mất kết nối, chưa cấu hình...) và provider dự phòng khả
+    dụng thì thử lại đúng 1 lần ở provider dự phòng, ghi log cảnh báo.
+    create_embeddings: LUÔN đi provider chính — vector embedding phải
+    đồng nhất trong cùng kho tri thức, trộn 2 provider sẽ phá vỡ RAG.
+    """
+
+    def __init__(self, primary: AIProvider, fallback: AIProvider):
+        self.primary = primary
+        self.fallback = fallback
+        self.name = primary.name
+        self.model = primary.model
+        self.embedding_model = getattr(primary, "embedding_model", "")
+
+    @property
+    def is_available(self) -> bool:
+        return self.primary.is_available or self.fallback.is_available
+
+    def chat_completion(self, system_prompt: str, user_prompt: str, *,
+                        temperature: float | None = None,
+                        json_mode: bool = True) -> str:
+        try:
+            return self.primary.chat_completion(
+                system_prompt, user_prompt,
+                temperature=temperature, json_mode=json_mode)
+        except AIError as exc:
+            if not self.fallback.is_available:
+                raise
+            logger.warning(
+                "AI provider chính (%s) lỗi: %s — chuyển sang provider dự phòng (%s/%s).",
+                self.primary.name, exc, self.fallback.name, self.fallback.model)
+            return self.fallback.chat_completion(
+                system_prompt, user_prompt,
+                temperature=temperature, json_mode=json_mode)
+
+    def create_embeddings(self, inputs) -> list[list[float]]:
+        return self.primary.create_embeddings(inputs)
+
+
+def _get_fallback_provider(timeout: int) -> AIProvider | None:
+    """Dựng provider dự phòng từ AI_FALLBACK_* — None nếu chưa cấu hình đủ."""
+    api_key = os.environ.get("AI_FALLBACK_API_KEY") or _config_value("AI_FALLBACK_API_KEY")
+    base_url = os.environ.get("AI_FALLBACK_BASE_URL") or _config_value("AI_FALLBACK_BASE_URL")
+    model = os.environ.get("AI_FALLBACK_MODEL") or _config_value("AI_FALLBACK_MODEL")
+    if not (api_key and base_url and model):
+        return None
+    name = (os.environ.get("AI_FALLBACK_PROVIDER")
+            or _config_value("AI_FALLBACK_PROVIDER") or "fallback")
+    return OpenAICompatibleProvider(
+        api_key=api_key, model=model, base_url=base_url,
+        timeout=timeout, provider_name=str(name).lower())
+
+
 def get_provider() -> AIProvider:
     """Factory: tạo provider theo cấu hình hiện tại.
 
     Chưa có AI_API_KEY -> UnavailableProvider (raise lỗi rõ ràng khi dùng),
-    KHÔNG trả kết quả giả trong bất kỳ trường hợp nào.
+    KHÔNG trả kết quả giả trong bất kỳ trường hợp nào. Nếu có cấu hình
+    AI_FALLBACK_* thì bọc thêm FallbackProvider cho chat.
     """
     cfg = get_ai_config()
     api_key = os.environ.get("AI_API_KEY") or _config_value("AI_API_KEY")
     if not api_key:
-        return UnavailableProvider(model=cfg["model"],
-                                   embedding_model=cfg["embedding_model"])
-    return OpenAICompatibleProvider(
-        api_key=api_key,
-        model=cfg["model"],
-        base_url=cfg["base_url"],
-        timeout=cfg["timeout"],
-        provider_name=cfg["provider"],
-        embedding_model=cfg["embedding_model"],
-    )
+        primary: AIProvider = UnavailableProvider(
+            model=cfg["model"], embedding_model=cfg["embedding_model"])
+    else:
+        primary = OpenAICompatibleProvider(
+            api_key=api_key,
+            model=cfg["model"],
+            base_url=cfg["base_url"],
+            timeout=cfg["timeout"],
+            provider_name=cfg["provider"],
+            embedding_model=cfg["embedding_model"],
+        )
+    fallback = _get_fallback_provider(cfg["timeout"])
+    if fallback is not None:
+        return FallbackProvider(primary, fallback)
+    return primary

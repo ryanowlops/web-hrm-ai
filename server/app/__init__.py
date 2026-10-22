@@ -47,6 +47,8 @@ _MODULE_BLUEPRINTS = [
     "gamification",
     "skills",
     "interviews",
+    "checkin",
+    "briefing",
     "ai",
     "kb",
     "chat",

@@ -28,6 +28,7 @@ import {
 } from '../../../components/ui';
 import { Drawer, StaggerList, StaggerItem } from '../../../components/motion';
 import { IconFileText, IconSparkles, IconUsers, IconX } from '../../../components/icons.jsx';
+import InterviewKitPanel from '../components/InterviewKitPanel.jsx';
 
 /* ------------------------------ Hằng số UI ------------------------------- */
 
@@ -378,6 +379,7 @@ export default function JobDetailPage() {
   const { jobId } = useParams();
 
   const [job, setJob] = useState(null);
+  const [activeTab, setActiveTab] = useState('candidates'); // 'candidates' | 'kit'
   const [jobLoading, setJobLoading] = useState(true);
   const [jobError, setJobError] = useState('');
   const [toggling, setToggling] = useState(false);
@@ -718,6 +720,30 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      {/* -------- Tabs: Ứng viên | Bộ câu hỏi phỏng vấn (v6) -------- */}
+      <div className="mt-7 flex gap-1 border-b border-gray-200">
+        {[
+          { key: 'candidates', label: `Ứng viên (${counts.all})` },
+          { key: 'kit', label: 'Bộ câu hỏi phỏng vấn' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'border-brand-600 text-brand-700'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'kit' ? (
+        <InterviewKitPanel job={job} />
+      ) : (
+        <>
       {/* -------- Banner kết quả AI / lỗi -------- */}
       {aiBanner && (
         <div className="relative mt-4">
@@ -944,6 +970,9 @@ export default function JobDetailPage() {
             </StaggerItem>
           </StaggerList>
         </Card>
+      )}
+
+        </>
       )}
 
       {/* -------- Drawer chi tiết -------- */}

@@ -9,7 +9,10 @@ import {
   AssetsPage,
   AttendancePage,
   AttritionPage,
+  BriefingPage,
   ChatbotPage,
+  CheckinPage,
+  CheckinQrPage,
   DashboardPage,
   DepartmentListPage,
   DisplayPage,
@@ -117,6 +120,12 @@ const router = createBrowserRouter([
     element: <ProtectedRoute>{lazyPage(DisplayPage)}</ProtectedRoute>,
   },
 
+  // --- Mở rộng v6: trang quét QR chấm công (đã đăng nhập, không AppLayout) ---
+  {
+    path: '/checkin',
+    element: <ProtectedRoute>{lazyPage(CheckinPage)}</ProtectedRoute>,
+  },
+
   // --- Khu vực đã đăng nhập (AppLayout: sidebar + header + Outlet) ---
   {
     path: '/',
@@ -172,6 +181,15 @@ const router = createBrowserRouter([
       { path: 'my-journey', element: lazyPage(JourneyPage) },
       // --- Mở rộng v5 ---
       { path: 'skills', element: lazyPage(SkillsPage) },
+      // --- Mở rộng v6 (gói 3) ---
+      {
+        path: 'checkin-qr',
+        element: guardedPage(CheckinQrPage, ['admin', 'hr']),
+      },
+      {
+        path: 'briefing',
+        element: guardedPage(BriefingPage, ['admin', 'hr']),
+      },
     ],
   },
 

@@ -30,12 +30,16 @@ from app.extensions import limiter
 
 from . import bp
 from . import cvcheck
+from . import jd_service
+from . import kit_service
 from . import services
 from .schemas import (
     CandidateApplySchema,
     CandidateSchema,
     CandidateStatusSchema,
     CvAnalysisSchema,
+    InterviewKitSchema,
+    JdGenerateSchema,
     JobPostingCreateSchema,
     JobPostingSchema,
     JobPostingUpdateSchema,
@@ -127,6 +131,23 @@ def _job_payload(job):
     if count is not None:
         data["candidates_count"] = count
     return data
+
+
+def _current_user_id():
+    """ID user hiện tại (cho cột updated_by); None nếu không xác định được."""
+    try:
+        from app.blueprints.auth.guards import load_current_user
+
+        user = load_current_user()
+        if user is not None:
+            return user.id
+    except Exception:
+        pass
+    identity = get_jwt_identity()
+    try:
+        return int(identity)
+    except (TypeError, ValueError):
+        return None
 
 
 def _candidate_payload(candidate, analysis=None, job=None):
@@ -241,6 +262,58 @@ def public_cv_check():
         payload = request.get_json(silent=True) or {}
         result = cvcheck.check_cv(payload.get("job_id"), cv_text=payload.get("cv_text"))
     return jsonify({"data": result}), 200
+
+
+# --------------------------------------------------------------------------- #
+# AI tạo JD (v6 mục 2) — chỉ sinh nội dung, KHÔNG tạo/lưu JobPosting
+# --------------------------------------------------------------------------- #
+@bp.route("/jd/generate", methods=["POST"])
+@handle_errors
+@require_roles("admin", "hr")
+def generate_jd():
+    """Sinh JD có cấu trúc từ chức danh/cấp bậc/kỹ năng.
+
+    Trả ``{summary, responsibilities[], requirements[], benefits[],
+    source: "ai"|"template"}`` để FE cho HR xem trước + sửa; JD chỉ được
+    lưu khi HR tự tạo/sửa tin tuyển dụng như bình thường.
+    """
+    data = JdGenerateSchema().load(request.get_json(silent=True) or {})
+    result = jd_service.generate_jd(data)
+    return jsonify({"data": result}), 200
+
+
+# --------------------------------------------------------------------------- #
+# Bộ câu hỏi phỏng vấn (v6 mục 3) — mỗi tin tối đa 1 bộ, HR/Admin
+# --------------------------------------------------------------------------- #
+@bp.route("/jobs/<int:job_id>/interview-kit/generate", methods=["POST"])
+@handle_errors
+@require_roles("admin", "hr")
+def generate_interview_kit(job_id):
+    """Sinh/tái tạo bộ câu hỏi từ JD của tin; mỗi lần tái tạo version +1."""
+    kit = kit_service.generate_kit(job_id, _current_user_id())
+    return jsonify({"data": InterviewKitSchema().dump(kit)}), 200
+
+
+@bp.route("/jobs/<int:job_id>/interview-kit", methods=["GET"])
+@handle_errors
+@require_roles("admin", "hr")
+def get_interview_kit(job_id):
+    """Đọc bộ câu hỏi hiện tại; chưa tạo -> 404."""
+    kit = kit_service.get_kit(job_id)
+    return jsonify({"data": InterviewKitSchema().dump(kit)}), 200
+
+
+@bp.route("/jobs/<int:job_id>/interview-kit", methods=["PUT"])
+@handle_errors
+@require_roles("admin", "hr")
+def update_interview_kit(job_id):
+    """HR sửa tay từng câu: body ``{questions: [...]}`` — giữ nguyên
+    version và nhãn nguồn, chỉ cập nhật nội dung + người sửa."""
+    payload = request.get_json(silent=True) or {}
+    kit = kit_service.update_kit(
+        job_id, payload.get("questions"), _current_user_id()
+    )
+    return jsonify({"data": InterviewKitSchema().dump(kit)}), 200
 
 
 # --------------------------------------------------------------------------- #

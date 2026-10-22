@@ -46,6 +46,9 @@ from app.models.feed import FeedComment, FeedLike, FeedPost
 from app.models.gamification import PointsLedger, Redemption, Reward
 from app.models.skill import EmployeeSkill, Skill
 from app.models.interview import InterviewQA, InterviewSession
+from app.models.checkin_log import CheckinLog
+from app.models.interview_kit import InterviewKit
+from app.models.briefing import Briefing
 
 __all__ = [
     # users / org
@@ -121,6 +124,10 @@ __all__ = [
     # interviews (phỏng vấn thử AI) — v5
     "InterviewSession",
     "InterviewQA",
+    # v6 — gói 3: check-in QR+GPS + bộ câu hỏi phỏng vấn + báo cáo điều hành
+    "CheckinLog",
+    "InterviewKit",
+    "Briefing",
     # misc
     "Notification",
     "Setting",

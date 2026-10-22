@@ -114,6 +114,35 @@ export async function getCandidateAnalysis(candidateId) {
   return unwrap(await api.get(`/ai/candidates/${candidateId}/analysis`));
 }
 
+/* --------------------- AI tạo JD + Bộ câu hỏi (v6) ---------------------- */
+
+/**
+ * Sinh JD bằng AI (hoặc template dự phòng phía server khi AI không khả
+ * dụng). payload: { title, department_id?, department_name?, level?,
+ * skills?: string[], salary_note? }
+ * Trả về { summary, responsibilities[], requirements[], benefits[],
+ *          source: 'ai'|'template', title, level }
+ * CHỈ sinh nội dung xem trước — không tạo/lưu tin tuyển dụng.
+ */
+export async function generateJd(payload) {
+  return unwrap(await api.post('/jd/generate', payload));
+}
+
+/** Đọc bộ câu hỏi phỏng vấn của 1 tin. 404 = chưa tạo bộ câu hỏi. */
+export async function getInterviewKit(jobId) {
+  return unwrap(await api.get(`/jobs/${jobId}/interview-kit`));
+}
+
+/** Sinh/tái tạo bộ câu hỏi phỏng vấn bằng AI (mỗi lần tái tạo version +1). */
+export async function generateInterviewKit(jobId) {
+  return unwrap(await api.post(`/jobs/${jobId}/interview-kit/generate`));
+}
+
+/** HR lưu bản sửa tay của bộ câu hỏi. payload: questions = [{round, topic, question, rubric, weight}] */
+export async function updateInterviewKit(jobId, questions) {
+  return unwrap(await api.put(`/jobs/${jobId}/interview-kit`, { questions }));
+}
+
 /* ------------------------------- Phụ trợ -------------------------------- */
 
 /** Danh sách phòng ban để chọn khi đăng tin (dùng chung API departments). */

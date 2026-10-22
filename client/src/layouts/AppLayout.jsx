@@ -389,6 +389,20 @@ const InterviewIcon = (
   />
 );
 
+const QrIcon = (
+  <Icon
+    paths={
+      <>
+        <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
+        <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
+        <rect x="3.5" y="13.5" width="7" height="7" rx="1" />
+        <path d="M13.5 13.5h3v3h-3z" />
+        <path d="M20.5 13.5v.01M13.5 20.5v.01M17 20.5h3.5v-3.5" />
+      </>
+    }
+  />
+);
+
 const NAV_ITEMS = [
   { to: '/', label: 'Tổng quan', icon: ICONS.dashboard, end: true },
   { to: '/employees', label: 'Nhân viên', icon: ICONS.employees },
@@ -399,6 +413,12 @@ const NAV_ITEMS = [
     roles: ['admin', 'hr', 'manager'],
   },
   { to: '/attendance', label: 'Chấm công', icon: ICONS.attendance },
+  {
+    to: '/checkin-qr',
+    label: 'Chấm công QR',
+    icon: QrIcon,
+    roles: ['admin', 'hr'],
+  },
   { to: '/leave', label: 'Nghỉ phép', icon: ICONS.leave },
   { to: '/payroll', label: 'Bảng lương', icon: ICONS.payroll },
   { to: '/performance', label: 'Hiệu suất', icon: ICONS.performance },
@@ -432,6 +452,12 @@ const NAV_ITEMS = [
   { to: '/my-journey', label: 'Hành trình của tôi', icon: ICONS.journey },
   { to: '/rewards', label: 'Cửa hàng quà', icon: ICONS.rewards },
   { to: '/reports', label: 'Báo cáo', icon: ICONS.reports },
+  {
+    to: '/briefing',
+    label: 'Báo cáo điều hành',
+    icon: ICONS.reports,
+    roles: ['admin', 'hr'],
+  },
   { to: '/admin', label: 'Quản trị', icon: ICONS.admin, roles: ['admin'] },
 ];
 
@@ -440,7 +466,7 @@ const NAV_GROUPS = [
   { label: 'Menu chính', paths: ['/'] },
   {
     label: 'Quản lý',
-    paths: ['/employees', '/departments', '/attendance', '/leave', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
+    paths: ['/employees', '/departments', '/attendance', '/checkin-qr', '/leave', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
   },
   { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding', '/skills'] },
   { label: 'Vận hành', paths: ['/assets', '/training'] },
@@ -448,7 +474,7 @@ const NAV_GROUPS = [
     label: 'Tuyển dụng & AI',
     paths: ['/recruitment', '/chatbot', '/attrition-risk', '/mock-interview'],
   },
-  { label: 'Truyền thông', paths: ['/announcements', '/reports', '/kudos', '/surveys', '/feed'] },
+  { label: 'Truyền thông', paths: ['/announcements', '/reports', '/briefing', '/kudos', '/surveys', '/feed'] },
   { label: 'Trải nghiệm', paths: ['/my-journey', '/rewards'] },
   { label: 'Hệ thống', paths: ['/admin'] },
 ];

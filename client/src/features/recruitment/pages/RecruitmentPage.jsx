@@ -7,6 +7,7 @@ import {
   closeJob,
   reopenJob,
   listDepartments,
+  generateJd,
   friendlyError,
 } from '../services';
 import {
@@ -29,8 +30,19 @@ import {
   IconBuilding,
   IconCalendar,
   IconSearch,
+  IconSparkles,
   IconUsers,
 } from '../../../components/icons.jsx';
+
+const JD_LEVELS = [
+  ['intern', 'Thực tập sinh'],
+  ['fresher', 'Mới tốt nghiệp (Fresher)'],
+  ['junior', 'Junior'],
+  ['middle', 'Middle'],
+  ['senior', 'Senior'],
+  ['lead', 'Team Lead'],
+  ['manager', 'Quản lý (Manager)'],
+];
 
 const JOB_STATUS = {
   open: { label: 'Đang tuyển', tone: 'green' },
@@ -64,9 +76,22 @@ function isOverdue(job) {
 
 function JobFormModal({ open, initial, departments, saving, error, onClose, onSubmit }) {
   const [form, setForm] = useState(EMPTY_FORM);
+  // Panel "Tạo JD bằng AI" (v6 mục 2): sinh JD xem trước, HR sửa rồi mới
+  // bấm "Dùng JD này" để điền vào form — không tự đăng tin.
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiForm, setAiForm] = useState({ level: 'middle', skills: '', salary_note: '' });
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiResult, setAiResult] = useState(null);
+  const [aiApplied, setAiApplied] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setAiOpen(false);
+      setAiForm({ level: 'middle', skills: '', salary_note: '' });
+      setAiError('');
+      setAiResult(null);
+      setAiApplied(false);
       setForm(
         initial
           ? {
@@ -86,6 +111,57 @@ function JobFormModal({ open, initial, departments, saving, error, onClose, onSu
   if (!open) return null;
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleGenerateJd = async () => {
+    if (!form.title.trim()) {
+      setAiError('Hãy nhập "Vị trí tuyển" ở trên trước khi tạo JD bằng AI.');
+      return;
+    }
+    setAiBusy(true);
+    setAiError('');
+    try {
+      const data = await generateJd({
+        title: form.title.trim(),
+        department_id: form.department_id ? Number(form.department_id) : null,
+        level: aiForm.level,
+        skills: aiForm.skills
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        salary_note: aiForm.salary_note.trim() || null,
+      });
+      setAiResult(data);
+      setAiApplied(false);
+    } catch (err) {
+      setAiError(friendlyError(err, 'Không tạo được JD. Vui lòng thử lại.'));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const patchAiList = (key) => (e) =>
+    setAiResult((r) => (r ? { ...r, [key]: e.target.value.split('\n') } : r));
+
+  const handleApplyJd = () => {
+    if (!aiResult) return;
+    const lines = (items) =>
+      (items ?? []).map((x) => String(x).trim()).filter(Boolean);
+    const resp = lines(aiResult.responsibilities);
+    const benefits = lines(aiResult.benefits);
+    const description = [
+      String(aiResult.summary ?? '').trim(),
+      resp.length ? `Trách nhiệm chính:\n${resp.map((x) => `- ${x}`).join('\n')}` : '',
+      benefits.length ? `Quyền lợi:\n${benefits.map((x) => `- ${x}`).join('\n')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    setForm((f) => ({
+      ...f,
+      description,
+      requirements: lines(aiResult.requirements).join('\n'),
+    }));
+    setAiApplied(true);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -190,6 +266,127 @@ function JobFormModal({ open, initial, departments, saving, error, onClose, onSu
               placeholder="Kỹ năng bắt buộc, số năm kinh nghiệm... — nội dung này là chuẩn để AI đối chiếu khi sàng lọc CV"
             />
           </FormField>
+
+          {/* ---------- Panel Tạo JD bằng AI (v6 mục 2) ---------- */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 sm:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                <IconSparkles size={15} className="text-brand-600" />
+                Tạo JD bằng AI
+                <span className="font-normal text-gray-400">
+                  — sinh bản nháp để bạn xem trước & sửa, không tự đăng tin
+                </span>
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setAiOpen((o) => !o)}
+              >
+                {aiOpen ? 'Thu gọn' : 'Mở panel'}
+              </Button>
+            </div>
+
+            {aiOpen && (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <FormField label="Cấp bậc">
+                    <Select
+                      value={aiForm.level}
+                      onChange={(e) => setAiForm((f) => ({ ...f, level: e.target.value }))}
+                    >
+                      {JD_LEVELS.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                  <FormField label="Kỹ năng chính" hint="Cách nhau bằng dấu phẩy">
+                    <Input
+                      value={aiForm.skills}
+                      onChange={(e) => setAiForm((f) => ({ ...f, skills: e.target.value }))}
+                      placeholder="Ví dụ: Python, Flask, PostgreSQL"
+                    />
+                  </FormField>
+                  <FormField label="Ghi chú lương" hint="Để trống = 'thoả thuận'">
+                    <Input
+                      value={aiForm.salary_note}
+                      onChange={(e) =>
+                        setAiForm((f) => ({ ...f, salary_note: e.target.value }))
+                      }
+                      placeholder="Ví dụ: 15–25 triệu/tháng"
+                    />
+                  </FormField>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button type="button" onClick={handleGenerateJd} loading={aiBusy}>
+                    <IconSparkles size={15} />
+                    {aiBusy ? 'Đang tạo JD...' : 'Tạo JD'}
+                  </Button>
+                  <span className="text-[13px] text-gray-400">
+                    Chức danh và phòng ban lấy từ form phía trên.
+                  </span>
+                </div>
+
+                {aiError && <Alert tone="error">{aiError}</Alert>}
+
+                {aiResult && (
+                  <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900">Bản nháp JD</span>
+                      <Badge tone={aiResult.source === 'ai' ? 'violet' : 'gray'}>
+                        {aiResult.source === 'ai'
+                          ? 'Do AI tạo'
+                          : 'Mẫu dự phòng (AI chưa khả dụng)'}
+                      </Badge>
+                      {aiApplied && <Badge tone="green">Đã điền vào form</Badge>}
+                    </div>
+                    <FormField label="Tóm tắt vị trí">
+                      <Textarea
+                        rows={3}
+                        value={aiResult.summary ?? ''}
+                        onChange={(e) =>
+                          setAiResult((r) => (r ? { ...r, summary: e.target.value } : r))
+                        }
+                      />
+                    </FormField>
+                    <FormField label="Trách nhiệm chính" hint="Mỗi dòng một mục">
+                      <Textarea
+                        rows={4}
+                        value={(aiResult.responsibilities ?? []).join('\n')}
+                        onChange={patchAiList('responsibilities')}
+                      />
+                    </FormField>
+                    <FormField label="Yêu cầu ứng viên" hint="Mỗi dòng một mục">
+                      <Textarea
+                        rows={4}
+                        value={(aiResult.requirements ?? []).join('\n')}
+                        onChange={patchAiList('requirements')}
+                      />
+                    </FormField>
+                    <FormField label="Quyền lợi" hint="Mỗi dòng một mục">
+                      <Textarea
+                        rows={3}
+                        value={(aiResult.benefits ?? []).join('\n')}
+                        onChange={patchAiList('benefits')}
+                      />
+                    </FormField>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button type="button" onClick={handleApplyJd}>
+                        Dùng JD này
+                      </Button>
+                      <span className="text-[13px] text-gray-400">
+                        Nội dung sẽ điền vào ô "Mô tả công việc" và "Yêu cầu ứng viên" —
+                        bạn vẫn kiểm tra lại trước khi đăng tin.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {initial && (
             <FormField label="Trạng thái">
