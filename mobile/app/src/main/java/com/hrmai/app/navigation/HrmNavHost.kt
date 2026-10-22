@@ -273,7 +273,5 @@ private fun MoreRoute(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // Giữ Arrangement import được dùng (menu dọc đều nhau)
-        Column(Arrangement.spacedBy(0.dp)) { }
     }
 }

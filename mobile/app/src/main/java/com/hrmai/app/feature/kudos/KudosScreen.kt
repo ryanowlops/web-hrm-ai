@@ -122,7 +122,7 @@ private fun KudosScreen(state: KudosUiState, vm: KudosViewModel) {
             text = "Ghi nhận đóng góp và lan toả điều tích cực",
             style = MaterialTheme.typography.bodyMedium,
             color = InkMuted,
-            modifier = Modifier.padding(horizontal = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
         )
 
         when {

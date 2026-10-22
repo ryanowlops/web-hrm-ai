@@ -108,7 +108,7 @@ private fun AnnouncementsScreen(state: AnnouncementsUiState, vm: AnnouncementsVi
             text = "Cập nhật chính sách, sự kiện và tin tức từ công ty",
             style = MaterialTheme.typography.bodyMedium,
             color = InkMuted,
-            modifier = Modifier.padding(horizontal = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
         )
 
         when {

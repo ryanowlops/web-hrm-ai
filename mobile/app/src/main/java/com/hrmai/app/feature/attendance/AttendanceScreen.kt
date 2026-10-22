@@ -1,11 +1,11 @@
 package com.hrmai.app.feature.attendance
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -286,20 +286,28 @@ private fun MainActionSection(state: AttendanceUiState, vm: AttendanceViewModel)
                     }
                 }
             }
-            AnimatedVisibility(
-                visible = state.showSuccess,
-                enter = scaleIn(
-                    initialScale = 0.3f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow,
-                    ),
-                ) + fadeIn(),
-                exit = fadeOut(),
-            ) {
+            // Vòng tròn thành công nảy kiểu spring khi chấm công xong.
+            // Dùng animateFloatAsState thay AnimatedVisibility để tránh
+            // xung đột overload ColumnScope trong Box lồng nhau.
+            val successScale by animateFloatAsState(
+                targetValue = if (state.showSuccess) 1f else 0.3f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow,
+                ),
+                label = "successScale",
+            )
+            val successAlpha by animateFloatAsState(
+                targetValue = if (state.showSuccess) 1f else 0f,
+                animationSpec = tween(200),
+                label = "successAlpha",
+            )
+            if (state.showSuccess || successAlpha > 0.01f) {
                 Box(
                     modifier = Modifier
                         .size(96.dp)
+                        .scale(successScale)
+                        .alpha(successAlpha)
                         .clip(CircleShape)
                         .background(SuccessGreen),
                     contentAlignment = Alignment.Center,
