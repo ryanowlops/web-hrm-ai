@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Poll
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
@@ -83,7 +85,10 @@ import com.hrmai.app.feature.assets.AssetsRoute
 import com.hrmai.app.feature.attendance.AttendanceRoute
 import com.hrmai.app.feature.attrition.AttritionRoute
 import com.hrmai.app.feature.auth.LoginRoute
+import com.hrmai.app.feature.briefing.BriefingRoute
 import com.hrmai.app.feature.chatbot.ChatbotRoute
+import com.hrmai.app.feature.checkin.CheckinScanRoute
+import com.hrmai.app.feature.checkinadmin.CheckinAdminRoute
 import com.hrmai.app.feature.cvcheck.CvCheckRoute
 import com.hrmai.app.feature.departments.DepartmentsRoute
 import com.hrmai.app.feature.documents.DocumentsRoute
@@ -91,6 +96,7 @@ import com.hrmai.app.feature.employees.EmployeeDetailRoute
 import com.hrmai.app.feature.employees.EmployeesRoute
 import com.hrmai.app.feature.feed.FeedRoute
 import com.hrmai.app.feature.home.HomeRoute
+import com.hrmai.app.feature.jd.JdGeneratorRoute
 import com.hrmai.app.feature.jobs.JobDetailRoute
 import com.hrmai.app.feature.jobs.JobsRoute
 import com.hrmai.app.feature.journey.JourneyRoute
@@ -155,6 +161,11 @@ object Routes {
     const val JOB_DETAIL = "job/{jobId}"
     const val CV_CHECK = "cv-check"
     const val MOCK_INTERVIEW = "mock-interview"
+    // Dong bo v6 (goi 3 ban web)
+    const val CHECKIN_SCAN = "checkin-scan"
+    const val CHECKIN_ADMIN = "checkin-admin"
+    const val JD_GENERATOR = "jd-generator"
+    const val BRIEFING = "briefing"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -200,6 +211,10 @@ private val DETAIL_TITLES = mapOf(
     Routes.JOB_DETAIL to "Chi tiết việc làm",
     Routes.CV_CHECK to "Kiểm tra CV bằng AI",
     Routes.MOCK_INTERVIEW to "Phỏng vấn thử AI",
+    Routes.CHECKIN_SCAN to "Chấm công QR + GPS",
+    Routes.CHECKIN_ADMIN to "Mã QR chấm công",
+    Routes.JD_GENERATOR to "Tạo JD bằng AI",
+    Routes.BRIEFING to "Báo cáo điều hành",
 )
 
 @Composable
@@ -328,7 +343,11 @@ private fun MainShell(container: AppContainer) {
             composable(Routes.DEPARTMENTS) { DepartmentsRoute(container) }
             composable(Routes.ORG_CHART) { OrgChartRoute(container) }
             composable(Routes.RECRUITMENT) {
-                RecruitmentRoute(container, onOpenJob = { id -> navController.navigate("recruitment-job/$id") })
+                RecruitmentRoute(
+                    container,
+                    onOpenJob = { id -> navController.navigate("recruitment-job/$id") },
+                    onOpenJdGenerator = { navController.navigate(Routes.JD_GENERATOR) },
+                )
             }
             composable(
                 Routes.RECRUITMENT_JOB,
@@ -360,6 +379,11 @@ private fun MainShell(container: AppContainer) {
             }
             composable(Routes.CV_CHECK) { CvCheckRoute(container) }
             composable(Routes.MOCK_INTERVIEW) { MockInterviewRoute(container) }
+            // ===== Dong bo v6 =====
+            composable(Routes.CHECKIN_SCAN) { CheckinScanRoute(container) }
+            composable(Routes.CHECKIN_ADMIN) { CheckinAdminRoute(container) }
+            composable(Routes.JD_GENERATOR) { JdGeneratorRoute(container) }
+            composable(Routes.BRIEFING) { BriefingRoute(container) }
         }
     }
 }
@@ -384,6 +408,7 @@ private fun MoreRoute(
                 null,
                 listOf(
                     Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable),
+                    Triple(Routes.CHECKIN_SCAN, "Chấm công QR + GPS", Icons.Filled.QrCodeScanner),
                     Triple(Routes.PAYROLL, "Lương của tôi", Icons.Filled.Payments),
                     Triple(Routes.KUDOS, "Vinh danh & điểm thưởng", Icons.Filled.EmojiEvents),
                     Triple(Routes.REWARDS, "Cửa hàng đổi thưởng", Icons.Filled.CardGiftcard),
@@ -431,6 +456,8 @@ private fun MoreRoute(
                 MenuSection(
                     "HR & hệ thống",
                     buildList {
+                        add(Triple(Routes.CHECKIN_ADMIN, "Mã QR chấm công", Icons.Filled.QrCode))
+                        add(Triple(Routes.BRIEFING, "Báo cáo điều hành", Icons.Filled.Assessment))
                         add(Triple(Routes.PAYROLL_ADMIN, "Quản lý lương", Icons.Filled.Payments))
                         if (role == "admin") {
                             add(Triple(Routes.ADMIN, "Quản trị tài khoản", Icons.Filled.Settings))

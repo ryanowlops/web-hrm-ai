@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,7 +72,11 @@ import com.hrmai.app.core.util.Format
 // ---------------------------------------------------------------------------
 
 @Composable
-fun RecruitmentRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
+fun RecruitmentRoute(
+    container: AppContainer,
+    onOpenJob: (Int) -> Unit,
+    onOpenJdGenerator: () -> Unit = {},
+) {
     val vm: RecruitmentViewModel = viewModel(
         factory = RecruitmentViewModel.Factory(
             api = container.api(RecruitmentApi::class.java),
@@ -78,7 +84,15 @@ fun RecruitmentRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
         ),
     )
     val state by vm.state.collectAsState()
-    RecruitmentScreen(state = state, vm = vm, onOpenJob = onOpenJob)
+    val session by container.sessionStore.sessionFlow.collectAsState()
+    val role = session?.user?.role
+    RecruitmentScreen(
+        state = state,
+        vm = vm,
+        onOpenJob = onOpenJob,
+        showJdGenerator = role == "hr" || role == "admin",
+        onOpenJdGenerator = onOpenJdGenerator,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,6 +101,8 @@ private fun RecruitmentScreen(
     state: RecruitmentUiState,
     vm: RecruitmentViewModel,
     onOpenJob: (Int) -> Unit,
+    showJdGenerator: Boolean,
+    onOpenJdGenerator: () -> Unit,
 ) {
     PullToRefreshBox(
         isRefreshing = state.refreshing,
@@ -110,6 +126,42 @@ private fun RecruitmentScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = InkMuted,
                     )
+                }
+            }
+            if (showJdGenerator) {
+                item {
+                    HrmCard(
+                        modifier = Modifier.fillMaxWidth().clickable { onOpenJdGenerator() },
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = null,
+                                tint = BrandBlue,
+                                modifier = Modifier.size(28.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Tạo JD bằng AI",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "AI soạn mô tả công việc từ vị trí và kỹ năng — " +
+                                        "bạn xem trước, sửa rồi mới đăng tin.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = InkMuted,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = InkMuted,
+                            )
+                        }
+                    }
                 }
             }
             when {
@@ -212,7 +264,13 @@ fun RecruitmentJobRoute(container: AppContainer, jobId: Int, onBack: () -> Unit)
         ),
     )
     val state by vm.state.collectAsState()
-    JobDetailScreen(state = state, vm = vm, onBack = onBack)
+    JobDetailScreen(
+        state = state,
+        vm = vm,
+        container = container,
+        jobId = jobId,
+        onBack = onBack,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -220,6 +278,8 @@ fun RecruitmentJobRoute(container: AppContainer, jobId: Int, onBack: () -> Unit)
 private fun JobDetailScreen(
     state: JobDetailUiState,
     vm: JobDetailViewModel,
+    container: AppContainer,
+    jobId: Int,
     onBack: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -300,6 +360,9 @@ private fun JobDetailScreen(
                                 )
                             }
                         }
+                    }
+                    item {
+                        InterviewKitSection(container = container, jobId = jobId)
                     }
                 }
             }
