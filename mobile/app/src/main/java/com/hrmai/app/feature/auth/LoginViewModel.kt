@@ -59,6 +59,10 @@ class LoginViewModel(private val sessionStore: SessionStore) : ViewModel() {
                     throw IllegalStateException("Phản hồi đăng nhập không hợp lệ")
                 }
                 sessionStore.save(Session(access, refresh, user, baseUrl))
+            }.onSuccess {
+                // Phải tắt loading cả khi thành công: màn hình đăng nhập được
+                // dùng lại sau khi đăng xuất, nếu không nút sẽ kẹt ở trạng thái tải.
+                _state.update { it.copy(loading = false) }
             }.onFailure { e ->
                 _state.update { it.copy(loading = false, error = e.toApiException().message) }
             }
