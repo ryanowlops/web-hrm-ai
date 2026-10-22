@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chữ H trắng trên nền trong suốt (adaptive icon foreground),
+     vẽ tay theo nhận diện logo của hệ thống. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,30 L42,30 L42,47 L66,47 L66,30 L78,30 L78,78 L66,78 L66,59 L42,59 L42,78 L30,78 Z" />
+    <path
+        android:fillColor="#9DB8FF"
+        android:pathData="M74,16 L76.2,21.8 L82,24 L76.2,26.2 L74,32 L71.8,26.2 L66,24 L71.8,21.8 Z" />
+</vector>
