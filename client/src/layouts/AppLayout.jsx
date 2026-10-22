@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -12,6 +12,7 @@ import { getEmployees } from '../features/employees/services';
 import PageTransition from '../components/motion/PageTransition.jsx';
 import ActivePill from '../components/motion/ActivePill.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
+import { useClickOutside } from '../hooks/useClickOutside.js';
 
 // Layout chính cho khu vực đã đăng nhập (design system v4 — bám shadcn-admin):
 // sidebar TRẮNG 264px border-r gray-200 (thu gọn 76px ở desktop), mục đang
@@ -504,6 +505,17 @@ const navLinkClass = ({ isActive }) =>
       : 'text-gray-700 hover:bg-gray-50',
   ].join(' ');
 
+// Bỏ dấu tiếng Việt + hạ chữ thường để ô tìm kiếm ⌘K lọc được cả khi
+// người dùng gõ không dấu ("nghi phep" vẫn khớp "Nghỉ phép").
+function stripDiacritics(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd');
+}
+
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -515,6 +527,112 @@ export default function AppLayout() {
   const sidebarWidth = isDesktop ? (collapsed ? 76 : 264) : undefined;
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user?.role));
   const navSections = groupNavItems(visibleItems);
+
+  /* ---------------- Command palette ⌘K (thuần client) ----------------
+     Ô tìm kiếm trên topbar: gõ để lọc các trang trong NAV_ITEMS (theo
+     đúng role đang đăng nhập), Enter/click để nhảy tới trang. */
+  const searchInputRef = useRef(null);
+  const searchBoxRef = useRef(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState('');
+  const [paletteIndex, setPaletteIndex] = useState(0);
+
+  const normalizedQuery = stripDiacritics(paletteQuery.trim());
+  const paletteItems = normalizedQuery
+    ? visibleItems.filter(
+        (item) =>
+          stripDiacritics(item.label).includes(normalizedQuery) ||
+          item.to.toLowerCase().includes(paletteQuery.trim().toLowerCase()),
+      )
+    : visibleItems;
+  const activePaletteIndex = paletteItems.length
+    ? Math.min(paletteIndex, paletteItems.length - 1)
+    : 0;
+
+  const goToPaletteItem = (item) => {
+    if (!item) return;
+    setPaletteOpen(false);
+    setPaletteQuery('');
+    setPaletteIndex(0);
+    searchInputRef.current?.blur();
+    navigate(item.to);
+  };
+
+  // Cmd+K / Ctrl+K: mở palette và focus ô tìm kiếm ở bất cứ đâu trong app.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(true);
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Đóng palette khi bấm ra ngoài ô tìm kiếm (Esc xử lý ngay trong input).
+  useClickOutside(searchBoxRef, () => setPaletteOpen(false), { escapeKey: false });
+
+  // Chuyển trang xong thì đóng palette + xoá từ khoá.
+  useEffect(() => {
+    setPaletteOpen(false);
+    setPaletteQuery('');
+    setPaletteIndex(0);
+  }, [location.pathname]);
+
+  // Giữ mục đang chọn luôn nằm trong tầm nhìn của dropdown.
+  useEffect(() => {
+    if (!paletteOpen) return;
+    searchBoxRef.current
+      ?.querySelector('[data-palette-active="true"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [paletteOpen, activePaletteIndex]);
+
+  const onSearchKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setPaletteOpen(true);
+      if (paletteItems.length) {
+        setPaletteIndex((activePaletteIndex + 1) % paletteItems.length);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setPaletteOpen(true);
+      if (paletteItems.length) {
+        setPaletteIndex((activePaletteIndex - 1 + paletteItems.length) % paletteItems.length);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      goToPaletteItem(paletteItems[activePaletteIndex]);
+    } else if (e.key === 'Escape') {
+      setPaletteOpen(false);
+      searchInputRef.current?.blur();
+    }
+  };
+
+  /* ------------- Tiêu đề tab trình duyệt theo trang đang mở ------------- */
+  useEffect(() => {
+    const { pathname } = location;
+    let label = null;
+    // Khớp tiền tố dài nhất trước để trang chi tiết lấy label của route cha.
+    const sorted = [...NAV_ITEMS].sort((a, b) => b.to.length - a.to.length);
+    for (const item of sorted) {
+      if (item.to === '/') {
+        if (pathname === '/') {
+          label = item.label;
+          break;
+        }
+        continue;
+      }
+      if (pathname === item.to || pathname.startsWith(`${item.to}/`)) {
+        label = item.label;
+        break;
+      }
+    }
+    document.title = label ? `${label} · Web HRM AI` : 'Web HRM AI';
+  }, [location.pathname]);
   const displayName = user?.fullName || user?.email || 'Người dùng';
   const roleLabel = user?.role ? ROLE_LABELS[user.role] || user.role : null;
 
@@ -693,15 +811,27 @@ export default function AppLayout() {
         {/* Topbar trắng */}
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
           <div className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-5 lg:px-8">
-            {/* Ô tìm kiếm kiểu shadcn-admin (trình bày, giữ hành vi hiện có) */}
-            <div className="relative hidden w-full max-w-sm md:block">
+            {/* Ô tìm kiếm ⌘K — command palette nhảy nhanh tới trang (thuần client) */}
+            <div ref={searchBoxRef} className="relative hidden w-full max-w-sm md:block">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 {searchIcon}
               </span>
               <input
+                ref={searchInputRef}
                 type="search"
-                aria-label="Tìm kiếm"
+                role="combobox"
+                aria-expanded={paletteOpen}
+                aria-controls="command-palette-list"
+                aria-label="Tìm kiếm trang"
                 placeholder="Tìm kiếm..."
+                value={paletteQuery}
+                onChange={(e) => {
+                  setPaletteQuery(e.target.value);
+                  setPaletteIndex(0);
+                  setPaletteOpen(true);
+                }}
+                onFocus={() => setPaletteOpen(true)}
+                onKeyDown={onSearchKeyDown}
                 className="h-10 w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-14 text-sm text-gray-700 transition placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-600/20"
               />
               <kbd
@@ -710,6 +840,45 @@ export default function AppLayout() {
               >
                 ⌘K
               </kbd>
+              {paletteOpen && (
+                <div
+                  id="command-palette-list"
+                  role="listbox"
+                  aria-label="Danh sách trang"
+                  className="nice-scroll absolute left-0 right-0 top-full z-40 mt-2 max-h-80 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1.5 shadow-lg"
+                >
+                  {paletteItems.length === 0 ? (
+                    <p className="px-3.5 py-2.5 text-sm text-gray-500">
+                      Không tìm thấy trang nào khớp “{paletteQuery}”.
+                    </p>
+                  ) : (
+                    paletteItems.map((item, idx) => (
+                      <button
+                        key={item.to}
+                        type="button"
+                        role="option"
+                        aria-selected={idx === activePaletteIndex}
+                        data-palette-active={idx === activePaletteIndex ? 'true' : undefined}
+                        onMouseEnter={() => setPaletteIndex(idx)}
+                        onClick={() => goToPaletteItem(item)}
+                        className={`flex w-full items-center gap-3 px-3.5 py-2 text-left text-sm transition-colors ${
+                          idx === activePaletteIndex
+                            ? 'bg-brand-50 font-medium text-brand-700'
+                            : 'text-gray-700'
+                        }`}
+                      >
+                        <span
+                          className={idx === activePaletteIndex ? 'text-brand-600' : 'text-gray-400'}
+                          aria-hidden="true"
+                        >
+                          {item.icon}
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
             <div className="min-w-0 flex-1 md:hidden">
               <span className="block truncate text-sm font-medium text-gray-900">

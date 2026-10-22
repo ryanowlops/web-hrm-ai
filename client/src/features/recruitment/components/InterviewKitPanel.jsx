@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   CardBody,
+  ConfirmDialog,
   EmptyState,
   Input,
   Skeleton,
@@ -85,15 +86,20 @@ export default function InterviewKitPanel({ job }) {
     load();
   }, [load]);
 
+  // Tạo lại bộ câu hỏi khi đã có bộ cũ: hỏi xác nhận bằng ConfirmDialog
+  // (thay window.confirm) vì thao tác ghi đè cả phần đã sửa tay; logic gọi
+  // API nằm ở doGenerate và chỉ chạy sau khi người dùng xác nhận.
+  const [confirmRegen, setConfirmRegen] = useState(false);
+
   const handleGenerate = async () => {
-    if (
-      kit &&
-      !window.confirm(
-        'Tạo lại sẽ ghi đè toàn bộ câu hỏi hiện tại (kể cả phần đã sửa tay). Tiếp tục?',
-      )
-    ) {
+    if (kit) {
+      setConfirmRegen(true);
       return;
     }
+    await doGenerate();
+  };
+
+  const doGenerate = async () => {
     setGenerating(true);
     setError('');
     try {
@@ -327,6 +333,19 @@ export default function InterviewKitPanel({ job }) {
           </p>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmRegen}
+        title="Tạo lại bộ câu hỏi"
+        description="Tạo lại sẽ ghi đè toàn bộ câu hỏi hiện tại (kể cả phần đã sửa tay). Tiếp tục?"
+        confirmLabel="Tạo lại"
+        danger
+        onConfirm={() => {
+          setConfirmRegen(false);
+          doGenerate();
+        }}
+        onCancel={() => setConfirmRegen(false)}
+      />
 
       {/* Vùng in: chỉ hiện khi in (print CSS ở đầu component) */}
       {kit && (

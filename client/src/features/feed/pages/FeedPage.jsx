@@ -9,7 +9,9 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   EmptyState,
+  LoadError,
   PageHeader,
   Skeleton,
   Textarea,
@@ -133,6 +135,7 @@ function CommentSection({ post, currentUser }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const fullQuery = useQuery({
     queryKey: ['feed', 'comments', post.id],
@@ -181,9 +184,7 @@ function CommentSection({ post, currentUser }) {
               key={comment.id}
               comment={comment}
               deleting={deleteMutation.isPending}
-              onDelete={(c) => {
-                if (window.confirm('Xoá bình luận này?')) deleteMutation.mutate(c);
-              }}
+              onDelete={(c) => setDeleteTarget(c)}
             />
           ))}
         </ul>
@@ -235,6 +236,19 @@ function CommentSection({ post, currentUser }) {
           </Button>
         </div>
       </form>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Xoá bình luận"
+        description="Xoá bình luận này? Hành động này không thể hoàn tác."
+        confirmLabel="Xoá bình luận"
+        danger
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -244,6 +258,7 @@ function CommentSection({ post, currentUser }) {
 function PostCard({ post, currentUser }) {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const likeMutation = useMutation({
     mutationFn: () => toggleLike(post.id),
@@ -272,6 +287,7 @@ function PostCard({ post, currentUser }) {
   ].filter(Boolean);
 
   return (
+    <>
     <Card>
       <div className="flex items-start gap-3 px-5 pt-4">
         <Avatar name={post.author_name} />
@@ -309,11 +325,7 @@ function PostCard({ post, currentUser }) {
             <button
               type="button"
               disabled={deleteMutation.isPending}
-              onClick={() => {
-                if (window.confirm('Xoá bài viết này? Bình luận và lượt tim cũng sẽ bị xoá.')) {
-                  deleteMutation.mutate();
-                }
-              }}
+              onClick={() => setConfirmDelete(true)}
               title="Xoá bài viết"
               aria-label="Xoá bài viết"
               className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
@@ -358,13 +370,27 @@ function PostCard({ post, currentUser }) {
 
       <CommentSection post={post} currentUser={currentUser} />
     </Card>
+
+    <ConfirmDialog
+      open={confirmDelete}
+      title="Xoá bài viết"
+      description="Xoá bài viết này? Bình luận và lượt tim cũng sẽ bị xoá."
+      confirmLabel="Xoá bài viết"
+      danger
+      onConfirm={() => {
+        setConfirmDelete(false);
+        deleteMutation.mutate();
+      }}
+      onCancel={() => setConfirmDelete(false)}
+    />
+    </>
   );
 }
 
 /* ------------------------------- Cột phải ------------------------------- */
 
 function ActivityCard() {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['feed', 'activity-latest'],
     queryFn: () => getActivity({ limit: 10 }),
     staleTime: 60_000,
@@ -381,7 +407,14 @@ function ActivityCard() {
             <Skeleton key={i} className="h-4 w-full" />
           ))}
         </div>
-      ) : isError || items.length === 0 ? (
+      ) : isError ? (
+        <CardBody>
+          <LoadError
+            message="Không tải được hoạt động mới nhất."
+            onRetry={() => refetch()}
+          />
+        </CardBody>
+      ) : items.length === 0 ? (
         <CardBody>
           <p className="text-sm text-gray-500">Chưa có hoạt động nào gần đây.</p>
         </CardBody>

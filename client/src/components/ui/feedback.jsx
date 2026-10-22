@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import Button from './Button.jsx';
 
 // Thành phần phản hồi v4 — bám Untitled UI: phẳng, thang gray, màu ngữ
 // nghĩa nền nhạt + border cùng tông + icon. Spinner, Skeleton,
@@ -96,5 +97,23 @@ export function Alert({ tone = 'info', children, className = '' }) {
       </span>
       {children}
     </div>
+  );
+}
+
+// Banner lỗi tải dữ liệu dùng chung: Alert tone error + nút "Thử lại" gọi
+// onRetry — thay cho các banner lỗi trơ (không có cách phục hồi) ở các trang.
+export function LoadError({ message, onRetry, className = '' }) {
+  if (!message) return null;
+  return (
+    <Alert tone="error" className={className}>
+      <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="min-w-0 flex-1">{message}</span>
+        {onRetry && (
+          <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
+            Thử lại
+          </Button>
+        )}
+      </span>
+    </Alert>
   );
 }

@@ -20,6 +20,7 @@ import {
   Textarea,
   Skeleton,
   TableSkeleton,
+  ConfirmDialog,
 } from '../../../components/ui';
 import { IconPlus, IconEdit, IconTrash, IconCheck, IconClock } from '../../../components/icons.jsx';
 import {
@@ -352,8 +353,13 @@ function ScheduleTab({ role }) {
     load();
   }, [load]);
 
-  const handleDeleteDef = async (def) => {
-    if (!window.confirm(`Xoá / ngừng áp dụng ca "${def.name}"?`)) return;
+  // Xoá ca: hỏi xác nhận bằng ConfirmDialog (thay window.confirm), logic
+  // gọi API giữ nguyên và chỉ chạy sau khi người dùng xác nhận.
+  const [deleteDefTarget, setDeleteDefTarget] = useState(null);
+  const confirmDeleteDef = async () => {
+    const def = deleteDefTarget;
+    setDeleteDefTarget(null);
+    if (!def) return;
     try {
       await deleteDefinition(def.id);
       reloadDefs();
@@ -472,7 +478,7 @@ function ScheduleTab({ role }) {
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1.5">
                             <Button size="sm" variant="secondary" onClick={() => setDefModal({ open: true, editing: d })}><IconEdit size={14} /> Sửa</Button>
-                            <Button size="sm" variant="danger" onClick={() => handleDeleteDef(d)}><IconTrash size={14} /></Button>
+                            <Button size="sm" variant="danger" onClick={() => setDeleteDefTarget(d)}><IconTrash size={14} /></Button>
                           </div>
                         </td>
                       </tr>
@@ -487,6 +493,15 @@ function ScheduleTab({ role }) {
 
       <AssignmentModal open={!!cell} cell={cell} definitions={definitions} onClose={() => setCell(null)} onSaved={load} />
       <DefinitionModal open={defModal.open} editing={defModal.editing} onClose={() => setDefModal({ open: false, editing: null })} onSaved={reloadDefs} />
+      <ConfirmDialog
+        open={!!deleteDefTarget}
+        title="Xoá ca làm việc"
+        description={deleteDefTarget ? `Xoá / ngừng áp dụng ca "${deleteDefTarget.name}"?` : ''}
+        confirmLabel="Xoá ca"
+        danger
+        onConfirm={confirmDeleteDef}
+        onCancel={() => setDeleteDefTarget(null)}
+      />
     </div>
   );
 }

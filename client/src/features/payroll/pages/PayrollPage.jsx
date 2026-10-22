@@ -8,7 +8,6 @@ import {
   getMyPayslip,
 } from '../services';
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -22,6 +21,8 @@ import {
   Select,
   Skeleton,
   TableSkeleton,
+  LoadError,
+  useToast,
 } from '../../../components/ui';
 import { AnimatedNumber } from '../../../components/motion';
 
@@ -130,6 +131,7 @@ export default function PayrollPage({ user: userProp }) {
 /* ================= Góc nhìn HR / Admin ================= */
 
 function HrPayrollView() {
+  const toast = useToast();
   const [periods, setPeriods] = useState([]);
   const [loadingPeriods, setLoadingPeriods] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
@@ -139,7 +141,6 @@ function HrPayrollView() {
   const [loadingItems, setLoadingItems] = useState(false);
   const [busyId, setBusyId] = useState(null); // period id đang tính/chốt
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(() => {
@@ -202,7 +203,6 @@ function HrPayrollView() {
 
   const selectPeriod = (id) => {
     setError('');
-    setNotice('');
     setItemsPage(1);
     setSelectedId(id);
   };
@@ -219,7 +219,7 @@ function HrPayrollView() {
     try {
       await createPeriod({ month, year, standardWorkdays });
       setShowCreate(false);
-      setNotice(`Đã tạo kỳ lương tháng ${month}/${year}.`);
+      toast.success(`Đã tạo kỳ lương tháng ${month}/${year}.`);
       await loadPeriods();
     } catch (err) {
       setError(errorMessage(err, 'Tạo kỳ lương thất bại (có thể kỳ này đã tồn tại).'));
@@ -231,10 +231,9 @@ function HrPayrollView() {
   const handleCalculate = async (period) => {
     setBusyId(period.id);
     setError('');
-    setNotice('');
     try {
       await calculatePeriod(period.id);
-      setNotice(
+      toast.success(
         `Đã tính lương kỳ tháng ${pick(period, 'month')}/${pick(period, 'year')}. Kiểm tra bảng bên dưới trước khi chốt.`,
       );
       if (String(selectedId) === String(period.id)) await loadItems();
@@ -251,7 +250,7 @@ function HrPayrollView() {
     setError('');
     try {
       await lockPeriod(lockTarget.id);
-      setNotice(
+      toast.success(
         `Đã chốt kỳ lương tháng ${pick(lockTarget, 'month')}/${pick(lockTarget, 'year')}. Nhân viên đã xem được phiếu lương của mình.`,
       );
       setLockTarget(null);
@@ -284,8 +283,13 @@ function HrPayrollView() {
         }
       />
 
-      <Alert tone="error" className="mb-4">{error}</Alert>
-      <Alert tone="success" className="mb-4">{notice}</Alert>
+      {error && (
+        <LoadError
+          message={error}
+          onRetry={() => { loadPeriods(); loadItems(); }}
+          className="mb-4"
+        />
+      )}
 
       {/* Danh sách kỳ lương */}
       <Card className="mb-6 overflow-hidden">
@@ -658,7 +662,7 @@ function MyPayslipView() {
         }
       />
 
-      <Alert tone="error" className="mb-4">{error}</Alert>
+      {error && <LoadError message={error} onRetry={loadSlip} className="mb-4" />}
 
       {loading ? (
         <Card className="mx-auto max-w-2xl">

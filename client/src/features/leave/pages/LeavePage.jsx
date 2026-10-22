@@ -4,8 +4,9 @@ import {
   getPendingForMe, approveRequest, rejectRequest, getCalendar,
 } from '../services';
 import {
-  Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState,
-  FormField, Input, PageHeader, Select, Skeleton, StatCard, TableSkeleton, Textarea,
+  Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, EmptyState,
+  FormField, Input, LoadError, PageHeader, Select, Skeleton, StatCard, TableSkeleton, Textarea,
+  useToast,
 } from '../../../components/ui';
 import { StaggerList, StaggerItem } from '../../../components/motion';
 
@@ -91,13 +92,13 @@ function BalanceCard({ balance: b }) {
 
 export default function LeavePage() {
   const user = useMemo(getCurrentUser, []);
+  const toast = useToast();
   const isApprover = ['admin', 'hr', 'manager'].includes(user?.role);
   const year = new Date().getFullYear();
   const now = new Date();
   const [cursor, setCursor] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
 
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   /* --- Số dư phép + loại nghỉ --- */
   const [types, setTypes] = useState([]);
@@ -156,29 +157,35 @@ export default function LeavePage() {
   const submit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    setSubmitting(true); setError(''); setNotice('');
+    setSubmitting(true); setError('');
     try {
       await createRequest({
         leave_type_id: Number(form.leave_type_id),
         from_date: form.from_date, to_date: form.to_date, reason: form.reason.trim(),
       });
-      setNotice('Đơn nghỉ đã được gửi và đang chờ quản lý duyệt.');
+      toast.success('Đơn nghỉ đã được gửi và đang chờ quản lý duyệt.');
       setForm({ leave_type_id: '', from_date: '', to_date: '', reason: '' });
       setFormErrors({});
       loadMine(); loadBalances(); loadPending();
     } catch (err) { setError(errMsg(err)); } finally { setSubmitting(false); }
   };
 
-  const cancel = async (id) => {
-    if (!window.confirm('Huỷ đơn nghỉ này?')) return;
-    setError(''); setNotice('');
-    try { await cancelRequest(id); setNotice('Đã huỷ đơn nghỉ.'); loadMine(); loadBalances(); }
+  // Huỷ đơn: hỏi xác nhận bằng ConfirmDialog (thay window.confirm), logic
+  // gọi API giữ nguyên và chỉ chạy sau khi người dùng xác nhận.
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const confirmCancel = async () => {
+    const id = cancelTarget;
+    setCancelTarget(null);
+    if (id == null) return;
+    setError('');
+    try { await cancelRequest(id); toast.success('Đã huỷ đơn nghỉ.'); loadMine(); loadBalances(); }
     catch (err) { setError(errMsg(err)); }
   };
 
   /* --- Khu vực duyệt (Manager / HR / Admin) --- */
   const [pending, setPending] = useState([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingError, setPendingError] = useState('');
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [decidingId, setDecidingId] = useState(null);
@@ -189,7 +196,12 @@ export default function LeavePage() {
     try {
       const res = await getPendingForMe({ page: 1, limit: 50 });
       setPending(Array.isArray(res) ? res : res.data || []);
-    } catch { setPending([]); } finally { setPendingLoading(false); }
+      setPendingError('');
+    } catch (e) {
+      // Lỗi tải phải tách khỏi trạng thái rỗng: giữ nguyên danh sách cũ và
+      // báo lỗi riêng có nút thử lại, không "giả vờ" là không có đơn chờ.
+      setPendingError(errMsg(e));
+    } finally { setPendingLoading(false); }
   }, [isApprover]);
   useEffect(() => { loadPending(); }, [loadPending]);
 
@@ -197,12 +209,12 @@ export default function LeavePage() {
     if (action === 'reject' && !rejectReason.trim()) {
       setError('Vui lòng nhập lý do từ chối.'); return;
     }
-    setDecidingId(id); setError(''); setNotice('');
+    setDecidingId(id); setError('');
     try {
       const itemStatus = pending.find((r) => r.id === id)?.status;
       if (action === 'approve') await approveRequest(id, undefined, itemStatus);
       else await rejectRequest(id, rejectReason.trim(), itemStatus);
-      setNotice(action === 'approve' ? 'Đã duyệt đơn.' : 'Đã từ chối đơn.');
+      toast.success(action === 'approve' ? 'Đã duyệt đơn.' : 'Đã từ chối đơn.');
       setRejectingId(null); setRejectReason('');
       loadPending(); loadMine(); loadCalendar(); loadBalances();
     } catch (err) { setError(errMsg(err)); } finally { setDecidingId(null); }
@@ -210,8 +222,12 @@ export default function LeavePage() {
 
   /* --- Lịch nghỉ tháng --- */
   const [calendar, setCalendar] = useState([]);
+  const [calendarError, setCalendarError] = useState('');
   const loadCalendar = useCallback(async () => {
-    try { setCalendar(await getCalendar(cursor.month, cursor.year)); } catch { setCalendar([]); }
+    try {
+      setCalendar(await getCalendar(cursor.month, cursor.year));
+      setCalendarError('');
+    } catch (e) { setCalendar([]); setCalendarError(errMsg(e)); }
   }, [cursor]);
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
@@ -248,10 +264,12 @@ export default function LeavePage() {
         )}
       />
 
-      {(error || notice) && (
-        <div className="mb-6 space-y-3">
-          {error && <Alert tone="error">{error}</Alert>}
-          {notice && <Alert tone="success">{notice}</Alert>}
+      {error && (
+        <div className="mb-6">
+          <LoadError
+            message={error}
+            onRetry={() => { loadMine(); loadPending(); loadCalendar(); loadBalances(); }}
+          />
         </div>
       )}
 
@@ -357,7 +375,7 @@ export default function LeavePage() {
                         </td>
                         <td className="ui-td text-right">
                           {['pending', 'manager_approved'].includes(r.status) && (
-                            <Button type="button" variant="ghost" size="sm" onClick={() => cancel(r.id)}
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setCancelTarget(r.id)}
                               className="text-[#B42318] ring-1 ring-inset ring-[#FDA29B] hover:bg-[#FEF3F2] hover:text-[#B42318]">
                               Huỷ đơn
                             </Button>)}
@@ -384,10 +402,17 @@ export default function LeavePage() {
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-20 w-full" />
             </div>
+          ) : pendingError && pending.length === 0 ? (
+            <div className="p-5">
+              <LoadError message={pendingError} onRetry={loadPending} />
+            </div>
           ) : pending.length === 0 ? (
             <EmptyState title="Không có đơn nào đang chờ bạn duyệt. 🎉" description="Khi có đơn nghỉ mới thuộc phạm vi duyệt của bạn, đơn sẽ xuất hiện tại đây." />
           ) : (
             <CardBody>
+              {pendingError && (
+                <LoadError message={pendingError} onRetry={loadPending} className="mb-4" />
+              )}
               <StaggerList className="space-y-3">
               {pending.map((r, i) => (
                 <StaggerItem key={r.id} index={i}>
@@ -441,6 +466,9 @@ export default function LeavePage() {
           actions={<MonthNav cursor={cursor} onChange={setCursor} />}
         />
         <CardBody>
+          {calendarError && (
+            <LoadError message={calendarError} onRetry={loadCalendar} className="mb-4" />
+          )}
           <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-medium text-gray-500">
             {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => <div key={d} className="py-1">{d}</div>)}
           </div>
@@ -475,6 +503,16 @@ export default function LeavePage() {
           </div>
         </CardBody>
       </Card>
+
+      <ConfirmDialog
+        open={cancelTarget != null}
+        title="Huỷ đơn nghỉ"
+        description="Huỷ đơn nghỉ này? Đơn đã huỷ sẽ không còn được xét duyệt nữa."
+        confirmLabel="Huỷ đơn"
+        danger
+        onConfirm={confirmCancel}
+        onCancel={() => setCancelTarget(null)}
+      />
     </div>
   );
 }

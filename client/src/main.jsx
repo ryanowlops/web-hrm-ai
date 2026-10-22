@@ -6,6 +6,14 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './app/AuthContext.jsx';
 import router from './app/router.jsx';
+import { ToastProvider } from './components/ui';
+
+// Tự chữa lỗi chunk cũ sau khi deploy bản mới: Vite bắn sự kiện
+// 'vite:preloadError' khi import động trúng chunk đã bị thay/thế xoá —
+// tải lại trang để lấy bản mới thay vì để app đứng ở trạng thái lỗi.
+window.addEventListener('vite:preloadError', () => {
+  window.location.reload();
+});
 
 // Font Inter Variable (đóng gói sẵn, không phụ thuộc CDN) — font duy nhất cho toàn bộ giao diện v4
 import '@fontsource-variable/inter';
@@ -54,7 +62,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       }}
     >
       <AuthProvider>
-        <RouterProvider router={router} />
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
       </AuthProvider>
     </PersistQueryClientProvider>
   </React.StrictMode>,

@@ -17,6 +17,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   EmptyState,
   Input,
   PageHeader,
@@ -146,6 +147,7 @@ export default function ChatbotPage() {
   const [kbBusyId, setKbBusyId] = useState(null);
   const [kbError, setKbError] = useState('');
   const [kbNotice, setKbNotice] = useState('');
+  const [kbDeleteTarget, setKbDeleteTarget] = useState(null);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -298,8 +300,12 @@ export default function ChatbotPage() {
     }
   }
 
-  async function handleKbDelete(doc) {
-    if (!window.confirm(`Xoá tài liệu "${doc.title}"? Chatbot sẽ không còn dùng tài liệu này để trả lời.`)) return;
+  // Xoá tài liệu KB: hỏi xác nhận bằng ConfirmDialog (thay window.confirm),
+  // logic gọi API giữ nguyên và chỉ chạy sau khi người dùng xác nhận.
+  async function confirmKbDelete() {
+    const doc = kbDeleteTarget;
+    setKbDeleteTarget(null);
+    if (!doc) return;
     setKbError('');
     setKbNotice('');
     try {
@@ -825,7 +831,7 @@ export default function ChatbotPage() {
                       <button
                         type="button"
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors duration-150 hover:bg-[#FEF3F2] hover:text-[#B42318] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#F04438]/20"
-                        onClick={() => handleKbDelete(doc)}
+                        onClick={() => setKbDeleteTarget(doc)}
                         aria-label={`Xoá tài liệu ${doc.title || ''}`}
                         title="Xoá tài liệu"
                       >
@@ -841,6 +847,20 @@ export default function ChatbotPage() {
           </aside>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!kbDeleteTarget}
+        title="Xoá tài liệu"
+        description={
+          kbDeleteTarget
+            ? `Xoá tài liệu "${kbDeleteTarget.title}"? Chatbot sẽ không còn dùng tài liệu này để trả lời.`
+            : ''
+        }
+        confirmLabel="Xoá tài liệu"
+        danger
+        onConfirm={confirmKbDelete}
+        onCancel={() => setKbDeleteTarget(null)}
+      />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { Suspense } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, useRouteError } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute.jsx';
+import PageLoading from './PageLoading.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
+import { Alert, Button, Card, CardBody } from '../components/ui';
 import {
   AdminPage,
   AnnouncementsPage,
@@ -76,19 +78,29 @@ import {
 //   *                       -> pages/NotFoundPage.jsx
 // ---------------------------------------------------------------------------
 
-function PageLoading() {
-  // Khung chờ dạng skeleton (pulse nhẹ) — giữ bố cục ổn định trong lúc chunk
-  // của trang đang tải, tránh cảm giác trang trắng/nhảy hình.
+// Trang lỗi cấp route: hiện khi một route con ném lỗi (thường gặp nhất là
+// chunk JS cũ bị 404 sau khi deploy bản mới). Đưa người dùng về trạng thái
+// an toàn bằng nút "Tải lại trang" thay vì màn hình lỗi mặc định.
+function RouteErrorPage() {
+  const error = useRouteError();
+  // Ghi log để tiện truy vết; người dùng chỉ thấy thông điệp thân thiện.
+  console.error('Lỗi route:', error);
   return (
-    <div role="status" aria-live="polite" aria-label="Đang tải trang" className="animate-pulse">
-      <div className="mb-2 h-6 w-56 rounded-md bg-gray-200" />
-      <div className="mb-6 h-4 w-80 max-w-full rounded-md bg-gray-100" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 rounded-xl border border-gray-200 bg-white" />
-        ))}
-      </div>
-      <div className="mt-5 h-64 rounded-xl border border-gray-200 bg-white" />
+    <div className="flex min-h-dvh items-center justify-center bg-gray-50 p-6">
+      <Card className="w-full max-w-md">
+        <CardBody className="px-6 py-6">
+          <h1 className="text-xl font-semibold text-gray-900">Đã xảy ra lỗi</h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-500">
+            Trang không tải được — có thể hệ thống vừa được cập nhật lên phiên bản mới.
+          </p>
+          <Alert tone="error" className="mt-4">
+            Vui lòng tải lại trang để tiếp tục. Dữ liệu đã lưu của bạn không bị ảnh hưởng.
+          </Alert>
+          <Button type="button" className="mt-5" onClick={() => window.location.reload()}>
+            Tải lại trang
+          </Button>
+        </CardBody>
+      </Card>
     </div>
   );
 }
@@ -129,6 +141,7 @@ const router = createBrowserRouter([
   // --- Khu vực đã đăng nhập (AppLayout: sidebar + header + Outlet) ---
   {
     path: '/',
+    errorElement: <RouteErrorPage />,
     element: (
       <ProtectedRoute>
         <AppLayout />

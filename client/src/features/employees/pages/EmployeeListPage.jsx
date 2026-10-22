@@ -26,6 +26,8 @@ import {
   FormField,
   Input,
   Select,
+  LoadError,
+  useToast,
 } from '../../../components/ui';
 import { StaggerList, StaggerItem, AnimatedNumber } from '../../../components/motion';
 
@@ -271,6 +273,7 @@ function EmployeeForm({ initial, departments, positions, employees, onSubmit, on
 
 export default function EmployeeListPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { user } = useAuth();
   const fallbackRole = useMemo(getCurrentRole, []);
   const role = user?.role || fallbackRole;
@@ -291,7 +294,6 @@ export default function EmployeeListPage() {
   const [formTarget, setFormTarget] = useState(null); // null: đóng | 'create' | employee object
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [notice, setNotice] = useState('');
   const firstLoad = useRef(true);
 
   const load = useCallback(async () => {
@@ -347,10 +349,10 @@ export default function EmployeeListPage() {
     try {
       if (formTarget === 'create') {
         await createEmployee(payload);
-        setNotice('Đã thêm nhân viên mới.');
+        toast.success('Đã thêm nhân viên mới.');
       } else {
         await updateEmployee(formTarget.id, payload);
-        setNotice('Đã cập nhật hồ sơ nhân viên.');
+        toast.success('Đã cập nhật hồ sơ nhân viên.');
       }
       setFormTarget(null);
       await load();
@@ -364,7 +366,7 @@ export default function EmployeeListPage() {
     setSubmitting(true);
     try {
       await deleteEmployee(deleteTarget.id);
-      setNotice(`Đã xóa nhân viên ${deleteTarget.full_name}.`);
+      toast.success(`Đã xóa nhân viên ${deleteTarget.full_name}.`);
       setDeleteTarget(null);
       await load();
     } catch (err) {
@@ -390,22 +392,6 @@ export default function EmployeeListPage() {
           ) : undefined
         }
       />
-
-      {notice && (
-        <div className="mb-4 flex animate-fade-in items-start gap-2">
-          <Alert tone="success" className="flex-1">
-            {notice}
-          </Alert>
-          <button
-            type="button"
-            onClick={() => setNotice('')}
-            aria-label="Đóng thông báo"
-            className="mt-1 rounded-lg p-1.5 text-emerald-600 transition hover:bg-emerald-50 hover:text-emerald-800"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* Thanh công cụ: tìm kiếm + bộ lọc */}
       <Card className="mb-5 p-4 sm:p-5">
@@ -442,11 +428,7 @@ export default function EmployeeListPage() {
         </div>
       </Card>
 
-      {error && (
-        <Alert tone="error" className="mb-4">
-          {error}
-        </Alert>
-      )}
+      {error && <LoadError message={error} onRetry={load} className="mb-4" />}
 
       <Card className="overflow-hidden">
         {loading ? (

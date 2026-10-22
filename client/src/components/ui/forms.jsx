@@ -1,3 +1,5 @@
+import { Fragment, cloneElement, isValidElement, useId } from 'react';
+
 // Ô nhập liệu chuẩn design system v4 (hợp đồng frontend-design-v4, mục 3):
 // cao 40px, border gray-300, rounded-lg, nền trắng, chữ gray-900,
 // placeholder gray-400, focus = border brand-600 + ring brand-600/20.
@@ -17,10 +19,23 @@ const CHEVRON_STYLE = {
 };
 
 export function FormField({ label, error, hint, children, className = '' }) {
+  const autoId = useId();
+  // Nối label với ô nhập: nếu child là một phần tử duy nhất chưa có id,
+  // gán id tự sinh bằng cloneElement và cho label trỏ htmlFor tới id đó.
+  // Child đã có id riêng / không phải phần tử đơn -> giữ nguyên.
+  const singleChild =
+    isValidElement(children) && children.type !== Fragment ? children : null;
+  const fieldId = singleChild ? singleChild.props.id || autoId : undefined;
+  const content =
+    singleChild && !singleChild.props.id ? cloneElement(singleChild, { id: fieldId }) : children;
   return (
     <div className={className}>
-      {label && <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>}
-      {children}
+      {label && (
+        <label htmlFor={fieldId} className="mb-1.5 block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+      )}
+      {content}
       {hint && !error && <p className="mt-1.5 text-[13px] leading-relaxed text-gray-500">{hint}</p>}
       {error && <p className="mt-1.5 text-[13px] font-medium text-[#B42318]">{error}</p>}
     </div>
