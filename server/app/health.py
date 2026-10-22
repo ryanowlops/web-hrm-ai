@@ -4,9 +4,12 @@
 """
 from flask import Blueprint, jsonify
 
+from .extensions import limiter
+
 bp = Blueprint("health", __name__, url_prefix="/api/v1")
 
 
 @bp.get("/health")
+@limiter.exempt
 def health():
     return jsonify({"status": "ok", "service": "hrm-ai-api"})

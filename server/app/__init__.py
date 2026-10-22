@@ -16,6 +16,7 @@ import os
 
 from flask import Flask, jsonify
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config, config_by_name
 from .errors import register_error_handlers, register_jwt_error_handlers
@@ -130,6 +131,13 @@ def create_app(config=None) -> Flask:
 
     app = Flask(__name__)
     app.config.from_object(_resolve_config(config))
+
+    # Sau proxy của nền tảng deploy (Render/Cloudflare): tin X-Forwarded-*
+    # của đúng 1 hop proxy để request.remote_addr là IP THẬT của client.
+    # Thiếu bước này, rate limit (khóa theo remote_addr) dồn toàn bộ người
+    # dùng vào vài IP proxy dùng chung một hạn mức 600/giờ — và chính
+    # health check của Render cũng bị trả 429 oan (báo động giả 22/10).
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # UPLOAD_FOLDER tương đối → quy về thư mục server/ (cha của package app).
     upload_folder = app.config.get("UPLOAD_FOLDER", "uploads")
