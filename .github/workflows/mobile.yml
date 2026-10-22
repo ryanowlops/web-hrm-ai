@@ -35,7 +35,7 @@ jobs:
         working-directory: mobile
         run: |
           set -o pipefail
-          gradle assembleDebug --stacktrace 2>&1 | tee ../mobile-build.log
+          gradle assembleDebug --build-cache --stacktrace 2>&1 | tee ../mobile-build.log
 
       - name: Collect artifacts
         if: always()
