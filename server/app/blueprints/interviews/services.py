@@ -398,6 +398,20 @@ def assert_session_access(session, user, session_token):
     if session_token:
         if session.access_token and secrets.compare_digest(
                 session_token, session.access_token):
+            # Token khách hết hạn sau 48 giờ: token bị lộ (log/ảnh chụp/link
+            # chuyển tiếp) không dùng được vĩnh viễn để đọc báo cáo kèm tên,
+            # email và toàn bộ câu trả lời của ứng viên (audit 23/10).
+            created = getattr(session, "created_at", None)
+            if created is not None:
+                from datetime import datetime, timedelta, timezone
+
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - created > timedelta(hours=48):
+                    raise ApiError(
+                        401, "SESSION_EXPIRED",
+                        "Phiên phỏng vấn đã hết hạn sau 48 giờ, vui lòng bắt đầu phiên mới.",
+                    )
             return
         raise ApiError(403, "FORBIDDEN",
                        "Mã phiên không đúng, không thể mở phiên phỏng vấn này.")

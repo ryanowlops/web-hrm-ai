@@ -20,6 +20,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    APP_ENV=production \
     PATH="/opt/venv/bin:$PATH" \
     # Giảm phân mảnh RAM của glibc khi chạy nhiều thread trong 1 process
     MALLOC_ARENA_MAX=2

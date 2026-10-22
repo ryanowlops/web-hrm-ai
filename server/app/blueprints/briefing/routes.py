@@ -15,11 +15,13 @@ from app.blueprints.auth.guards import load_current_user, require_roles
 from app.blueprints.briefing import bp
 from app.blueprints.briefing import schemas, services
 from app.errors import ApiError
+from app.extensions import limiter, user_or_ip_key
 
 BRIEFING_ROLES = ("admin", "hr")
 
 
 @bp.post("/generate")
+@limiter.limit("10 per hour", key_func=user_or_ip_key)
 @require_roles(*BRIEFING_ROLES)
 def generate_briefing():
     period, ref_date = schemas.parse_generate_body(request.get_json(silent=True))

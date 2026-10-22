@@ -13,11 +13,10 @@ Lỗi luôn theo định dạng chuẩn (architecture B3.4):
 
 from __future__ import annotations
 
-from functools import wraps
-
-from flask import jsonify, request
+from flask import current_app, jsonify, request
 
 from app.ai_service.provider import AIResponseError, AIUnavailableError
+from app.blueprints.auth.guards import require_roles
 
 from . import bp
 from . import services
@@ -27,71 +26,20 @@ ALLOWED_ROLES = ("admin", "hr")
 
 
 # ---------------------------------------------------------------------------
-# Phân quyền: ưu tiên require_roles dùng chung của dự án; nếu module dùng
-# chung chưa sẵn sàng thì fallback kiểm tra role trong JWT claims tại đây.
-# Dù ở nhánh nào, server luôn là nơi quyết định quyền (architecture B1/B8).
+# Phân quyền: dùng thẳng guard chuẩn của dự án (đọc role từ DB mỗi request +
+# chặn tài khoản đã khoá). Trước đây blueprint này có nhánh "fallback" tự
+# kiểm tra role trong JWT claims khi không tìm thấy guard dùng chung — và
+# nhánh đó đã âm thầm là đường chạy THẬT vì các đường dẫn import thử đều
+# không tồn tại (kiểm toán bảo mật 23/10). Fail-closed: import lỗi thì app
+# không khởi động, không bao giờ chạy với guard yếu hơn.
 # ---------------------------------------------------------------------------
 
-def _load_shared_require_roles():
-    for module_path in (
-        "app.utils.decorators",
-        "app.common.decorators",
-        "app.security.decorators",
-        "app.auth.decorators",
-        "app.decorators",
-    ):
-        try:
-            module = __import__(module_path, fromlist=["require_roles"])
-            candidate = getattr(module, "require_roles", None)
-            if callable(candidate):
-                return candidate
-        except ImportError:
-            continue
-    return None
-
-
-_shared_require_roles = _load_shared_require_roles()
+require_ai_roles = require_roles(*ALLOWED_ROLES)
 
 
 def _error(code: str, message: str, status: int, details=None):
     body = {"error": {"code": code, "message": message, "details": details or []}}
     return jsonify(body), status
-
-
-def _fallback_require_roles(*roles):
-    """Kiểm tra JWT + role claim khi chưa có decorator dùng chung."""
-    allowed = {r.lower() for r in roles}
-
-    def decorator(view):
-        @wraps(view)
-        def wrapper(*args, **kwargs):
-            try:
-                from flask_jwt_extended import get_jwt, verify_jwt_in_request
-
-                verify_jwt_in_request()
-                claims = get_jwt() or {}
-            except ImportError:
-                return _error("UNAUTHORIZED",
-                              "Máy chủ chưa cấu hình xác thực JWT.", 401)
-            except Exception:
-                return _error("UNAUTHORIZED",
-                              "Thiếu hoặc token không hợp lệ/hết hạn.", 401)
-            role = str(claims.get("role") or claims.get("user_role") or "").lower()
-            if role not in allowed:
-                return _error("FORBIDDEN",
-                              "Bạn không có quyền sử dụng chức năng AI sàng lọc CV.", 403)
-            return view(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-require_ai_roles = (
-    _shared_require_roles(*ALLOWED_ROLES)
-    if _shared_require_roles is not None
-    else _fallback_require_roles(*ALLOWED_ROLES)
-)
 
 
 def _current_user_id():
@@ -169,4 +117,11 @@ def _handle_ai_unavailable(exc):
 
 @bp.errorhandler(AIResponseError)
 def _handle_ai_response_error(exc):
-    return _error("AI_RESPONSE_ERROR", str(exc), 502)
+    # Chi tiết lỗi thô của provider (hạ tầng/quota/model) chỉ vào log server;
+    # client nhận thông điệp chung (kiểm toán bảo mật 23/10).
+    current_app.logger.warning("AI provider response error: %s", exc)
+    return _error(
+        "AI_RESPONSE_ERROR",
+        "AI tạm thời không phản hồi đúng định dạng, vui lòng thử lại sau.",
+        502,
+    )

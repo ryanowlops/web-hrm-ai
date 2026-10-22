@@ -24,11 +24,13 @@ from flask import jsonify, request
 from app.blueprints.auth.guards import load_current_user, require_roles
 from app.blueprints.chat import bp, services
 from app.errors import ApiError
+from app.extensions import limiter, user_or_ip_key
 
 MAX_QUESTION_CHARS = 2000
 
 
 @bp.post("/ask")
+@limiter.limit("30 per minute", key_func=user_or_ip_key)
 @require_roles()
 def ask():
     user = load_current_user()

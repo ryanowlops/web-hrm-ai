@@ -42,9 +42,12 @@ class ApiError(Exception):
 
 COMPANY_NAME = "Công ty HRM Demo"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
-# Đuôi file thực thi / script nguy hiểm — từ chối khi upload.
-BLOCKED_EXTENSIONS = {
-    "exe", "sh", "bat", "cmd", "ps1", "msi", "com", "scr", "vbs", "jar",
+# Allowlist định dạng nghiệp vụ cho kho tài liệu (kiểm toán bảo mật 23/10):
+# trước đây dùng blocklist nên html/svg/js vẫn lọt — dù download luôn ép
+# attachment, phòng thủ theo chiều sâu vẫn nên chỉ cho phép định dạng cần thiết.
+ALLOWED_EXTENSIONS = {
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+    "png", "jpg", "jpeg", "gif", "webp", "txt", "csv",
 }
 HR_ADMIN_ROLES = ("admin", "hr")
 
@@ -217,12 +220,12 @@ def save_document_file(file_storage):
             [{"field": "file", "message": "File là bắt buộc."}],
         )
     ext = _extension_of(original)
-    if ext in BLOCKED_EXTENSIONS:
+    if ext not in ALLOWED_EXTENSIONS:
         raise ApiError(
             400,
             "INVALID_FILE_TYPE",
-            "Định dạng file này không được phép tải lên vì lý do an toàn.",
-            [{"field": "file", "message": f"Đuôi .{ext} bị chặn."}],
+            "Định dạng file này chưa được hỗ trợ trong kho tài liệu.",
+            [{"field": "file", "message": f"Đuôi .{ext} không nằm trong danh sách cho phép."}],
         )
     content = file_storage.read()
     if not content:

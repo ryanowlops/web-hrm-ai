@@ -134,6 +134,26 @@ def create_app(config=None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(_resolve_config(config))
 
+    # Chốt chặn production (kiểm toán bảo mật 23/10): các secret mặc định đã
+    # CÔNG KHAI trong repo — nếu production còn dùng chúng, bất kỳ ai cũng ký
+    # được JWT admin. Từ chối khởi động thay vì chạy trong trạng thái nguy hiểm.
+    if app.config.get("REQUIRE_REAL_SECRETS"):
+        from app.config import KNOWN_INSECURE_SECRETS
+
+        _insecure = [
+            name
+            for name in ("SECRET_KEY", "JWT_SECRET_KEY")
+            if not app.config.get(name)
+            or app.config.get(name) in KNOWN_INSECURE_SECRETS
+        ]
+        if _insecure:
+            raise RuntimeError(
+                "Production từ chối khởi động: "
+                + ", ".join(_insecure)
+                + " đang dùng giá trị mặc định công khai. "
+                "Hãy đặt biến môi trường thật trên máy chủ deploy."
+            )
+
     # Sau proxy của nền tảng deploy (Render/Cloudflare): tin X-Forwarded-*
     # của đúng 1 hop proxy để request.remote_addr là IP THẬT của client.
     # Thiếu bước này, rate limit (khóa theo remote_addr) dồn toàn bộ người

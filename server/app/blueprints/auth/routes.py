@@ -13,6 +13,7 @@ from marshmallow import ValidationError
 
 from app.blueprints.auth import bp, services
 from app.blueprints.auth.guards import load_current_user
+from app.extensions import limiter
 from app.blueprints.auth.schemas import (
     ChangePasswordSchema,
     LoginSchema,
@@ -40,6 +41,7 @@ def _load(schema, payload):
 
 
 @bp.post("/login")
+@limiter.limit("10 per minute; 100 per hour")
 def login():
     data = _load(LoginSchema(), request.get_json(silent=True))
     user = services.authenticate(data["email"], data["password"])
@@ -49,6 +51,7 @@ def login():
 
 
 @bp.post("/refresh")
+@limiter.limit("30 per minute")
 @jwt_required(refresh=True)
 def refresh():
     # load_current_user kiểm tra tài khoản còn tồn tại + chưa bị khóa.
@@ -68,6 +71,18 @@ def refresh():
 @jwt_required()
 def logout():
     services.revoke_token(get_jwt().get("jti"))
+    # Thu hồi luôn refresh token mà client gửi kèm trong body: trước đây
+    # logout chỉ cắt access token, refresh 7 ngày vẫn âm thầm cấp phiên mới
+    # được sau khi "đăng xuất" (kiểm toán bảo mật 23/10).
+    body = request.get_json(silent=True) or {}
+    refresh_token = body.get("refresh_token")
+    if refresh_token:
+        try:
+            from flask_jwt_extended import decode_token
+
+            services.revoke_token(decode_token(refresh_token).get("jti"))
+        except Exception:
+            pass  # Token refresh không hợp lệ/hết hạn — không cần thu hồi.
     return jsonify({"message": "Đăng xuất thành công."}), 200
 
 

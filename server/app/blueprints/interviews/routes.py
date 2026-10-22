@@ -16,7 +16,7 @@ from app.blueprints.auth.guards import load_current_user, require_roles
 from app.blueprints.interviews import bp
 from app.blueprints.interviews import schemas, services
 from app.blueprints.interviews.services import ApiError
-from app.extensions import db
+from app.extensions import db, limiter, user_or_ip_key
 from app.models import User
 
 
@@ -76,6 +76,7 @@ def _resolve_session(session_id):
 # ---------------------------------------------------------------------------
 
 @bp.route("/start", methods=["POST"], strict_slashes=False)
+@limiter.limit("10 per hour", key_func=user_or_ip_key)
 def start_interview():
     try:
         user = _optional_user()
@@ -127,6 +128,7 @@ def get_interview(session_id):
 
 
 @bp.route("/<int:session_id>/answer", methods=["POST"], strict_slashes=False)
+@limiter.limit("60 per hour", key_func=user_or_ip_key)
 def answer_interview(session_id):
     try:
         session = _resolve_session(session_id)
@@ -139,6 +141,7 @@ def answer_interview(session_id):
 
 
 @bp.route("/<int:session_id>/finish", methods=["POST"], strict_slashes=False)
+@limiter.limit("20 per hour", key_func=user_or_ip_key)
 def finish_interview(session_id):
     try:
         session = _resolve_session(session_id)

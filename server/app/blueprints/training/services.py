@@ -280,6 +280,13 @@ def update_enrollment(enrollment_id, cleaned, user):
         new_progress = 100
         new_status = CourseEnrollment.STATUS_COMPLETED
 
+    # Học viên tự cập nhật chỉ được tới 99%: trạng thái "hoàn thành" (được
+    # gamification cộng +50 điểm đổi quà) phải do HR/Admin xác nhận — tránh
+    # tự bấm hoàn thành để farm điểm (kiểm toán bảo mật 23/10).
+    if user.role not in WRITE_ROLES and new_status == CourseEnrollment.STATUS_COMPLETED:
+        new_status = CourseEnrollment.STATUS_IN_PROGRESS
+        new_progress = min(new_progress, 99)
+
     enrollment.progress = new_progress
     enrollment.status = new_status
     if new_status == CourseEnrollment.STATUS_COMPLETED:

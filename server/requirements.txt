@@ -10,4 +10,4 @@ SQLAlchemy>=2.0,<3.0
 psycopg2-binary>=2.9
 pypdf>=4.0
 python-dotenv>=1.0
-gunicorn>=21.2; sys_platform != "win32"
+gunicorn>=22; sys_platform != "win32"

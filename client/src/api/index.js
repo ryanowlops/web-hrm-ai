@@ -18,7 +18,9 @@ export {
 // ---------------------------------------------------------------------------
 export const authApi = {
   login: (email, password) => api.post('/auth/login', { email, password }),
-  logout: () => api.post('/auth/logout'),
+  // Gửi kèm refresh token để server thu hồi cả hai: trước đây logout chỉ cắt
+  // access token, refresh 7 ngày vẫn cấp lại phiên mới được (audit 23/10).
+  logout: () => api.post('/auth/logout', { refresh_token: getRefreshToken() }),
   changePassword: (currentPassword, newPassword) =>
     api.post('/auth/change-password', {
       current_password: currentPassword,

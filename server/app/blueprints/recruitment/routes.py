@@ -26,7 +26,7 @@ from flask import jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
-from app.extensions import limiter
+from app.extensions import limiter, user_or_ip_key
 
 from . import bp
 from . import cvcheck
@@ -213,6 +213,7 @@ def delete_job(job_id):
 
 
 @bp.route("/jobs/<int:job_id>/apply", methods=["POST"])
+@limiter.limit("10 per minute; 50 per hour")
 @handle_errors
 def apply_to_job(job_id):
     """Ứng viên nộp CV — không cần đăng nhập.
@@ -268,6 +269,7 @@ def public_cv_check():
 # AI tạo JD (v6 mục 2) — chỉ sinh nội dung, KHÔNG tạo/lưu JobPosting
 # --------------------------------------------------------------------------- #
 @bp.route("/jd/generate", methods=["POST"])
+@limiter.limit("10 per hour", key_func=user_or_ip_key)
 @handle_errors
 @require_roles("admin", "hr")
 def generate_jd():
@@ -286,6 +288,7 @@ def generate_jd():
 # Bộ câu hỏi phỏng vấn (v6 mục 3) — mỗi tin tối đa 1 bộ, HR/Admin
 # --------------------------------------------------------------------------- #
 @bp.route("/jobs/<int:job_id>/interview-kit/generate", methods=["POST"])
+@limiter.limit("10 per hour", key_func=user_or_ip_key)
 @handle_errors
 @require_roles("admin", "hr")
 def generate_interview_kit(job_id):

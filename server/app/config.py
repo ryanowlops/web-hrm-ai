@@ -17,6 +17,19 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+# Giá trị bí mật mặc định CHỈ dành cho dev local. Cả ba chuỗi đều đã công khai
+# trong repo (code + docker-compose) — môi trường production bị CHẶN KHỞI ĐỘNG
+# nếu còn dùng bất kỳ giá trị nào trong số này (REQUIRE_REAL_SECRETS + create_app).
+DEV_SECRET_KEY_FALLBACK = "dev-secret-key-change-me"
+DEV_JWT_SECRET_KEY_FALLBACK = "dev-jwt-secret-change-me-in-production-0123456789"
+COMPOSE_DEV_JWT_FALLBACK = "dev_only_change_me_in_env"
+KNOWN_INSECURE_SECRETS = {
+    DEV_SECRET_KEY_FALLBACK,
+    DEV_JWT_SECRET_KEY_FALLBACK,
+    COMPOSE_DEV_JWT_FALLBACK,
+}
+
+
 def _cors_origins() -> list[str]:
     raw = os.environ.get("CORS_ORIGINS", "http://localhost:5173")
     return [o.strip() for o in raw.split(",") if o.strip()]
@@ -26,9 +39,12 @@ class Config:
     """Cấu hình nền cho mọi môi trường."""
 
     # --- Chung ---
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
+    SECRET_KEY = os.environ.get("SECRET_KEY", DEV_SECRET_KEY_FALLBACK)
     DEBUG = False
     TESTING = False
+    # Chỉ ProductionConfig bật cờ này: create_app từ chối khởi động nếu
+    # SECRET_KEY/JWT_SECRET_KEY còn là giá trị mặc định công khai.
+    REQUIRE_REAL_SECRETS = False
 
     # --- Database ---
     # Mặc định SQLite cho dev local; production dùng PostgreSQL qua DATABASE_URL,
@@ -57,7 +73,7 @@ class Config:
     }
 
     # --- JWT (Flask-JWT-Extended, ADR-7) ---
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-me-in-production-0123456789")
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", DEV_JWT_SECRET_KEY_FALLBACK)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=30)   # access ngắn hạn 15–60 phút
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)      # refresh 7 ngày
     JWT_TOKEN_LOCATION = ["headers"]                   # Authorization: Bearer <token>
@@ -118,6 +134,7 @@ class TestingConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
+    REQUIRE_REAL_SECRETS = True
 
 
 config_by_name = {

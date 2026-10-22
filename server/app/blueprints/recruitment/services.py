@@ -277,7 +277,9 @@ def _extract_pdf_text(relative_path):
         except ImportError:
             from PyPDF2 import PdfReader
         reader = PdfReader(abs_path)
-        parts = [(page.extract_text() or "") for page in reader.pages]
+        # Chặn PDF "nghìn trang" đốt CPU: CV thật không quá 30 trang; endpoint
+        # này công khai nên giới hạn cứng ở đây (kiểm toán bảo mật 23/10).
+        parts = [(page.extract_text() or "") for page in reader.pages[:30]]
         return "\n".join(parts).strip()
     except Exception as exc:  # noqa: BLE001 - trích text không được làm hỏng luồng nộp CV
         current_app.logger.warning(

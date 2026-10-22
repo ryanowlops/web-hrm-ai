@@ -189,7 +189,9 @@ def _extract_pdf_pages(data: bytes) -> list[tuple[int | None, str]]:
     try:
         reader = PdfReader(io.BytesIO(data))
         pages = []
-        for index, page in enumerate(reader.pages, start=1):
+        # Trần 300 trang: tài liệu nội bộ HR hiếm khi dài hơn; chặn PDF bất
+        # thường giữ CPU không giới hạn (kiểm toán bảo mật 23/10).
+        for index, page in enumerate(reader.pages[:300], start=1):
             pages.append((index, page.extract_text() or ""))
     except Exception as exc:
         raise ApiError(422, "TEXT_EXTRACT_FAILED",
@@ -258,6 +260,17 @@ def _save_original_file(data: bytes, ext: str) -> str | None:
         return None
 
 
+def _remove_original_file(relative_path: str | None) -> None:
+    """Xoá file gốc đã lưu khi xử lý tài liệu thất bại (tránh rác trên đĩa)."""
+    if not relative_path:
+        return
+    upload_root = current_app.config.get("UPLOAD_FOLDER") or "uploads"
+    try:
+        os.remove(os.path.join(upload_root, relative_path))
+    except OSError:
+        pass
+
+
 def create_document(file_storage, title: str | None, uploaded_by: int) -> KbDocument:
     """Nạp 1 tài liệu: lưu bản ghi + file gốc, trích text, chunk, embedding."""
     if file_storage is None or not (file_storage.filename or "").strip():
@@ -312,11 +325,13 @@ def create_document(file_storage, title: str | None, uploaded_by: int) -> KbDocu
         db.session.rollback()
         document.status = KbDocument.STATUS_FAILED
         db.session.commit()
+        _remove_original_file(document.file_url)
         raise
     except Exception as exc:  # lỗi bất ngờ -> đánh dấu failed, không để rác processing
         db.session.rollback()
         document.status = KbDocument.STATUS_FAILED
         db.session.commit()
+        _remove_original_file(document.file_url)
         raise ApiError(422, "TEXT_EXTRACT_FAILED",
                        "Xử lý tài liệu thất bại, vui lòng kiểm tra lại tệp.") from exc
     return document

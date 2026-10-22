@@ -326,7 +326,9 @@ def extract_cv_text_from_upload(file_storage):
         except ImportError:
             from PyPDF2 import PdfReader
         reader = PdfReader(io.BytesIO(content))
-        parts = [(page.extract_text() or "") for page in reader.pages]
+        # Cùng giới hạn 30 trang như luồng nộp CV: endpoint công khai, PDF
+        # nghìn trang sẽ giữ CPU rất lâu (kiểm toán bảo mật 23/10).
+        parts = [(page.extract_text() or "") for page in reader.pages[:30]]
         return "\n".join(parts).strip()
     except Exception as exc:  # noqa: BLE001
         current_app.logger.warning("CV check: không trích được text PDF: %s", exc)

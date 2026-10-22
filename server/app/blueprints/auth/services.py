@@ -33,6 +33,11 @@ def is_token_revoked(jti: str) -> bool:
         return jti in _revoked_jtis
 
 
+# Hash giả dùng để cân bằng thời gian phản hồi khi email không tồn tại
+# (xem authenticate) — sinh một lần lúc import, không phải mật khẩu thật.
+_DUMMY_PASSWORD_HASH = generate_password_hash("dummy-password-for-timing-equalization")
+
+
 def register_jwt_blocklist(jwt_manager) -> None:
     """Đăng ký callback blocklist cho Flask-JWT-Extended (gọi từ app factory)."""
 
@@ -80,6 +85,11 @@ def authenticate(email: str, password: str) -> User:
     """
     normalized_email = (email or "").strip().lower()
     user = db.session.query(User).filter(User.email == normalized_email).first()
+    if user is None:
+        # Vẫn chạy kiểm tra hash trên một hash giả để thời gian phản hồi của
+        # "email không tồn tại" không khác "sai mật khẩu" (chống dò tài khoản
+        # qua timing — kiểm toán bảo mật 23/10).
+        check_password_hash(_DUMMY_PASSWORD_HASH, password or "")
     if user is None or not check_password_hash(user.password_hash, password):
         raise ApiError(
             "INVALID_CREDENTIALS",
