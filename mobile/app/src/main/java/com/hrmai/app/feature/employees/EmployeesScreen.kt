@@ -238,7 +238,7 @@ private fun EmployeeDetailScreen(vm: EmployeeDetailViewModel, onBack: () -> Unit
             state.employee == null -> {
                 EmptyState("Không tìm thấy nhân viên này.")
             }
-            else -> EmployeeDetailContent(state.employee)
+            else -> state.employee?.let { EmployeeDetailContent(it) }
         }
     }
 }

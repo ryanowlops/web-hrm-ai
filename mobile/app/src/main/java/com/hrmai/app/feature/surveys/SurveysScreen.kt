@@ -93,7 +93,7 @@ private fun SurveysScreen(vm: SurveysViewModel) {
         ) {
             when {
                 state.loading -> LoadingState()
-                state.error != null -> ErrorState(state.error, onRetry = { vm.load() })
+                state.error != null -> state.error?.let { ErrorState(it, onRetry = { vm.load() }) }
                 state.surveys.isEmpty() -> EmptyState(
                     "Hiện chưa có khảo sát nào đang mở. Khi HR mở khảo sát mới, khảo sát sẽ hiện ở đây.",
                 )
