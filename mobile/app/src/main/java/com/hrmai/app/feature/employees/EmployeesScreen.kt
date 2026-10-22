@@ -171,12 +171,16 @@ private fun EmployeeCard(employee: EmployeeDto, onClick: () -> Unit) {
                         employee.fullName ?: "Nhân viên",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     if (!employee.code.isNullOrBlank()) {
                         Text(
                             " · ${employee.code}",
                             style = MaterialTheme.typography.bodySmall,
                             color = InkMuted,
+                            maxLines = 1,
                         )
                     }
                 }

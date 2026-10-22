@@ -231,7 +231,11 @@ private fun MainShell(container: AppContainer) {
 
     Scaffold(
         topBar = {
-            if (!isTab && currentRoute != null) {
+            // 3 man chi tiet co tieu de + nut quay lai rieng trong man hinh
+            val hasOwnHeader = currentRoute in setOf(
+                Routes.EMPLOYEE_DETAIL, Routes.RECRUITMENT_JOB, Routes.JOB_DETAIL,
+            )
+            if (!isTab && currentRoute != null && !hasOwnHeader) {
                 TopAppBar(
                     title = { Text(DETAIL_TITLES[currentRoute] ?: "") },
                     navigationIcon = {
