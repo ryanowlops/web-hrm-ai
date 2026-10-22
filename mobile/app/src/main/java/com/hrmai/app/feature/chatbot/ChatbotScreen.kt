@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hrmai.app.core.di.AppContainer
+import com.hrmai.app.core.ui.ErrorState
 import com.hrmai.app.core.ui.HrmCard
 import com.hrmai.app.core.ui.InitialAvatar
 import com.hrmai.app.core.ui.LoadingState
@@ -125,6 +127,7 @@ fun ChatbotRoute(container: AppContainer) {
         userRole = session?.user?.role?.lowercase(),
         onSend = vm::send,
         onRetryLast = vm::retryLast,
+        onRetryHistory = vm::loadHistory,
         onConfirmAction = vm::confirmAction,
         onCancelAction = vm::cancelAction,
     )
@@ -137,16 +140,26 @@ private fun ChatbotScreen(
     userRole: String?,
     onSend: (String) -> Unit,
     onRetryLast: () -> Unit,
+    onRetryHistory: () -> Unit,
     onConfirmAction: (String) -> Unit,
     onCancelAction: (String) -> Unit,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // Tự cuộn xuống cuối khi có tin mới / trạng thái gửi thay đổi.
+    // Tự cuộn xuống cuối khi có tin mới — nhưng chỉ khi người dùng đang ở gần
+    // đáy (hoặc tin mới nhất là của chính họ), tránh giật màn hình khi họ
+    // đang cuộn lên đọc lại. Lần dựng đầu tiên (chưa layout) luôn xuống đáy.
     LaunchedEffect(state.messages.size, state.sending) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+        if (state.messages.isEmpty()) return@LaunchedEffect
+        val lastIndex = state.messages.lastIndex
+        val info = listState.layoutInfo
+        val neverLaidOut = info.totalItemsCount == 0
+        val lastVisibleIndex = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+        val nearBottom = lastVisibleIndex >= lastIndex - 1
+        val lastIsMine = state.messages.last().fromUser
+        if (neverLaidOut || nearBottom || lastIsMine) {
+            listState.animateScrollToItem(lastIndex)
         }
     }
 
@@ -157,11 +170,15 @@ private fun ChatbotScreen(
         onSend(q)
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(CanvasGray)) {
+    Column(modifier = Modifier.fillMaxSize().background(CanvasGray).imePadding()) {
         ChatHeader()
         Box(modifier = Modifier.weight(1f)) {
             when {
                 state.historyLoading && state.messages.isEmpty() -> LoadingState()
+                state.historyError != null && state.messages.isEmpty() -> ErrorState(
+                    message = state.historyError,
+                    onRetry = onRetryHistory,
+                )
                 state.messages.isEmpty() -> EmptyConversation(onPick = { submit(it) })
                 else -> LazyColumn(
                     state = listState,
@@ -336,7 +353,7 @@ private fun SuggestionChip(
             .background(if (accent) BrandBlueSoft else Color.White)
             .border(1.dp, if (accent) BrandBlue else BorderGray, RoundedCornerShape(10.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
     ) {
         Text(
             text = text,
@@ -456,7 +473,15 @@ private fun MessageRow(
                 modifier = Modifier.widthIn(max = 320.dp),
             ) {
                 when {
-                    msg.isTyping -> TypingBubble()
+                    msg.isTyping -> Column {
+                        TypingBubble()
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "AI đang tra cứu, bản miễn phí có thể mất tới 30 giây…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = InkMuted,
+                        )
+                    }
                     msg.isError -> {
                         Box(
                             modifier = Modifier.clip(

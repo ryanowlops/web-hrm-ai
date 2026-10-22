@@ -42,16 +42,24 @@ class ChatViewModel(
     /* ------------------------------- Lịch sử ------------------------------- */
 
     fun loadHistory() {
-        _state.update { it.copy(historyLoading = true) }
+        _state.update { it.copy(historyLoading = true, historyError = null) }
         viewModelScope.launch {
             runCatching {
                 val raw = api.history(page = 1, limit = 30).string()
                 parseHistory(raw)
             }.onSuccess { restored ->
-                _state.update { it.copy(messages = restored, historyLoading = false) }
-            }.onFailure {
-                // Không tải được lịch sử không chặn việc chat mới (như bản web).
-                _state.update { it.copy(historyLoading = false) }
+                _state.update {
+                    it.copy(messages = restored, historyLoading = false, historyError = null)
+                }
+            }.onFailure { e ->
+                // Không tải được lịch sử không chặn việc chat mới, nhưng phải
+                // báo rõ thay vì lặng lẽ hiện hội thoại trống như mới.
+                _state.update {
+                    it.copy(
+                        historyLoading = false,
+                        historyError = e.toApiException().message,
+                    )
+                }
             }
         }
     }

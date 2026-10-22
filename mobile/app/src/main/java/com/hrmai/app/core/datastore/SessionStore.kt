@@ -56,6 +56,13 @@ class SessionStore(private val context: Context) : TokenProvider {
     private val _sessionFlow = MutableStateFlow<Session?>(null)
     val sessionFlow: StateFlow<Session?> = _sessionFlow
 
+    /**
+     * false cho tới khi DataStore phát giá trị đầu tiên. UI dùng cờ này để hiện
+     * màn chờ khôi phục phiên thay vì chớp màn đăng nhập khi mở app.
+     */
+    private val _sessionKnown = MutableStateFlow(false)
+    val sessionKnown: StateFlow<Boolean> = _sessionKnown
+
     /** Địa chỉ server đang dùng (mặc định production, đổi được ở màn đăng nhập). */
     val baseUrlFlow: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_BASE_URL] ?: BuildConfig.DEFAULT_BASE_URL
@@ -67,6 +74,7 @@ class SessionStore(private val context: Context) : TokenProvider {
                 val session = decode(prefs)
                 cached.set(session)
                 _sessionFlow.value = session
+                _sessionKnown.value = true
             }
         }
     }

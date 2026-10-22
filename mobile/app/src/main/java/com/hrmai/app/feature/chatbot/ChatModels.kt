@@ -84,6 +84,8 @@ data class ChatMessage(
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val historyLoading: Boolean = true,
+    /** Lỗi khi tải lịch sử trò chuyện (hiện ErrorState + nút tải lại). */
+    val historyError: String? = null,
     val sending: Boolean = false,
     /** Câu hỏi gửi gần nhất bị lỗi — phục vụ nút "Thử lại". */
     val lastFailedQuestion: String? = null,

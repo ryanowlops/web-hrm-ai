@@ -469,7 +469,7 @@ private fun CommentRow(comment: FeedCommentDto, onDelete: () -> Unit) {
                     Spacer(Modifier.weight(1f))
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(40.dp),
                     ) {
                         Icon(
                             Icons.Outlined.Delete,

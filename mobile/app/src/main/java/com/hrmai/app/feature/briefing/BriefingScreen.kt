@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -95,11 +96,16 @@ private fun BriefingScreen(vm: BriefingViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BriefingContent(state: BriefingUiState, vm: BriefingViewModel) {
-    LazyColumn(
+    PullToRefreshBox(
+        isRefreshing = state.loading || state.historyLoading,
+        onRefresh = { vm.retry() },
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
         // Chọn kỳ báo cáo
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -210,6 +216,7 @@ private fun BriefingContent(state: BriefingUiState, vm: BriefingViewModel) {
                     onClick = { vm.selectBriefing(item) },
                 )
             }
+        }
         }
     }
 }

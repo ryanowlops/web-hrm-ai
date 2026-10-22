@@ -507,18 +507,59 @@ private fun fetchCurrentLocation(
                 }
             }
         } else {
-            @Suppress("DEPRECATION")
-            lm.requestSingleUpdate(
-                LocationManager.GPS_PROVIDER,
-                object : LocationListener {
-                    override fun onLocationChanged(location: Location) {
-                        onResult(location.latitude, location.longitude)
-                    }
+            fetchLegacyLocation(lm, onResult, onError)
+        }
+    } catch (e: SecurityException) {
+        onError("Chưa được cấp quyền vị trí nên chưa lấy được toạ độ.")
+    } catch (e: Exception) {
+        onError("Không lấy được vị trí hiện tại, thử lại nhé.")
+    }
+}
 
-                    override fun onProviderDisabled(provider: String) {
-                        onError("Hãy bật định vị (GPS) trên máy rồi thử lại nhé.")
-                    }
-                },
+/**
+ * Đường lấy vị trí cho Android < 30 (chưa có getCurrentLocation): xin fix từ
+ * GPS và đồng thời từ mạng — GPS trong nhà thường không có fix, vị trí mạng
+ * là đường dự phòng. Fix đầu tiên tới sẽ thắng.
+ */
+@Suppress("DEPRECATION")
+private fun fetchLegacyLocation(
+    lm: LocationManager,
+    onResult: (lat: Double, lon: Double) -> Unit,
+    onError: (String) -> Unit,
+) {
+    val gpsEnabled = runCatching {
+        lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    }.getOrDefault(false)
+    val networkEnabled = runCatching {
+        lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }.getOrDefault(false)
+    if (!gpsEnabled && !networkEnabled) {
+        onError("Hãy bật định vị (GPS) trên máy rồi thử lại nhé.")
+        return
+    }
+    var delivered = false
+    val listener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            if (delivered) return
+            delivered = true
+            runCatching { lm.removeUpdates(this) }
+            onResult(location.latitude, location.longitude)
+        }
+
+        override fun onProviderDisabled(provider: String) {
+            if (!delivered && provider == LocationManager.GPS_PROVIDER && !networkEnabled) {
+                onError("Hãy bật định vị (GPS) trên máy rồi thử lại nhé.")
+            }
+        }
+    }
+    try {
+        if (gpsEnabled) {
+            lm.requestSingleUpdate(LocationManager.GPS_PROVIDER, listener, Looper.getMainLooper())
+        }
+        if (networkEnabled) {
+            lm.requestSingleUpdate(
+                LocationManager.NETWORK_PROVIDER,
+                listener,
                 Looper.getMainLooper(),
             )
         }

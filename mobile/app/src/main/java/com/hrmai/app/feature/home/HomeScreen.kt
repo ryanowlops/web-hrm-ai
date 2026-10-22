@@ -37,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -107,7 +108,13 @@ private fun HomeScreen(
         ) {
             item { HomeHeader(state = state, onOpenNotifications = onOpenNotifications) }
 
-            item { TodayAttendanceCard(block = state.today, onOpenRoute = onOpenRoute) }
+            item {
+                TodayAttendanceCard(
+                    block = state.today,
+                    onOpenRoute = onOpenRoute,
+                    onRetry = onRefresh,
+                )
+            }
 
             item { StatsRow(state = state) }
 
@@ -123,11 +130,14 @@ private fun HomeScreen(
             when (val block = state.announcements) {
                 is Block.Loading -> item { SkeletonBlock(heightDp = 96) }
                 is Block.Failed -> item {
-                    Text(
-                        text = "Chưa tải được thông báo (${block.message})",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkMuted,
-                    )
+                    Column {
+                        Text(
+                            text = "Chưa tải được thông báo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = InkMuted,
+                        )
+                        TextButton(onClick = onRefresh) { Text("Thử lại") }
+                    }
                 }
                 is Block.Content -> {
                     if (block.value.isEmpty()) {
@@ -147,11 +157,14 @@ private fun HomeScreen(
             when (val block = state.activity) {
                 is Block.Loading -> item { SkeletonBlock(heightDp = 120) }
                 is Block.Failed -> item {
-                    Text(
-                        text = "Chưa tải được hoạt động gần đây.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkMuted,
-                    )
+                    Column {
+                        Text(
+                            text = "Chưa tải được hoạt động gần đây.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = InkMuted,
+                        )
+                        TextButton(onClick = onRefresh) { Text("Thử lại") }
+                    }
                 }
                 is Block.Content -> {
                     if (block.value.isEmpty()) {
@@ -222,7 +235,11 @@ private fun HomeHeader(state: HomeUiState, onOpenNotifications: () -> Unit) {
 }
 
 @Composable
-private fun TodayAttendanceCard(block: Block<TodayAttendanceResponse>, onOpenRoute: (String) -> Unit) {
+private fun TodayAttendanceCard(
+    block: Block<TodayAttendanceResponse>,
+    onOpenRoute: (String) -> Unit,
+    onRetry: () -> Unit,
+) {
     HrmCard(modifier = Modifier.fillMaxWidth()) {
         when (block) {
             is Block.Loading -> SkeletonBlock(heightDp = 72)
@@ -238,6 +255,7 @@ private fun TodayAttendanceCard(block: Block<TodayAttendanceResponse>, onOpenRou
                     style = MaterialTheme.typography.bodySmall,
                     color = InkMuted,
                 )
+                TextButton(onClick = onRetry) { Text("Thử lại") }
             }
             is Block.Content -> {
                 val resp = block.value

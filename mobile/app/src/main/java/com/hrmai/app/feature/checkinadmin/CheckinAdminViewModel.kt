@@ -59,6 +59,7 @@ class CheckinAdminViewModel(
     private var baseUrl: String = BuildConfig.DEFAULT_BASE_URL
     private var bootstrapped = false
     private var countdownJob: Job? = null
+    private var locatingTimeoutJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -183,10 +184,29 @@ class CheckinAdminViewModel(
     fun setRadiusText(text: String) =
         _state.update { it.copy(radiusText = text, configFormError = null) }
 
-    fun setLocating(value: Boolean) = _state.update { it.copy(locating = value) }
+    fun setLocating(value: Boolean) {
+        _state.update { it.copy(locating = value) }
+        locatingTimeoutJob?.cancel()
+        locatingTimeoutJob = null
+        if (value) {
+            // GPS trong nhà có thể không bao giờ có fix: quá 12 giây thì tự
+            // kết thúc trạng thái đang lấy vị trí để nút không quay vô hạn.
+            locatingTimeoutJob = viewModelScope.launch {
+                delay(LOCATION_TIMEOUT_MS)
+                if (_state.value.locating) {
+                    onLocationFailed(
+                        "Chưa lấy được vị trí sau 12 giây — kiểm tra GPS " +
+                            "hoặc nhập tay toạ độ nhé.",
+                    )
+                }
+            }
+        }
+    }
 
     /** Màn hình đã lấy được vị trí hiện tại của máy -> điền vào form. */
     fun onLocationPicked(lat: Double, lon: Double) {
+        locatingTimeoutJob?.cancel()
+        locatingTimeoutJob = null
         _state.update {
             it.copy(
                 locating = false,
@@ -199,6 +219,8 @@ class CheckinAdminViewModel(
     }
 
     fun onLocationFailed(message: String) {
+        locatingTimeoutJob?.cancel()
+        locatingTimeoutJob = null
         _state.update { it.copy(locating = false, message = message) }
     }
 
@@ -307,5 +329,6 @@ class CheckinAdminViewModel(
     companion object {
         private val HR_ROLES = setOf("hr", "admin")
         private const val RETRY_AFTER_FAIL_S = 30
+        private const val LOCATION_TIMEOUT_MS = 12_000L
     }
 }

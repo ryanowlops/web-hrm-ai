@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,9 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Assessment
@@ -23,6 +28,7 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DynamicFeed
@@ -50,7 +56,9 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Work
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,13 +66,19 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,8 +91,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hrmai.app.core.di.AppContainer
-import com.hrmai.app.core.ui.HrmCard
 import com.hrmai.app.core.ui.InitialAvatar
+import com.hrmai.app.core.ui.LoadingState
+import com.hrmai.app.core.ui.theme.BorderGray
+import com.hrmai.app.core.ui.theme.BrandBlue
+import com.hrmai.app.core.ui.theme.CanvasGray
+import com.hrmai.app.core.ui.theme.DangerRed
 import com.hrmai.app.feature.admin.AdminRoute
 import com.hrmai.app.feature.announcements.AnnouncementsRoute
 import com.hrmai.app.feature.assets.AssetsRoute
@@ -220,10 +238,37 @@ private val DETAIL_TITLES = mapOf(
 @Composable
 fun HrmNavHost(container: AppContainer) {
     val session by container.sessionStore.sessionFlow.collectAsState()
-    if (session == null) {
-        LoginRoute(container)
-    } else {
-        MainShell(container)
+    val sessionKnown by container.sessionStore.sessionKnown.collectAsState()
+    when {
+        // DataStore chưa phát giá trị đầu: hiện màn chờ, tránh chớp màn đăng nhập.
+        !sessionKnown -> SessionSplash()
+        session == null -> LoginRoute(container)
+        else -> MainShell(container)
+    }
+}
+
+/** Màn chờ nhẹ trong lúc khôi phục phiên đã lưu (logo H + vòng tải). */
+@Composable
+private fun SessionSplash() {
+    Box(
+        modifier = Modifier.fillMaxSize().background(CanvasGray),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(BrandBlue),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "H",
+                    color = Color.White,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            LoadingState()
+        }
     }
 }
 
@@ -255,7 +300,10 @@ private fun MainShell(container: AppContainer) {
                     title = { Text(DETAIL_TITLES[currentRoute] ?: "") },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Text("←", style = MaterialTheme.typography.titleLarge)
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Quay lại",
+                            )
                         }
                     },
                 )
@@ -396,6 +444,7 @@ private fun MoreRoute(
     onOpenRoute: (String) -> Unit,
     onLogout: () -> Unit,
 ) {
+    var showLogoutDialog by remember { mutableStateOf(false) }
     val session by container.sessionStore.sessionFlow.collectAsState()
     val user = session?.user
     val role = user?.role ?: "employee"
@@ -507,45 +556,90 @@ private fun MoreRoute(
                     modifier = Modifier.padding(top = 10.dp, bottom = 10.dp),
                 )
             }
-            section.items.forEach { (route, label, icon) ->
-                HrmCard(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
-                        .clickable { onOpenRoute(route) },
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary)
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
+            section.items.forEachIndexed { index, (route, label, icon) ->
+                MoreMenuRow(
+                    label = label,
+                    icon = icon,
+                    onClick = { onOpenRoute(route) },
+                )
+                if (index < section.items.lastIndex) {
+                    HorizontalDivider(color = BorderGray)
                 }
             }
         }
         Spacer(Modifier.height(8.dp))
-        HrmCard(
-            modifier = Modifier.fillMaxWidth().clickable { onLogout() },
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = "Đăng xuất",
-                    tint = MaterialTheme.colorScheme.error,
-                )
-                Text(
-                    "Đăng xuất",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-            }
-        }
+        HorizontalDivider(color = BorderGray)
+        MoreMenuRow(
+            label = "Đăng xuất",
+            icon = Icons.AutoMirrored.Filled.Logout,
+            tint = MaterialTheme.colorScheme.error,
+            labelColor = MaterialTheme.colorScheme.error,
+            showChevron = false,
+            onClick = { showLogoutDialog = true },
+        )
         Spacer(Modifier.height(24.dp))
         Text(
             "HRM AI Mobile v1.0 · Dữ liệu đồng bộ với bản web",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Đăng xuất?") },
+            text = { Text("Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng ứng dụng.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogout()
+                    },
+                ) { Text("Đăng xuất", color = DangerRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) { Text("Huỷ") }
+            },
+        )
+    }
+}
+
+/** Một hàng mục menu gọn (~54.dp): icon + nhãn + chevron, thay thẻ HrmCard cũ. */
+@Composable
+private fun MoreMenuRow(
+    label: String,
+    icon: ImageVector,
+    tint: Color? = null,
+    labelColor: Color? = null,
+    showChevron: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clickable { onClick() }
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = tint ?: MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = labelColor ?: MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 12.dp).weight(1f),
+        )
+        if (showChevron) {
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
