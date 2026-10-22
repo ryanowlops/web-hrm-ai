@@ -23,6 +23,19 @@ android {
         )
     }
 
+    // Keystore debug CO DINH luu trong repo: moi lan build CI deu ky cung mot
+    // chu ky, nen APK ban sau cai de len ban truoc duoc (khong bi loi
+    // INSTALL_FAILED_UPDATE_INCOMPATIBLE do may build doi key moi lan).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.p12")
+            storeType = "PKCS12"
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
