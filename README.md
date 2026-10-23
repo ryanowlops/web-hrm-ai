@@ -34,6 +34,8 @@
 | Manager | `manager@hrm.local` | `Manager@123` | Quản lý phòng ban của mình, duyệt cấp 1 |
 | Employee | `employee@hrm.local` | `Employee@123` | Tự phục vụ: chấm công, xin phép, xem phiếu lương |
 
+Đội ngũ phòng Nhân sự (đều role HR, mật khẩu chung `Hr@12345`): Phạm Thu Hằng `hang.pt@hrm.local` (Trưởng phòng nhân sự), Vũ Minh Tuấn `tuan.vm@hrm.local` (tuyển dụng), Đặng Ngọc Linh `linh.dn@hrm.local` (nhân sự), Bùi Quốc Bảo `bao.bq@hrm.local` (C&B), Hồ Thanh Tâm `tam.ht@hrm.local` (đào tạo).
+
 Ứng viên bên ngoài có trang tuyển dụng công khai tại `/jobs` — nộp CV không cần tài khoản.
 
 ## Tính năng

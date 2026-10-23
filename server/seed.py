@@ -9,6 +9,11 @@ hợp đồng, và 4 tài khoản demo theo 4 vai trò:
     manager@hrm.local  / Manager@123   (Trưởng phòng Kinh doanh)
     employee@hrm.local / Employee@123  (Nhân viên)
 
+Thêm phòng Nhân sự với 5 nhân viên HR (NV0006–NV0010), mỗi người một tài
+khoản role "hr", mật khẩu chung Hr@12345: hang.pt@ (Trưởng phòng nhân sự),
+tuan.vm@ (tuyển dụng), linh.dn@ (nhân sự), bao.bq@ (C&B), tam.ht@ (đào tạo)
+— hậu tố đầy đủ @hrm.local.
+
 Đây là mật khẩu MẪU cho môi trường demo — tuyệt đối không dùng ở production.
 Script chạy lại nhiều lần an toàn: đã có dữ liệu thì không tạo trùng.
 """
@@ -530,6 +535,93 @@ def main() -> None:
                 )
             )
 
+        db.session.flush()
+
+        # --- Đội ngũ HR mở rộng: phòng Nhân sự + 5 nhân viên HR, mỗi người
+        # một tài khoản đăng nhập role "hr" (mật khẩu chung Hr@12345 như tài
+        # khoản HR mẫu). Idempotent theo email trước, mã NV sau — an toàn kể
+        # cả khi DB đã có nhân viên trùng mã do tạo qua giao diện.
+        hr_dept = Department.query.filter_by(name="Nhân sự").first()
+        if hr_dept is None:
+            hr_dept = Department(name="Nhân sự", description="Phòng Nhân sự")
+            db.session.add(hr_dept)
+            db.session.flush()
+
+        hr_team = [
+            # mã, họ tên, email, chức vụ, lương cơ bản, phụ cấp, ngày vào, quản lý (email)
+            ("NV0006", "Phạm Thu Hằng", "hang.pt@hrm.local", "Trưởng phòng nhân sự", 24_000_000, 2_000_000, date(2023, 3, 1), None),
+            ("NV0007", "Vũ Minh Tuấn", "tuan.vm@hrm.local", "Chuyên viên tuyển dụng", 14_000_000, 1_000_000, date(2023, 7, 17), "hang.pt@hrm.local"),
+            ("NV0008", "Đặng Ngọc Linh", "linh.dn@hrm.local", "Chuyên viên nhân sự", 13_500_000, 1_000_000, date(2024, 2, 19), "hang.pt@hrm.local"),
+            ("NV0009", "Bùi Quốc Bảo", "bao.bq@hrm.local", "Chuyên viên C&B", 14_500_000, 1_000_000, date(2023, 11, 6), "hang.pt@hrm.local"),
+            ("NV0010", "Hồ Thanh Tâm", "tam.ht@hrm.local", "Chuyên viên đào tạo", 13_000_000, 1_000_000, date(2024, 5, 13), "hang.pt@hrm.local"),
+        ]
+        hr_employees = {}
+        for code, name, email, title, salary, allowance, start, _mgr in hr_team:
+            emp = (
+                Employee.query.filter_by(email=email).first()
+                or Employee.query.filter_by(code=code).first()
+            )
+            if emp is None:
+                emp = Employee(
+                    code=code,
+                    full_name=name,
+                    email=email,
+                    phone="09000000" + code[-2:],
+                    department_id=hr_dept.id,
+                    position_id=get_position(title, hr_dept).id,
+                    start_date=start,
+                    status="working",
+                )
+                db.session.add(emp)
+                db.session.flush()
+            hr_employees[email] = emp
+            if (
+                Contract.query.filter_by(employee_id=emp.id, status="active").first()
+                is None
+            ):
+                db.session.add(
+                    Contract(
+                        employee_id=emp.id,
+                        contract_type="Không xác định thời hạn",
+                        start_date=start,
+                        end_date=date.today() + timedelta(days=400),
+                        base_salary=salary,
+                        allowance=allowance,
+                        status="active",
+                    )
+                )
+            if (
+                LeaveBalance.query.filter_by(
+                    employee_id=emp.id, year=year, leave_type_id=annual.id
+                ).first()
+                is None
+            ):
+                db.session.add(
+                    LeaveBalance(
+                        employee_id=emp.id,
+                        year=year,
+                        leave_type_id=annual.id,
+                        total_days=annual.annual_quota_days,
+                        used_days=0,
+                    )
+                )
+            if User.query.filter_by(email=email).first() is None:
+                db.session.add(
+                    User(
+                        email=email,
+                        password_hash=generate_password_hash("Hr@12345"),
+                        full_name=name,
+                        role="hr",
+                        is_active=True,
+                        employee_id=emp.id,
+                    )
+                )
+        db.session.flush()
+        for _code, _name, email, _title, _sal, _allow, _start, mgr_email in hr_team:
+            if mgr_email and hr_employees.get(mgr_email):
+                hr_employees[email].manager_id = hr_employees[mgr_email].id
+        if hr_employees.get("hang.pt@hrm.local"):
+            hr_dept.manager_id = hr_employees["hang.pt@hrm.local"].id
         db.session.flush()
 
         # Dữ liệu demo mở rộng v3 — mỗi module tự seed idempotent (không tự
