@@ -532,7 +532,15 @@ def create_overtime(user, cleaned):
 
 
 def list_overtime(user, args):
-    employee = _require_current_employee(user)
+    # Staff (admin/hr) xem danh sách toàn công ty không cần hồ sơ nhân viên
+    # cá nhân — hồ sơ chỉ bắt buộc cho scope "mine" và các role suy phạm vi
+    # từ hồ sơ (employee/manager). Trước đây admin hệ thống (không gắn hồ sơ)
+    # bị 400 NO_EMPLOYEE_PROFILE ngay ở danh sách dù _scope_query không hề
+    # dùng employee cho nhánh WRITE_ROLES.
+    if user.role in WRITE_ROLES and args.get("scope") != "mine":
+        employee = _current_employee(user)
+    else:
+        employee = _require_current_employee(user)
     query = _scope_query(
         OvertimeRequest.query,
         OvertimeRequest,
@@ -621,7 +629,12 @@ def create_correction(user, cleaned):
 
 
 def list_corrections(user, args):
-    employee = _require_current_employee(user)
+    # Xem list_overtime: staff (admin/hr) không cần hồ sơ cá nhân để xem
+    # danh sách toàn công ty; hồ sơ chỉ bắt buộc cho scope "mine"/employee/manager.
+    if user.role in WRITE_ROLES and args.get("scope") != "mine":
+        employee = _current_employee(user)
+    else:
+        employee = _require_current_employee(user)
     query = _scope_query(
         AttendanceCorrection.query,
         AttendanceCorrection,
