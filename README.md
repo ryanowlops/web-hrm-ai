@@ -36,6 +36,8 @@
 
 Đội ngũ phòng Nhân sự (đều role HR, mật khẩu chung `Hr@12345`): Phạm Thu Hằng `hang.pt@hrm.local` (Trưởng phòng nhân sự), Vũ Minh Tuấn `tuan.vm@hrm.local` (tuyển dụng), Đặng Ngọc Linh `linh.dn@hrm.local` (nhân sự), Bùi Quốc Bảo `bao.bq@hrm.local` (C&B), Hồ Thanh Tâm `tam.ht@hrm.local` (đào tạo).
 
+Dữ liệu seed gồm **50 nhân viên / 5 phòng ban** (Kinh doanh, Kỹ thuật, Nhân sự, Marketing, Kế toán) — 40 nhân viên NV0011–NV0050 đều có tài khoản đăng nhập: trưởng phòng/nhóm dùng mật khẩu `Manager@123`, nhân viên dùng `Employee@123`, email theo mẫu `ten.ho@hrm.local` (ví dụ `nam.nh@hrm.local`).
+
 Ứng viên bên ngoài có trang tuyển dụng công khai tại `/jobs` — nộp CV không cần tài khoản.
 
 ## Tính năng

@@ -14,6 +14,11 @@ khoản role "hr", mật khẩu chung Hr@12345: hang.pt@ (Trưởng phòng nhân
 tuan.vm@ (tuyển dụng), linh.dn@ (nhân sự), bao.bq@ (C&B), tam.ht@ (đào tạo)
 — hậu tố đầy đủ @hrm.local.
 
+Thêm 40 nhân viên NV0011–NV0050 (Kỹ thuật +14, Kinh doanh +12, Marketing
++6, Kế toán +4, Nhân sự +4; thêm 2 phòng Marketing/Kế toán) — trưởng
+phòng/nhóm role "manager" (Manager@123), còn lại role "employee"
+(Employee@123); tổng seed: 50 nhân viên, 5 phòng ban.
+
 Đây là mật khẩu MẪU cho môi trường demo — tuyệt đối không dùng ở production.
 Script chạy lại nhiều lần an toàn: đã có dữ liệu thì không tạo trùng.
 """
@@ -622,6 +627,167 @@ def main() -> None:
                 hr_employees[email].manager_id = hr_employees[mgr_email].id
         if hr_employees.get("hang.pt@hrm.local"):
             hr_dept.manager_id = hr_employees["hang.pt@hrm.local"].id
+        db.session.flush()
+
+        # --- Mở rộng đội ngũ: +40 nhân viên (NV0011–NV0050) trải ở Kỹ thuật,
+        # Kinh doanh, Marketing (mới), Kế toán (mới) và Nhân sự. Mỗi người có
+        # hợp đồng + số dư phép + tài khoản đăng nhập; trưởng phòng/nhóm được
+        # role "manager" (Manager@123), còn lại role "employee"
+        # (Employee@123). Idempotent theo email trước, mã NV sau.
+        import re as _re
+        import unicodedata as _ud
+
+        def _email_for(full_name):
+            parts = full_name.split()
+            raw = (parts[-1] + "." + "".join(p[0] for p in parts[:-1])).lower()
+            raw = raw.replace("đ", "d").replace("Đ", "d")
+            slug = _ud.normalize("NFKD", raw).encode("ascii", "ignore").decode()
+            return _re.sub(r"[^a-z0-9.]", "", slug) + "@hrm.local"
+
+        mkt = Department.query.filter_by(name="Marketing").first()
+        if mkt is None:
+            mkt = Department(name="Marketing", description="Phòng Marketing")
+            db.session.add(mkt)
+        acct = Department.query.filter_by(name="Kế toán").first()
+        if acct is None:
+            acct = Department(name="Kế toán", description="Phòng Kế toán")
+            db.session.add(acct)
+        db.session.flush()
+        staff_depts = {"kd": kd, "kt": kt, "ns": hr_dept, "mkt": mkt, "acct": acct}
+
+        staff_rows = [
+            # họ tên, phòng, chức vụ, lương, phụ cấp, ngày vào, role, quản lý (email; None = suy theo phòng)
+            ("Trần Quốc Bảo", "kt", "Trưởng nhóm kỹ thuật", 19_000_000, 1_500_000, date(2022, 3, 14), "manager", "hr@hrm.local"),
+            ("Nguyễn Hoàng Nam", "kt", "Kỹ sư phần mềm", 15_000_000, 1_000_000, date(2023, 1, 9), "employee", None),
+            ("Phạm Minh Đức", "kt", "Kỹ sư phần mềm", 14_000_000, 1_000_000, date(2023, 6, 5), "employee", None),
+            ("Lê Thanh Tùng", "kt", "Kỹ sư phần mềm", 13_500_000, 1_000_000, date(2024, 2, 19), "employee", None),
+            ("Vũ Đức Anh", "kt", "Kỹ sư phần mềm", 13_000_000, 1_000_000, date(2024, 8, 12), "employee", None),
+            ("Đặng Thu Thảo", "kt", "Kỹ sư kiểm thử", 11_000_000, 1_000_000, date(2023, 9, 18), "employee", None),
+            ("Bùi Phương Linh", "kt", "Kỹ sư kiểm thử", 10_500_000, 1_000_000, date(2024, 4, 8), "employee", None),
+            ("Hoàng Văn Khánh", "kt", "Kỹ sư DevOps", 16_000_000, 1_000_000, date(2022, 11, 7), "employee", None),
+            ("Ngô Thị Mai", "kt", "Phân tích nghiệp vụ", 13_000_000, 1_000_000, date(2023, 4, 10), "employee", None),
+            ("Đỗ Hải Đăng", "kt", "Kỹ sư phần mềm", 12_500_000, 1_000_000, date(2025, 1, 13), "employee", None),
+            ("Trịnh Văn Sơn", "kt", "Kỹ sư phần mềm", 12_000_000, 1_000_000, date(2025, 3, 3), "employee", None),
+            ("Dương Quốc Huy", "kt", "Thiết kế UI/UX", 12_000_000, 1_000_000, date(2024, 10, 7), "employee", None),
+            ("Phan Thị Ngọc", "kt", "Kỹ sư dữ liệu", 15_000_000, 1_000_000, date(2023, 8, 21), "employee", None),
+            ("Lý Văn Hùng", "kt", "Kỹ sư phần mềm", 11_500_000, 1_000_000, date(2025, 6, 16), "employee", None),
+            ("Nguyễn Thị Hương", "kd", "Trưởng nhóm kinh doanh", 17_000_000, 1_500_000, date(2022, 5, 16), "manager", "manager@hrm.local"),
+            ("Trần Văn Long", "kd", "Nhân viên kinh doanh", 10_000_000, 1_000_000, date(2023, 2, 6), "employee", None),
+            ("Lê Minh Quân", "kd", "Nhân viên kinh doanh", 10_500_000, 1_000_000, date(2023, 5, 15), "employee", None),
+            ("Phạm Thu Trang", "kd", "Nhân viên kinh doanh", 9_500_000, 1_000_000, date(2024, 1, 8), "employee", None),
+            ("Vũ Hải Yến", "kd", "Chăm sóc khách hàng", 9_000_000, 1_000_000, date(2023, 10, 2), "employee", None),
+            ("Đặng Quốc Tuấn", "kd", "Nhân viên kinh doanh", 10_000_000, 1_000_000, date(2024, 6, 10), "employee", None),
+            ("Bùi Thanh Hà", "kd", "Nhân viên kinh doanh", 9_800_000, 1_000_000, date(2024, 9, 9), "employee", None),
+            ("Hoàng Minh Trí", "kd", "Chăm sóc khách hàng", 9_200_000, 1_000_000, date(2025, 2, 10), "employee", None),
+            ("Ngô Phương Anh", "kd", "Nhân viên kinh doanh", 10_200_000, 1_000_000, date(2023, 12, 4), "employee", None),
+            ("Đỗ Văn Tài", "kd", "Nhân viên kinh doanh", 9_600_000, 1_000_000, date(2025, 4, 7), "employee", None),
+            ("Dương Thị Lan", "kd", "Chăm sóc khách hàng", 9_000_000, 1_000_000, date(2024, 11, 11), "employee", None),
+            ("Trịnh Hữu Nghĩa", "kd", "Nhân viên kinh doanh", 10_800_000, 1_000_000, date(2022, 9, 19), "employee", None),
+            ("Nguyễn Thuỳ Dương", "mkt", "Trưởng phòng Marketing", 18_000_000, 2_000_000, date(2023, 3, 20), "manager", "hr@hrm.local"),
+            ("Trần Hải Nam", "mkt", "Chuyên viên marketing", 11_000_000, 1_000_000, date(2023, 8, 7), "employee", None),
+            ("Lê Ngọc Anh", "mkt", "Chuyên viên nội dung", 10_000_000, 1_000_000, date(2024, 3, 11), "employee", None),
+            ("Phạm Quốc Khánh", "mkt", "Chuyên viên marketing", 11_500_000, 1_000_000, date(2024, 7, 15), "employee", None),
+            ("Vũ Thanh Vân", "mkt", "Thiết kế đồ hoạ", 10_500_000, 1_000_000, date(2024, 5, 20), "employee", None),
+            ("Đặng Minh Châu", "mkt", "Chuyên viên nội dung", 9_800_000, 1_000_000, date(2025, 1, 20), "employee", None),
+            ("Bùi Thị Sen", "acct", "Kế toán trưởng", 17_000_000, 1_500_000, date(2022, 7, 4), "manager", "hr@hrm.local"),
+            ("Hoàng Văn Đức", "acct", "Kế toán viên", 10_500_000, 1_000_000, date(2023, 5, 8), "employee", None),
+            ("Ngô Thu Hiền", "acct", "Kế toán viên", 10_000_000, 1_000_000, date(2024, 2, 26), "employee", None),
+            ("Đỗ Thanh Bình", "acct", "Thủ quỹ", 9_500_000, 1_000_000, date(2024, 8, 19), "employee", None),
+            ("Trần Ngọc Mai", "ns", "Chuyên viên nhân sự", 12_500_000, 1_000_000, date(2024, 6, 3), "employee", None),
+            ("Lê Quốc Trung", "ns", "Chuyên viên tuyển dụng", 12_000_000, 1_000_000, date(2024, 9, 16), "employee", None),
+            ("Phạm Hải Đăng", "ns", "Chuyên viên C&B", 12_800_000, 1_000_000, date(2025, 3, 10), "employee", None),
+            ("Vũ Ngọc Trâm", "ns", "Chuyên viên đào tạo", 11_800_000, 1_000_000, date(2025, 5, 12), "employee", None),
+        ]
+        # Quản lý mặc định theo phòng khi không chỉ định riêng ở trên.
+        dept_lead_email = {
+            "kt": _email_for("Trần Quốc Bảo"),
+            "kd": _email_for("Nguyễn Thị Hương"),
+            "mkt": _email_for("Nguyễn Thuỳ Dương"),
+            "acct": _email_for("Bùi Thị Sen"),
+            "ns": "hang.pt@hrm.local",
+        }
+        staff_employees = {}
+        for idx, (name, dept_key, title, salary, allowance, start, role, _mgr) in enumerate(staff_rows):
+            code = f"NV{11 + idx:04d}"
+            email = _email_for(name)
+            dept = staff_depts[dept_key]
+            emp = (
+                Employee.query.filter_by(email=email).first()
+                or Employee.query.filter_by(code=code).first()
+            )
+            if emp is None:
+                emp = Employee(
+                    code=code,
+                    full_name=name,
+                    email=email,
+                    phone="09000000" + code[-2:],
+                    department_id=dept.id,
+                    position_id=get_position(title, dept).id,
+                    start_date=start,
+                    status="working",
+                )
+                db.session.add(emp)
+                db.session.flush()
+            staff_employees[email] = emp
+            if (
+                Contract.query.filter_by(employee_id=emp.id, status="active").first()
+                is None
+            ):
+                db.session.add(
+                    Contract(
+                        employee_id=emp.id,
+                        contract_type="Không xác định thời hạn",
+                        start_date=start,
+                        end_date=date.today() + timedelta(days=400),
+                        base_salary=salary,
+                        allowance=allowance,
+                        status="active",
+                    )
+                )
+            if (
+                LeaveBalance.query.filter_by(
+                    employee_id=emp.id, year=year, leave_type_id=annual.id
+                ).first()
+                is None
+            ):
+                db.session.add(
+                    LeaveBalance(
+                        employee_id=emp.id,
+                        year=year,
+                        leave_type_id=annual.id,
+                        total_days=annual.annual_quota_days,
+                        used_days=0,
+                    )
+                )
+            if User.query.filter_by(email=email).first() is None:
+                db.session.add(
+                    User(
+                        email=email,
+                        password_hash=generate_password_hash(
+                            "Manager@123" if role == "manager" else "Employee@123"
+                        ),
+                        full_name=name,
+                        role=role,
+                        is_active=True,
+                        employee_id=emp.id,
+                    )
+                )
+        db.session.flush()
+        # Gán quản lý trực tiếp + trưởng phòng cho 2 phòng mới.
+        all_by_email = dict(staff_employees)
+        all_by_email.update(hr_employees)
+        all_by_email.update(employees_by_email := {
+            e.email: e for e in employees.values()
+        })
+        for (name, dept_key, _t, _s, _a, _start, _r, mgr_email) in staff_rows:
+            email = _email_for(name)
+            lead = mgr_email or dept_lead_email[dept_key]
+            if lead != email and all_by_email.get(lead):
+                staff_employees[email].manager_id = all_by_email[lead].id
+        if staff_employees.get(_email_for("Nguyễn Thuỳ Dương")):
+            mkt.manager_id = staff_employees[_email_for("Nguyễn Thuỳ Dương")].id
+        if staff_employees.get(_email_for("Bùi Thị Sen")):
+            acct.manager_id = staff_employees[_email_for("Bùi Thị Sen")].id
         db.session.flush()
 
         # Dữ liệu demo mở rộng v3 — mỗi module tự seed idempotent (không tự
