@@ -527,6 +527,15 @@ private fun MoreRoute(
         )
     }
 
+    // Thứ tự nhóm theo role: nhóm liên quan nhất của role hiện lên đầu.
+    // Chỉ đổi thứ tự hiển thị — nội dung và quyền hiển thị (gating) của từng nhóm giữ nguyên.
+    val sectionOrder: List<String?> = when (role) {
+        "hr", "admin" -> listOf("HR & hệ thống", "Quản lý", null, "Công việc & phát triển", "Trải nghiệm ứng viên")
+        "manager" -> listOf("Quản lý", null, "Công việc & phát triển", "Trải nghiệm ứng viên", "HR & hệ thống")
+        else -> listOf(null, "Công việc & phát triển", "Quản lý", "HR & hệ thống", "Trải nghiệm ứng viên")
+    }
+    val orderedSections = sections.sortedBy { sectionOrder.indexOf(it.title) }
+
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
     ) {
@@ -546,7 +555,7 @@ private fun MoreRoute(
             }
         }
         Spacer(Modifier.height(20.dp))
-        sections.forEach { section ->
+        orderedSections.forEach { section ->
             if (section.title != null) {
                 Text(
                     section.title,

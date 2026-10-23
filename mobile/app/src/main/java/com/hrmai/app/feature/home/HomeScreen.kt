@@ -20,15 +20,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.DynamicFeed
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -48,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -96,6 +105,9 @@ private fun HomeScreen(
     onOpenRoute: (String) -> Unit,
     onOpenNotifications: () -> Unit,
 ) {
+    val role = state.user?.role
+    // HR/Admin: lối tắt nghiệp vụ lên ngay sau thẻ chấm công, trước thống kê.
+    val shortcutsFirst = role == "hr" || role == "admin"
     PullToRefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -116,9 +128,21 @@ private fun HomeScreen(
                 )
             }
 
-            item { StatsRow(state = state) }
+            item {
+                if (shortcutsFirst) {
+                    ShortcutsGrid(role = role, onOpenRoute = onOpenRoute)
+                } else {
+                    StatsRow(state = state)
+                }
+            }
 
-            item { ShortcutsGrid(onOpenRoute = onOpenRoute) }
+            item {
+                if (shortcutsFirst) {
+                    StatsRow(state = state)
+                } else {
+                    ShortcutsGrid(role = role, onOpenRoute = onOpenRoute)
+                }
+            }
 
             item {
                 SectionHeader(
@@ -209,6 +233,22 @@ private fun HomeHeader(state: HomeUiState, onOpenNotifications: () -> Unit) {
             if (sub.isNotBlank()) {
                 Text(
                     text = sub,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = InkMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // Dòng mô tả theo role (employee giữ nguyên phần chức danh · phòng ban ở trên).
+            val roleTagline = when (user?.role) {
+                "hr" -> "Quản lý nhân sự, tuyển dụng và vận hành hôm nay"
+                "manager" -> "Theo dõi team và duyệt đơn đang chờ"
+                "admin" -> "Quản trị hệ thống và toàn công ty"
+                else -> null
+            }
+            if (roleTagline != null) {
+                Text(
+                    text = roleTagline,
                     style = MaterialTheme.typography.bodySmall,
                     color = InkMuted,
                     maxLines = 1,
@@ -416,13 +456,35 @@ private fun StatsRow(state: HomeUiState) {
 }
 
 @Composable
-private fun ShortcutsGrid(onOpenRoute: (String) -> Unit) {
-    val shortcuts = listOf(
-        Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable),
-        Triple(Routes.PAYROLL, "Lương", Icons.Filled.Payments),
-        Triple(Routes.KUDOS, "Vinh danh", Icons.Filled.EmojiEvents),
-        Triple(Routes.ANNOUNCEMENTS, "Thông báo", Icons.Filled.Campaign),
-    )
+private fun ShortcutsGrid(role: String?, onOpenRoute: (String) -> Unit) {
+    // Bộ lối tắt theo role — mọi route đều lấy từ Routes; "Duyệt đơn team" trỏ vào
+    // màn Nghỉ phép (nơi có tab duyệt đơn của manager/HR).
+    val shortcuts = when (role) {
+        "manager" -> listOf(
+            Triple(Routes.LEAVE, "Duyệt đơn team", Icons.Filled.FactCheck),
+            Triple(Routes.TEAM_CALENDAR, "Lịch team", Icons.Filled.CalendarToday),
+            Triple(Routes.CHECKIN_SCAN, "Quét QR chấm công", Icons.Filled.QrCodeScanner),
+            Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable),
+        )
+        "hr" -> listOf(
+            Triple(Routes.CHECKIN_ADMIN, "Mã QR chấm công", Icons.Filled.QrCode),
+            Triple(Routes.JD_GENERATOR, "Tạo JD bằng AI", Icons.Filled.Assignment),
+            Triple(Routes.BRIEFING, "Báo cáo điều hành", Icons.Filled.Assessment),
+            Triple(Routes.CHECKIN_SCAN, "Quét QR chấm công", Icons.Filled.QrCodeScanner),
+        )
+        "admin" -> listOf(
+            Triple(Routes.ADMIN, "Quản trị tài khoản", Icons.Filled.Settings),
+            Triple(Routes.CHECKIN_ADMIN, "Mã QR chấm công", Icons.Filled.QrCode),
+            Triple(Routes.BRIEFING, "Báo cáo điều hành", Icons.Filled.Assessment),
+            Triple(Routes.REPORTS, "Báo cáo & tổng quan", Icons.Filled.TrendingUp),
+        )
+        else -> listOf(
+            Triple(Routes.CHECKIN_SCAN, "Quét QR chấm công", Icons.Filled.QrCodeScanner),
+            Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable),
+            Triple(Routes.PAYROLL, "Phiếu lương", Icons.Filled.Payments),
+            Triple(Routes.JOURNEY, "Hành trình của tôi", Icons.Filled.Timeline),
+        )
+    }
     HrmCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -439,6 +501,7 @@ private fun ShortcutsGrid(onOpenRoute: (String) -> Unit) {
 private fun ShortcutItem(label: String, icon: ImageVector, onClick: () -> Unit) {
     Column(
         modifier = Modifier
+            .width(80.dp)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
             .clickable { onClick() }
             .padding(horizontal = 6.dp, vertical = 4.dp),
@@ -451,7 +514,13 @@ private fun ShortcutItem(label: String, icon: ImageVector, onClick: () -> Unit) 
             Icon(icon, contentDescription = label, tint = BrandBlue)
         }
         Spacer(Modifier.height(6.dp))
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
