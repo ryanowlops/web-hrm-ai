@@ -462,29 +462,48 @@ const NAV_ITEMS = [
   { to: '/admin', label: 'Quản trị', icon: ICONS.admin, roles: ['admin'] },
 ];
 
-// Nhóm menu hiển thị trong sidebar (giữ nguyên thứ tự của NAV_ITEMS).
+// Nhóm menu hiển thị trong sidebar. Thứ tự NHÓM được sắp xếp lại theo
+// vai trò (ROLE_GROUP_ORDER bên dưới); thứ tự mục trong từng nhóm giữ
+// nguyên theo NAV_ITEMS.
 const NAV_GROUPS = [
-  { label: 'Menu chính', paths: ['/'] },
+  { id: 'menu-chinh', label: 'Menu chính', paths: ['/'] },
   {
+    id: 'quan-ly',
     label: 'Quản lý',
     paths: ['/employees', '/departments', '/attendance', '/checkin-qr', '/leave', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
   },
-  { label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding', '/skills'] },
-  { label: 'Vận hành', paths: ['/assets', '/training'] },
+  { id: 'to-chuc', label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding', '/skills'] },
+  { id: 'van-hanh', label: 'Vận hành', paths: ['/assets', '/training'] },
   {
+    id: 'tuyen-dung-ai',
     label: 'Tuyển dụng & AI',
     paths: ['/recruitment', '/chatbot', '/attrition-risk', '/mock-interview'],
   },
-  { label: 'Truyền thông', paths: ['/announcements', '/reports', '/briefing', '/kudos', '/surveys', '/feed'] },
-  { label: 'Trải nghiệm', paths: ['/my-journey', '/rewards'] },
-  { label: 'Hệ thống', paths: ['/admin'] },
+  { id: 'truyen-thong', label: 'Truyền thông', paths: ['/announcements', '/reports', '/briefing', '/kudos', '/surveys', '/feed'] },
+  { id: 'trai-nghiem', label: 'Trải nghiệm', paths: ['/my-journey', '/rewards'] },
+  { id: 'he-thong', label: 'Hệ thống', paths: ['/admin'] },
 ];
 
-function groupNavItems(items) {
-  return NAV_GROUPS.map((group) => ({
+// Thứ tự ưu tiên nhóm menu theo vai trò: đưa nhóm dùng hằng ngày của từng
+// vai trò lên trước. Vai trò không có trong bảng này dùng thứ tự gốc.
+const ROLE_GROUP_ORDER = {
+  admin: ['menu-chinh', 'he-thong', 'quan-ly', 'to-chuc', 'tuyen-dung-ai', 'truyen-thong', 'van-hanh', 'trai-nghiem'],
+  hr: ['menu-chinh', 'quan-ly', 'tuyen-dung-ai', 'to-chuc', 'truyen-thong', 'van-hanh', 'trai-nghiem', 'he-thong'],
+  manager: ['menu-chinh', 'quan-ly', 'to-chuc', 'truyen-thong', 'tuyen-dung-ai', 'trai-nghiem', 'van-hanh', 'he-thong'],
+  employee: ['menu-chinh', 'trai-nghiem', 'truyen-thong', 'quan-ly', 'van-hanh', 'tuyen-dung-ai', 'to-chuc', 'he-thong'],
+};
+
+function groupNavItems(items, role) {
+  const groups = NAV_GROUPS.map((group) => ({
     ...group,
     items: items.filter((item) => group.paths.includes(item.to)),
   })).filter((group) => group.items.length > 0);
+  const order = ROLE_GROUP_ORDER[role];
+  if (!order) return groups;
+  const rank = new Map(order.map((id, index) => [id, index]));
+  return groups.sort(
+    (a, b) => (rank.get(a.id) ?? order.length) - (rank.get(b.id) ?? order.length),
+  );
 }
 
 function getInitials(user) {
@@ -526,7 +545,7 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const sidebarWidth = isDesktop ? (collapsed ? 76 : 264) : undefined;
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user?.role));
-  const navSections = groupNavItems(visibleItems);
+  const navSections = groupNavItems(visibleItems, user?.role);
 
   /* ---------------- Command palette ⌘K (thuần client) ----------------
      Ô tìm kiếm trên topbar: gõ để lọc các trang trong NAV_ITEMS (theo
@@ -724,7 +743,7 @@ export default function AppLayout() {
           aria-label="Điều hướng chính"
         >
           {navSections.map((section) => (
-            <div key={section.label} className="flex items-start gap-1 lg:mt-5 lg:block lg:first:mt-0">
+            <div key={section.id || section.label} className="flex items-start gap-1 lg:mt-5 lg:block lg:first:mt-0">
               <p className={`hidden px-3 pb-1.5 text-xs font-medium text-gray-500 lg:block ${collapsed ? 'lg:invisible' : ''}`}>
                 {section.label}
               </p>

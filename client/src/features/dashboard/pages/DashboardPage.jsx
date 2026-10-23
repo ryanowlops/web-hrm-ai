@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../../app/AuthContext.jsx';
 import {
+  IconAlertTriangle,
   IconBell,
   IconBriefcase,
   IconBuilding,
@@ -13,6 +14,9 @@ import {
   IconClock,
   IconFileText,
   IconMoney,
+  IconShield,
+  IconSliders,
+  IconSparkles,
   IconUsers,
 } from '../../../components/icons.jsx';
 import {
@@ -34,6 +38,10 @@ import { getAnnouncements } from '../../announcements/services';
 import LatestKudosWidget from '../../kudos/components/LatestKudosWidget.jsx';
 import LatestActivityWidget from '../../feed/components/LatestActivityWidget.jsx';
 import { getEmployees } from '../../employees/services';
+import { getMyBalances } from '../../leave/services';
+import { getMyPayslip } from '../../payroll/services';
+import { getMyPoints, getMyBadges } from '../../rewards/services';
+import { getToday } from '../../attendance/services';
 import { fetchOverview } from '../services';
 
 // Biểu đồ (recharts, chunk ~109KB gzip) nạp lazy + gắn sau khi trang đã vẽ
@@ -169,6 +177,164 @@ const EMPLOYEE_FEATURES = [
   },
 ];
 
+const ATTENDANCE_STATUS_LABELS = {
+  present: 'Đúng giờ',
+  late: 'Đi muộn',
+  absent: 'Vắng',
+  on_leave: 'Nghỉ phép',
+};
+
+function formatMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '—';
+  return `${new Intl.NumberFormat('vi-VN').format(num)} đ`;
+}
+
+function formatTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Hàng 4 thẻ số liệu cá nhân THẬT của chính nhân viên, đặt trên
+// EMPLOYEE_FEATURES. Mỗi thẻ dùng một useQuery độc lập với service sẵn có
+// (leave/payroll/rewards/attendance): thẻ nào lỗi thì hiện "—", không làm
+// sập cả trang.
+function EmployeePersonalStats() {
+  const year = new Date().getFullYear();
+
+  const balanceQuery = useQuery({
+    queryKey: ['dashboard', 'my-leave-balance', year],
+    queryFn: () => getMyBalances(year),
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const payslipQuery = useQuery({
+    queryKey: ['dashboard', 'my-latest-payslip'],
+    queryFn: async () => {
+      const res = await getMyPayslip();
+      const body = res?.data !== undefined ? res.data : res;
+      const slip = body?.data ?? body;
+      return slip && typeof slip === 'object' ? slip : null;
+    },
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const pointsQuery = useQuery({
+    queryKey: ['dashboard', 'my-points'],
+    queryFn: async () => {
+      const [pointsResult, badgesResult] = await Promise.allSettled([
+        getMyPoints(),
+        getMyBadges(),
+      ]);
+      if (pointsResult.status !== 'fulfilled') throw pointsResult.reason;
+      const badges =
+        badgesResult.status === 'fulfilled' ? badgesResult.value?.items || [] : [];
+      const earned = badges.filter((b) => b.earned);
+      return {
+        points: pointsResult.value || {},
+        latestBadge: earned.length ? earned[earned.length - 1] : null,
+      };
+    },
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const todayQuery = useQuery({
+    queryKey: ['dashboard', 'my-attendance-today'],
+    queryFn: getToday,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  // Phép còn lại: ưu tiên loại "phép năm"; không có thì lấy loại có tổng
+  // số ngày lớn nhất trong năm.
+  const balances = Array.isArray(balanceQuery.data) ? balanceQuery.data : [];
+  const annualBalance =
+    balances.find((b) => /phép năm|annual/i.test(b.leave_type_name || '')) ||
+    balances.reduce(
+      (best, b) => ((b.total_days || 0) > (best?.total_days || 0) ? b : best),
+      null,
+    );
+  const leaveRemaining = annualBalance
+    ? (annualBalance.remaining_days ??
+      Math.max((annualBalance.total_days || 0) - (annualBalance.used_days || 0), 0))
+    : null;
+
+  const slip = payslipQuery.data || null;
+  const slipPeriod = slip?.period || {};
+  const points = pointsQuery.data?.points || {};
+  const latestBadge = pointsQuery.data?.latestBadge || null;
+  const today = todayQuery.data || null;
+  const checkInTime = formatTime(today?.check_in_at);
+  const checkOutTime = formatTime(today?.check_out_at);
+  const todayTimes = [
+    checkInTime ? `Vào lúc ${checkInTime}` : '',
+    checkOutTime ? `Ra lúc ${checkOutTime}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <section className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <StatCard
+        icon={<IconCalendar size={20} />}
+        label={`Phép còn lại năm ${year}`}
+        value={
+          balanceQuery.isError || leaveRemaining == null ? '—' : `${leaveRemaining} ngày`
+        }
+        sub={
+          annualBalance
+            ? `${annualBalance.leave_type_name || 'Phép năm'} · Đã dùng ${annualBalance.used_days ?? 0}/${annualBalance.total_days ?? 0} ngày`
+            : 'Chưa có dữ liệu số dư phép'
+        }
+        tone="blue"
+      />
+      <StatCard
+        icon={<IconMoney size={20} />}
+        label="Phiếu lương gần nhất"
+        value={slip ? formatMoney(slip.total_salary ?? slip.totalSalary) : '—'}
+        sub={
+          slip && slipPeriod.month && slipPeriod.year
+            ? `Thực lĩnh kỳ lương tháng ${slipPeriod.month}/${slipPeriod.year}`
+            : 'Chưa có phiếu lương đã chốt'
+        }
+        tone="teal"
+      />
+      <StatCard
+        icon={<IconSparkles size={20} />}
+        label="Điểm thưởng của tôi"
+        value={pointsQuery.isError || points.balance == null ? '—' : points.balance}
+        sub={
+          latestBadge
+            ? `Huy hiệu gần nhất: ${latestBadge.emoji ? `${latestBadge.emoji} ` : ''}${latestBadge.name}`
+            : points.total_earned != null
+              ? `Đã tích lũy ${points.total_earned} điểm`
+              : 'Chưa có dữ liệu điểm thưởng'
+        }
+        tone="amber"
+      />
+      <StatCard
+        icon={<IconClock size={20} />}
+        label="Chấm công hôm nay"
+        value={
+          todayQuery.isError
+            ? '—'
+            : today
+              ? ATTENDANCE_STATUS_LABELS[today.status] || 'Đã chấm công'
+              : 'Chưa check-in'
+        }
+        sub={
+          today
+            ? todayTimes || 'Đã ghi nhận chấm công hôm nay'
+            : 'Hôm nay bạn chưa ghi nhận chấm công'
+        }
+        tone="slate"
+      />
+    </section>
+  );
+}
+
 function EmployeeHome({ user }) {
   return (
     <div>
@@ -176,6 +342,7 @@ function EmployeeHome({ user }) {
         title={`${greetingByHour()}${user?.fullName ? `, ${user.fullName}` : ''}`}
         subtitle={`${formatToday()} · Chấm công, gửi đơn nghỉ phép, xem phiếu lương và hỏi chatbot HR ngay trong hệ thống.`}
       />
+      <EmployeePersonalStats />
       <StaggerList className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {EMPLOYEE_FEATURES.map((feature, i) => {
           const FeatureIcon = feature.icon;
@@ -390,6 +557,101 @@ function DashboardExtras() {
   );
 }
 
+// Lối tắt theo vai trò — hàng thẻ phẳng (kiểu EMPLOYEE_FEATURES) ngay dưới
+// hàng StatCard, đưa việc hằng ngày của từng vai trò lên trước.
+const ROLE_SHORTCUTS = {
+  admin: [
+    {
+      title: 'Quản trị người dùng',
+      description: 'Tạo tài khoản, phân quyền và khoá/mở tài khoản hệ thống.',
+      icon: IconShield,
+      tone: 'bg-violet-50 text-violet-600 ring-violet-100',
+      to: '/admin',
+    },
+    {
+      title: 'Nhân viên',
+      description: 'Hồ sơ, hợp đồng và thông tin nhân sự toàn công ty.',
+      icon: IconUsers,
+      tone: 'bg-brand-50 text-brand-600 ring-brand-100',
+      to: '/employees',
+    },
+    {
+      title: 'Báo cáo',
+      description: 'Số liệu nhân sự, chấm công và lương để xuất báo cáo.',
+      icon: IconChart,
+      tone: 'bg-accent-50 text-accent-600 ring-accent-100',
+      to: '/reports',
+    },
+    {
+      title: 'Cấu hình chấm công QR',
+      description: 'Thiết lập mã QR hằng ngày và vị trí văn phòng hợp lệ.',
+      icon: IconSliders,
+      tone: 'bg-amber-50 text-amber-600 ring-amber-100',
+      to: '/checkin-qr',
+    },
+  ],
+  hr: [
+    {
+      title: 'Tuyển dụng & JD AI',
+      description: 'Tin tuyển dụng, ứng viên và tạo JD bằng AI.',
+      icon: IconBriefcase,
+      tone: 'bg-brand-50 text-brand-600 ring-brand-100',
+      to: '/recruitment',
+    },
+    {
+      title: 'Hồ sơ & chứng từ',
+      description: 'Quản lý hồ sơ nhân viên và duyệt yêu cầu chứng từ.',
+      icon: IconFileText,
+      tone: 'bg-accent-50 text-accent-600 ring-accent-100',
+      to: '/documents',
+    },
+    {
+      title: 'Onboarding',
+      description: 'Lộ trình hội nhập và đầu việc cho nhân viên mới.',
+      icon: IconClipboard,
+      tone: 'bg-amber-50 text-amber-600 ring-amber-100',
+      to: '/onboarding',
+    },
+    {
+      title: 'Báo cáo điều hành',
+      description: 'Bản tin điều hành AI tổng hợp từ số liệu thật.',
+      icon: IconSparkles,
+      tone: 'bg-violet-50 text-violet-600 ring-violet-100',
+      to: '/briefing',
+    },
+  ],
+  manager: [
+    {
+      title: 'Duyệt đơn của team',
+      description: 'Đơn nghỉ phép của team đang chờ bạn quyết định.',
+      icon: IconClipboard,
+      tone: 'bg-brand-50 text-brand-600 ring-brand-100',
+      to: '/leave',
+    },
+    {
+      title: 'Lịch team',
+      description: 'Ai đang nghỉ, ai đi làm trong team theo tuần/tháng.',
+      icon: IconCalendar,
+      tone: 'bg-accent-50 text-accent-600 ring-accent-100',
+      to: '/team-calendar',
+    },
+    {
+      title: 'Rủi ro nghỉ việc',
+      description: 'Điểm rủi ro nghỉ việc của team kèm yếu tố giải thích.',
+      icon: IconAlertTriangle,
+      tone: 'bg-amber-50 text-amber-600 ring-amber-100',
+      to: '/attrition-risk',
+    },
+    {
+      title: 'KPI & OKR team',
+      description: 'Mục tiêu và đánh giá hiệu suất của phòng ban.',
+      icon: IconChart,
+      tone: 'bg-violet-50 text-violet-600 ring-violet-100',
+      to: '/performance',
+    },
+  ],
+};
+
 // ---------- Trang chính ----------
 
 export default function DashboardPage() {
@@ -424,27 +686,76 @@ export default function DashboardPage() {
         ? 'Số liệu toàn công ty'
         : '';
 
+  // Nút hành động trên PageHeader theo vai trò; vai trò lạ dùng bộ mặc định.
+  const headerActions = {
+    admin: (
+      <>
+        <Link to="/admin" className={LINK_BUTTON_PRIMARY}>
+          Quản trị tài khoản
+        </Link>
+        <Link
+          to="/display"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={LINK_BUTTON_SECONDARY}
+        >
+          Màn hình sảnh
+        </Link>
+      </>
+    ),
+    hr: (
+      <>
+        <Link to="/recruitment" className={LINK_BUTTON_PRIMARY}>
+          Tuyển dụng
+        </Link>
+        <Link to="/briefing" className={LINK_BUTTON_SECONDARY}>
+          Báo cáo điều hành
+        </Link>
+        <Link
+          to="/display"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={LINK_BUTTON_SECONDARY}
+        >
+          Màn hình sảnh
+        </Link>
+      </>
+    ),
+    manager: (
+      <>
+        <Link to="/leave" className={LINK_BUTTON_PRIMARY}>
+          Duyệt phép
+        </Link>
+        <Link to="/team-calendar" className={LINK_BUTTON_SECONDARY}>
+          Lịch team
+        </Link>
+      </>
+    ),
+  };
+
   const header = (
     <PageHeader
       title={`${greetingByHour()}${user?.fullName ? `, ${user.fullName}` : ''}`}
       subtitle={`${formatToday()} · Vai trò: ${roleLabel}${scopeText ? ` · ${scopeText}` : ''}`}
       actions={
-        <>
-          <Link
-            to="/display"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={LINK_BUTTON_SECONDARY}
-          >
-            Màn hình sảnh
-          </Link>
-          <Link to="/attendance" className={LINK_BUTTON_SECONDARY}>
-            Xem chấm công
-          </Link>
-          <Link to="/leave" className={LINK_BUTTON_PRIMARY}>
-            Duyệt phép
-          </Link>
-        </>
+        headerActions[role] || (
+          <>
+            <Link
+              to="/display"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={LINK_BUTTON_SECONDARY}
+            >
+              Màn hình sảnh
+            </Link>
+            <Link to="/attendance" className={LINK_BUTTON_SECONDARY}>
+              Xem chấm công
+            </Link>
+            <Link to="/leave" className={LINK_BUTTON_PRIMARY}>
+              Duyệt phép
+            </Link>
+          </>
+        )
       }
     />
   );
@@ -510,6 +821,37 @@ export default function DashboardPage() {
             />
           </section>
 
+          {/* Lối tắt theo vai trò — thẻ phẳng kiểu EMPLOYEE_FEATURES */}
+          {ROLE_SHORTCUTS[role] ? (
+            <section className="mb-5">
+              <h2 className="mb-3 text-[15px] font-semibold text-gray-900">
+                Lối tắt theo vai trò
+              </h2>
+              <StaggerList className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {ROLE_SHORTCUTS[role].map((item, i) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <StaggerItem key={item.to} index={i}>
+                      <Link to={item.to} className="block h-full focus-visible:outline-none">
+                        <Card hover className="h-full p-5">
+                          <div
+                            className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ring-1 ring-inset ${item.tone}`}
+                          >
+                            <ItemIcon size={20} />
+                          </div>
+                          <div className="text-[15px] font-semibold text-gray-900">{item.title}</div>
+                          <div className="mt-1 text-sm leading-relaxed text-gray-500">
+                            {item.description}
+                          </div>
+                        </Card>
+                      </Link>
+                    </StaggerItem>
+                  );
+                })}
+              </StaggerList>
+            </section>
+          ) : null}
+
           {/* Hàng 2: biểu đồ chấm công (2/3) + Cần xử lý (1/3) */}
           <section className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
             <Card className="lg:col-span-2">
@@ -536,9 +878,22 @@ export default function DashboardPage() {
               </CardBody>
             </Card>
 
-            {/* Cần xử lý — danh sách việc chờ quyết định */}
+            {/* Cần xử lý — danh sách việc chờ quyết định.
+                Dữ liệu overview đã được server giới hạn theo vai trò (manager
+                chỉ thấy phạm vi phòng mình) và services.js chỉ chuẩn hoá các
+                số tổng hợp (đơn phép chờ, hợp đồng sắp hết hạn...) chứ không
+                có danh sách task theo loại (ca/OT/sửa chấm công) để lọc an
+                toàn tại client — nên giữ nguyên danh sách, chỉ đổi subtitle
+                theo vai trò. */}
             <Card>
-              <CardHeader title="Cần xử lý" subtitle="Những việc đang chờ bạn quyết định" />
+              <CardHeader
+                title="Cần xử lý"
+                subtitle={
+                  role === 'manager'
+                    ? 'Việc chờ duyệt trong phạm vi team của bạn'
+                    : 'Những việc đang chờ bạn quyết định'
+                }
+              />
               <div className="px-5 py-2">
                 <div className="flex items-center gap-3 border-b border-gray-100 py-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
