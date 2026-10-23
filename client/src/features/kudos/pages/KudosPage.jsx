@@ -342,6 +342,9 @@ export default function KudosPage() {
   const [giveOpen, setGiveOpen] = useState(false);
   const month = currentMonthValue();
   const myEmployeeId = user?.employee_id ?? user?.employeeId ?? null;
+  // Tài khoản không gắn hồ sơ nhân viên (vd admin hệ thống) không tham gia
+  // tặng/nhận kudos → ẩn hẳn nút + form tặng, chỉ xem tường vinh danh.
+  const hasEmployeeProfile = myEmployeeId != null;
 
   const wallQuery = useQuery({
     queryKey: ['engagement', 'kudos', 'wall'],
@@ -354,6 +357,7 @@ export default function KudosPage() {
     queryFn: async () => (await getEmployees({ limit: 100 })).items,
     staleTime: 60_000,
     retry: 1,
+    enabled: hasEmployeeProfile,
   });
 
   const kudos = wallQuery.data?.items || [];
@@ -364,7 +368,9 @@ export default function KudosPage() {
         title="Vinh danh"
         subtitle="Tường kudos ghi nhận đóng góp của đồng nghiệp và các cột mốc đáng nhớ trong tháng."
         actions={
-          <Button onClick={() => setGiveOpen(true)}>Tặng kudos</Button>
+          hasEmployeeProfile ? (
+            <Button onClick={() => setGiveOpen(true)}>Tặng kudos</Button>
+          ) : undefined
         }
       />
 
@@ -430,12 +436,14 @@ export default function KudosPage() {
         <MilestonesTab month={month} />
       )}
 
-      <GiveKudoModal
-        open={giveOpen}
-        onClose={() => setGiveOpen(false)}
-        employees={employeesQuery.data || []}
-        myEmployeeId={myEmployeeId}
-      />
+      {hasEmployeeProfile ? (
+        <GiveKudoModal
+          open={giveOpen}
+          onClose={() => setGiveOpen(false)}
+          employees={employeesQuery.data || []}
+          myEmployeeId={myEmployeeId}
+        />
+      ) : null}
     </div>
   );
 }

@@ -116,8 +116,16 @@ export default function DocumentsPage() {
   const { user } = useAuth();
   const role = user?.role;
   const canManage = role === 'admin' || role === 'hr';
-  const canUpload = canManage || role === 'employee';
+  const hasProfile = Boolean(user?.employeeId);
+  // Upload tự phục vụ chỉ khi tài khoản đã gắn hồ sơ (server trả
+  // NO_EMPLOYEE_PROFILE nếu chưa gắn); HR/Admin tải cho người khác
+  // không phụ thuộc hồ sơ của chính họ.
+  const canUpload = canManage || (role === 'employee' && hasProfile);
   const canDelete = canManage || role === 'employee';
+  // Kho tài liệu: HR/Admin quản trị toàn công ty nên không cần hồ sơ
+  // cá nhân; manager (theo team) và employee (của mình) đều suy scope
+  // từ hồ sơ cá nhân — chưa gắn hồ sơ thì kho luôn rỗng, ẩn hẳn.
+  const showDocVault = canManage || hasProfile;
 
   // --- Hồ sơ nhân viên ---
   const [employees, setEmployees] = useState([]);
@@ -144,16 +152,20 @@ export default function DocumentsPage() {
   const [actionError, setActionError] = useState('');
 
   const loadEmployees = useCallback(async () => {
-    if (role === 'employee') return;
+    if (role === 'employee' || !showDocVault) return;
     try {
       const { items } = await getEmployees({ limit: 100 });
       setEmployees(items || []);
     } catch {
       setEmployees([]);
     }
-  }, [role]);
+  }, [role, showDocVault]);
 
   const loadDocuments = useCallback(async () => {
+    if (!showDocVault) {
+      setDocsLoading(false);
+      return;
+    }
     setDocsLoading(true);
     setDocsError('');
     try {
@@ -167,7 +179,7 @@ export default function DocumentsPage() {
     } finally {
       setDocsLoading(false);
     }
-  }, [role, selectedEmployeeId, docPage]);
+  }, [role, selectedEmployeeId, docPage, showDocVault]);
 
   const loadExpiring = useCallback(async () => {
     if (!canManage) return;
@@ -180,11 +192,21 @@ export default function DocumentsPage() {
   }, [canManage]);
 
   const loadCertificates = useCallback(async () => {
+    // Chưa gắn hồ sơ và không thuộc HR/Admin: cả khu giấy xác nhận bị
+    // ẩn, không gọi API thừa.
+    if (!hasProfile && !canManage) {
+      setCertsLoading(false);
+      return;
+    }
     setCertsLoading(true);
     setCertsError('');
     try {
-      const mine = await getCertificates({ scope: 'mine', limit: 100 });
-      setMyCerts(mine.items || []);
+      // "Đơn của tôi" chỉ tồn tại khi tài khoản đã gắn hồ sơ nhân viên
+      // (admin/HR chưa gắn hồ sơ vẫn tải hàng chờ cấp bình thường).
+      if (hasProfile) {
+        const mine = await getCertificates({ scope: 'mine', limit: 100 });
+        setMyCerts(mine.items || []);
+      }
       if (canManage) {
         const queue = await getCertificates({ status: 'pending', limit: 100 });
         setCertQueue(queue.items || []);
@@ -194,7 +216,7 @@ export default function DocumentsPage() {
     } finally {
       setCertsLoading(false);
     }
-  }, [canManage]);
+  }, [canManage, hasProfile]);
 
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
@@ -243,9 +265,11 @@ export default function DocumentsPage() {
         subtitle="Kho tài liệu điện tử của nhân viên và giấy xác nhận lương / công tác."
         actions={(
           <>
-            <Button variant="secondary" onClick={() => setCertFormOpen(true)}>
-              <IconFileText size={16} /> Xin giấy xác nhận
-            </Button>
+            {hasProfile && (
+              <Button variant="secondary" onClick={() => setCertFormOpen(true)}>
+                <IconFileText size={16} /> Xin giấy xác nhận
+              </Button>
+            )}
             {canUpload && (
               <Button onClick={() => setUploadOpen(true)}>
                 <IconUpload size={16} /> Tải tài liệu lên
@@ -279,6 +303,8 @@ export default function DocumentsPage() {
       )}
 
       {/* ============ KHU 1: HỒ SƠ NHÂN VIÊN ============ */}
+      {showDocVault && (
+        <>
       <h2 className="mb-3 text-base font-semibold text-gray-900">Hồ sơ nhân viên</h2>
 
       {role !== 'employee' && (
@@ -369,8 +395,12 @@ export default function DocumentsPage() {
           <Button size="sm" variant="secondary" disabled={docPage >= docMeta.totalPages} onClick={() => setDocPage((p) => p + 1)}>Sau</Button>
         </div>
       )}
+        </>
+      )}
 
       {/* ============ KHU 2: GIẤY XÁC NHẬN ============ */}
+      {(hasProfile || canManage) && (
+        <>
       <h2 className="mb-3 text-base font-semibold text-gray-900">Giấy xác nhận</h2>
 
       {certsError ? (
@@ -427,7 +457,8 @@ export default function DocumentsPage() {
             </div>
           )}
 
-          {/* Đơn của tôi */}
+          {/* Đơn của tôi — chỉ khi tài khoản đã gắn hồ sơ nhân viên */}
+          {hasProfile && (
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card">
             <div className="border-b border-gray-100 px-4 py-3 text-sm font-medium text-gray-900">Đơn xin giấy của tôi</div>
             {myCerts.length === 0 ? (
@@ -478,7 +509,10 @@ export default function DocumentsPage() {
               </table>
             )}
           </div>
+          )}
         </div>
+      )}
+        </>
       )}
 
       {/* ============ MODALS ============ */}

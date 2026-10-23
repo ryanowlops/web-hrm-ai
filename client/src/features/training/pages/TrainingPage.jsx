@@ -717,7 +717,7 @@ function CourseProgressModal({ course, onClose }) {
 // View Employee/Manager — khoá học của tôi
 // ===========================================================================
 
-function MyTrainingView() {
+function MyTrainingView({ hasProfile }) {
   const [items, setItems] = useState([]);
   const [openCourses, setOpenCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -729,18 +729,25 @@ function MyTrainingView() {
     setLoading(true);
     setError('');
     try {
-      const [{ items: mine }, { items: all }] = await Promise.all([
-        getMyCourses(),
-        getCourses({ limit: 100 }),
-      ]);
-      setItems(mine);
-      setOpenCourses(all);
+      // Chưa gắn hồ sơ: /training/my trả 400 NO_EMPLOYEE_PROFILE nên
+      // không gọi; chỉ tải danh sách khoá đang mở (đọc được mọi role).
+      if (hasProfile) {
+        const [{ items: mine }, { items: all }] = await Promise.all([
+          getMyCourses(),
+          getCourses({ limit: 100 }),
+        ]);
+        setItems(mine);
+        setOpenCourses(all);
+      } else {
+        const { items: all } = await getCourses({ limit: 100 });
+        setOpenCourses(all);
+      }
     } catch (err) {
-      setError(parseApiError(err, 'Không tải được danh sách khoá học của bạn.').message);
+      setError(parseApiError(err, hasProfile ? 'Không tải được danh sách khoá học của bạn.' : 'Không tải được danh sách khoá học đang mở.').message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hasProfile]);
 
   useEffect(() => {
     load();
@@ -790,7 +797,8 @@ function MyTrainingView() {
         </Alert>
       )}
 
-      {loading ? (
+      {/* Khối "khoá học của tôi" — chỉ khi tài khoản đã gắn hồ sơ */}
+      {hasProfile && (loading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Skeleton className="h-44 w-full" />
           <Skeleton className="h-44 w-full" />
@@ -896,7 +904,7 @@ function MyTrainingView() {
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Khoá đang mở trong công ty (chỉ xem) */}
       {openCourses.length > 0 && (
@@ -936,8 +944,9 @@ function MyTrainingView() {
 export default function TrainingPage() {
   const { user } = useAuth();
   const role = user?.role || getRoleFallback();
+  const hasProfile = Boolean(user?.employeeId);
   if (role === 'admin' || role === 'hr') {
     return <ManagerTrainingView />;
   }
-  return <MyTrainingView />;
+  return <MyTrainingView hasProfile={hasProfile} />;
 }

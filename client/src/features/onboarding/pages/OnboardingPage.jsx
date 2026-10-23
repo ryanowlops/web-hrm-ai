@@ -272,6 +272,8 @@ function PlanDetail({ plan, isHr, busyId, onStatus, onVerify, onBack }) {
 export default function OnboardingPage() {
   const { user } = useAuth();
   const role = user?.role || currentRole();
+  // Tín hiệu có hồ sơ nhân viên gắn với tài khoản (admin hệ thống có thể null).
+  const hasProfile = Boolean(user?.employeeId);
   const isHr = role === 'admin' || role === 'hr';
   const isStaff = isHr || role === 'manager';
 
@@ -315,6 +317,16 @@ export default function OnboardingPage() {
   }, [isStaff, statusFilter]);
 
   const loadMyData = useCallback(async () => {
+    // Không gắn hồ sơ thì không có dữ liệu cá nhân nào để lấy: bỏ qua cả
+    // /my-tasks lẫn /my-plan (backend trả rỗng/null) để view cá nhân ẩn hẳn.
+    if (!hasProfile) {
+      setMyTasks([]);
+      if (!isStaff) {
+        setMyPlan(null);
+        setMyPlanLoading(false);
+      }
+      return;
+    }
     try {
       const tasks = await getMyTasks().catch(() => []);
       setMyTasks(Array.isArray(tasks) ? tasks : []);
@@ -331,7 +343,7 @@ export default function OnboardingPage() {
         setMyPlanLoading(false);
       }
     }
-  }, [isStaff]);
+  }, [isStaff, hasProfile]);
 
   const loadRefs = useCallback(async () => {
     if (!isHr) return;
@@ -438,6 +450,18 @@ export default function OnboardingPage() {
 
   // --- Employee: man hinh "Hoi nhap cua toi" ---
   if (!isStaff) {
+    // Employee không gắn hồ sơ: view cá nhân ẩn hẳn (không hiện thẻ rỗng
+    // "chưa có kế hoạch hội nhập"); chỉ còn tiêu đề trang.
+    if (!hasProfile) {
+      return (
+        <div className="page-shell">
+          <PageHeader
+            title="Hội nhập của tôi"
+            subtitle="Checklist hội nhập của bạn — hoàn thành từng đầu việc theo đúng hạn, HR sẽ xác nhận các hồ sơ cần thiết."
+          />
+        </div>
+      );
+    }
     return (
       <div className="page-shell">
         <PageHeader

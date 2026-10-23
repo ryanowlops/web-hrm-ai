@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../../app/AuthContext.jsx';
 import {
   getToday, checkIn, checkOut, getMyMonthly, getTeamMonthly, getDepartments, getEmployees,
 } from '../services';
@@ -72,8 +73,17 @@ function MonthNav({ cursor, onChange }) {
 /* ---------- Trang chính ---------- */
 
 export default function AttendancePage() {
+  const { user: authUser } = useAuth();
   const user = useMemo(getCurrentUser, []);
   const canViewTeam = ['admin', 'hr', 'manager'].includes(user?.role);
+  // Tín hiệu có hồ sơ nhân viên (AuthContext là nguồn chuẩn; chấp thêm
+  // employee_id thô từ user localStorage như Dashboard). Không có hồ sơ thì
+  // mọi khối "của tôi" (check-in/out, bảng công cá nhân) bị ẨN HẲN và không
+  // gọi API cá nhân — kể cả admin/hr/manager thuần hệ thống. Bảng team vẫn
+  // giữ riêng theo role (canViewTeam) cho admin/hr/manager.
+  const hasProfile = Boolean(
+    authUser?.employeeId ?? authUser?.employee_id ?? user?.employeeId ?? user?.employee_id,
+  );
 
   const now = new Date();
   const [cursor, setCursor] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
@@ -87,8 +97,10 @@ export default function AttendancePage() {
   const [notice, setNotice] = useState('');
 
   const loadToday = useCallback(async () => {
+    // Không có hồ sơ nhân viên: bỏ qua hẳn API cá nhân /attendance/today.
+    if (!hasProfile) { setToday(null); setTodayLoading(false); return; }
     try { setToday(await getToday()); } catch (e) { setError(errMsg(e)); } finally { setTodayLoading(false); }
-  }, []);
+  }, [hasProfile]);
 
   useEffect(() => { loadToday(); }, [loadToday]);
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -104,12 +116,14 @@ export default function AttendancePage() {
   const [myLoading, setMyLoading] = useState(false);
 
   const loadMyMonthly = useCallback(async () => {
+    // Không có hồ sơ nhân viên: bỏ qua hẳn API cá nhân /attendance/monthly?mine=1.
+    if (!hasProfile) { setMyLoading(false); return; }
     setMyLoading(true);
     try {
       const res = await getMyMonthly(cursor.month, cursor.year);
       setMyData({ records: Array.isArray(res) ? res : res.data || [], summary: res?.summary || null });
     } catch (e) { setError(errMsg(e)); } finally { setMyLoading(false); }
-  }, [cursor]);
+  }, [cursor, hasProfile]);
 
   useEffect(() => { loadMyMonthly(); }, [loadMyMonthly]);
 
@@ -172,7 +186,9 @@ export default function AttendancePage() {
       )}
 
       <StaggerList className="space-y-6">
-        {/* === Thẻ hôm nay: check-in / check-out (thẻ trắng phẳng, v4) === */}
+        {/* === Thẻ hôm nay: check-in / check-out (thẻ trắng phẳng, v4) ===
+            Chỉ hiển thị khi tài khoản ĐÃ gắn hồ sơ nhân viên (hasProfile). */}
+        {hasProfile && (
         <StaggerItem index={0}>
         <section className="rounded-xl border border-gray-200 bg-white shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-6 px-5 py-5 lg:px-6">
@@ -217,8 +233,11 @@ export default function AttendancePage() {
           </div>
         </section>
         </StaggerItem>
+        )}
 
-        {/* === Bảng công tháng của tôi === */}
+        {/* === Bảng công tháng của tôi ===
+            Chỉ hiển thị khi tài khoản ĐÃ gắn hồ sơ nhân viên (hasProfile). */}
+        {hasProfile && (
         <StaggerItem index={1}>
         <Card>
           <CardHeader
@@ -265,8 +284,9 @@ export default function AttendancePage() {
             )}
         </Card>
         </StaggerItem>
+        )}
 
-        {/* === Bảng công đội ngũ (HR / Manager / Admin) === */}
+        {/* === Bảng công đội ngũ (chỉ Admin / HR / Manager — employee không thấy) === */}
         {canViewTeam && (
           <StaggerItem index={2}>
           <Card>

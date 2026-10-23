@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { createBrowserRouter, useRouteError } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute.jsx';
+import RouteGuard from './RouteGuard.jsx';
 import PageLoading from './PageLoading.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
@@ -55,8 +56,8 @@ import {
 //
 // Route trong AppLayout (bắt buộc đăng nhập, mọi role trừ khi ghi chú thêm):
 //   /                       -> features/dashboard/pages/DashboardPage.jsx
-//   /employees              -> features/employees/pages/EmployeeListPage.jsx
-//   /employees/:id          -> features/employees/pages/EmployeeDetailPage.jsx
+//   /employees              -> features/employees/pages/EmployeeListPage.jsx      [admin, hr, manager]
+//   /employees/:id          -> features/employees/pages/EmployeeDetailPage.jsx    [admin, hr, manager]
 //   /departments            -> features/departments/pages/DepartmentListPage.jsx   [admin, hr, manager]
 //   /attendance             -> features/attendance/pages/AttendancePage.jsx
 //   /leave                  -> features/leave/pages/LeavePage.jsx
@@ -68,13 +69,14 @@ import {
 //   /admin                  -> features/admin/pages/AdminPage.jsx                  [admin]
 //   /performance            -> features/performance/pages/PerformancePage.jsx     (mở rộng v2)
 //   /onboarding             -> features/onboarding/pages/OnboardingPage.jsx       (mở rộng v2)
-//   /org-chart              -> features/orgchart/pages/OrgChartPage.jsx           (mở rộng v2)
-//   /team-calendar          -> features/calendar/pages/TeamCalendarPage.jsx       (mở rộng v2)
+//   /org-chart              -> features/orgchart/pages/OrgChartPage.jsx           (mở rộng v2) [admin, hr, manager]
+//   /team-calendar          -> features/calendar/pages/TeamCalendarPage.jsx       (mở rộng v2) [admin, hr, manager]
+//   /skills                 -> features/skills/pages/SkillsPage.jsx               (mở rộng v5) — mọi role: có tab "Kỹ năng của tôi" tự cập nhật
 //   /assets                 -> features/assets/pages/AssetsPage.jsx               (mở rộng v2)
 //   /training               -> features/training/pages/TrainingPage.jsx           (mở rộng v2)
 //   /announcements          -> features/announcements/pages/AnnouncementsPage.jsx (mở rộng v2)
 //   /notifications          -> features/notifications/pages/NotificationsPage.jsx (mở rộng v2)
-//   /reports                -> features/reports/pages/ReportsPage.jsx             (mở rộng v2)
+//   /reports                -> features/reports/pages/ReportsPage.jsx             (mở rộng v2) [admin, hr, manager]
 //   *                       -> pages/NotFoundPage.jsx
 // ---------------------------------------------------------------------------
 
@@ -113,10 +115,18 @@ function lazyPage(Component) {
   );
 }
 
-function guardedPage(Component, roles) {
+// Guard lặng cho route con trong AppLayout: sai role (hoặc thiếu hồ sơ
+// nhân viên khi route gắn needsEmployee) thì chuyển thẳng về "/" — ẩn hẳn
+// màn hình không thuộc về người dùng, không hiện trang lỗi. Phiên đăng
+// nhập vẫn do ProtectedRoute ở route cha đảm bảo.
+function guardedPage(Component, roles, { needsEmployee } = {}) {
   const page = lazyPage(Component);
-  if (!roles) return page;
-  return <ProtectedRoute roles={roles}>{page}</ProtectedRoute>;
+  if (!roles && !needsEmployee) return page;
+  return (
+    <RouteGuard roles={roles} needsEmployee={needsEmployee}>
+      {page}
+    </RouteGuard>
+  );
 }
 
 const router = createBrowserRouter([
@@ -149,8 +159,14 @@ const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: lazyPage(DashboardPage) },
-      { path: 'employees', element: lazyPage(EmployeeListPage) },
-      { path: 'employees/:id', element: lazyPage(EmployeeDetailPage) },
+      {
+        path: 'employees',
+        element: guardedPage(EmployeeListPage, ['admin', 'hr', 'manager']),
+      },
+      {
+        path: 'employees/:id',
+        element: guardedPage(EmployeeDetailPage, ['admin', 'hr', 'manager']),
+      },
       {
         path: 'departments',
         element: guardedPage(DepartmentListPage, ['admin', 'hr', 'manager']),
@@ -171,17 +187,29 @@ const router = createBrowserRouter([
       // --- Mở rộng v2 (mở cho mọi user đã đăng nhập, scope xử lý ở trang/API) ---
       { path: 'performance', element: lazyPage(PerformancePage) },
       { path: 'onboarding', element: lazyPage(OnboardingPage) },
-      { path: 'org-chart', element: lazyPage(OrgChartPage) },
-      { path: 'team-calendar', element: lazyPage(TeamCalendarPage) },
+      {
+        path: 'org-chart',
+        element: guardedPage(OrgChartPage, ['admin', 'hr', 'manager']),
+      },
+      {
+        path: 'team-calendar',
+        element: guardedPage(TeamCalendarPage, ['admin', 'hr', 'manager']),
+      },
       { path: 'assets', element: lazyPage(AssetsPage) },
       { path: 'training', element: lazyPage(TrainingPage) },
       { path: 'announcements', element: lazyPage(AnnouncementsPage) },
       { path: 'notifications', element: lazyPage(NotificationsPage) },
-      { path: 'reports', element: lazyPage(ReportsPage) },
+      {
+        path: 'reports',
+        element: guardedPage(ReportsPage, ['admin', 'hr', 'manager']),
+      },
       // --- Mở rộng v3 ---
       { path: 'shifts', element: lazyPage(ShiftsPage) },
       { path: 'documents', element: lazyPage(DocumentsPage) },
-      { path: 'offboarding', element: lazyPage(OffboardingPage) },
+      {
+        path: 'offboarding',
+        element: guardedPage(OffboardingPage, ['admin', 'hr']),
+      },
       { path: 'kudos', element: lazyPage(KudosPage) },
       { path: 'surveys', element: lazyPage(SurveysPage) },
       {
@@ -190,8 +218,14 @@ const router = createBrowserRouter([
       },
       // --- Mở rộng v4 ---
       { path: 'feed', element: lazyPage(FeedPage) },
-      { path: 'rewards', element: lazyPage(RewardsPage) },
-      { path: 'my-journey', element: lazyPage(JourneyPage) },
+      {
+        path: 'rewards',
+        element: guardedPage(RewardsPage, null, { needsEmployee: true }),
+      },
+      {
+        path: 'my-journey',
+        element: guardedPage(JourneyPage, null, { needsEmployee: true }),
+      },
       // --- Mở rộng v5 ---
       { path: 'skills', element: lazyPage(SkillsPage) },
       // --- Mở rộng v6 (gói 3) ---

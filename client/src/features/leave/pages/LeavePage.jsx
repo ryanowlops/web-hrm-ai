@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../../app/AuthContext.jsx';
 import {
   getLeaveTypes, getMyBalances, createRequest, getMyRequests, cancelRequest,
   getPendingForMe, approveRequest, rejectRequest, getCalendar,
@@ -91,9 +92,20 @@ function BalanceCard({ balance: b }) {
 /* ---------- Trang chính ---------- */
 
 export default function LeavePage() {
+  const { user: authUser } = useAuth();
   const user = useMemo(getCurrentUser, []);
   const toast = useToast();
   const isApprover = ['admin', 'hr', 'manager'].includes(user?.role);
+  // Tín hiệu có hồ sơ nhân viên (AuthContext là nguồn chuẩn; chấp thêm
+  // employee_id thô từ user localStorage như Dashboard). Không có hồ sơ thì
+  // mọi khối tự phục vụ (form tạo đơn, số dư phép, đơn của tôi) bị ẨN HẲN và
+  // không gọi API cá nhân — kể cả admin/hr/manager thuần hệ thống. Card
+  // duyệt vẫn giữ riêng theo role (isApprover) và theo cấp duyệt thật:
+  // manager chỉ nhận đơn pending của team (duyệt cấp 1), hr/admin chỉ nhận
+  // đơn manager_approved (duyệt cấp cuối) — xem getPendingForMe ở services.
+  const hasProfile = Boolean(
+    authUser?.employeeId ?? authUser?.employee_id ?? user?.employeeId ?? user?.employee_id,
+  );
   const year = new Date().getFullYear();
   const now = new Date();
   const [cursor, setCursor] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
@@ -104,12 +116,17 @@ export default function LeavePage() {
   const [types, setTypes] = useState([]);
   const [balances, setBalances] = useState([]);
   const loadBalances = useCallback(async () => {
+    // Không có hồ sơ nhân viên: bỏ qua hẳn API cá nhân /leave/balance/me.
+    if (!hasProfile) return;
     try { setBalances(await getMyBalances(year)); } catch (e) { setError(errMsg(e)); }
-  }, [year]);
+  }, [year, hasProfile]);
   useEffect(() => {
+    // Loại nghỉ chỉ dùng cho form tạo đơn (khối cá nhân) — không có hồ sơ
+    // thì form bị ẩn nên cũng không cần gọi /leave/types và số dư phép.
+    if (!hasProfile) return;
     getLeaveTypes().then(setTypes).catch((e) => setError(errMsg(e)));
     loadBalances();
-  }, [loadBalances]);
+  }, [loadBalances, hasProfile]);
 
   const balanceOf = (typeId) => balances.find((b) => String(b.leave_type_id) === String(typeId));
 
@@ -146,12 +163,14 @@ export default function LeavePage() {
   const [myRequests, setMyRequests] = useState([]);
   const [myLoading, setMyLoading] = useState(false);
   const loadMine = useCallback(async () => {
+    // Không có hồ sơ nhân viên: bỏ qua hẳn API cá nhân /leave/requests?scope=mine.
+    if (!hasProfile) { setMyLoading(false); return; }
     setMyLoading(true);
     try {
       const res = await getMyRequests({ page: 1, limit: 50 });
       setMyRequests(Array.isArray(res) ? res : res.data || []);
     } catch (e) { setError(errMsg(e)); } finally { setMyLoading(false); }
-  }, []);
+  }, [hasProfile]);
   useEffect(() => { loadMine(); }, [loadMine]);
 
   const submit = async (e) => {
@@ -257,11 +276,11 @@ export default function LeavePage() {
       <PageHeader
         title="Nghỉ phép"
         subtitle="Đơn nghỉ được duyệt 2 cấp: Quản lý trực tiếp → HR. Số dư phép cập nhật ngay khi HR duyệt."
-        actions={(
+        actions={hasProfile ? (
           <Button type="button" variant="primary" onClick={scrollToForm}>
             Tạo đơn nghỉ
           </Button>
-        )}
+        ) : null}
       />
 
       {error && (
@@ -273,6 +292,11 @@ export default function LeavePage() {
         </div>
       )}
 
+      {/* Toàn bộ lưới này là khối TỰ PHỤC VỤ CÁ NHÂN (form tạo đơn + số dư
+          phép + đơn của tôi): chỉ render khi tài khoản ĐÃ gắn hồ sơ nhân
+          viên (hasProfile). Không có hồ sơ thì ẩn hẳn — card duyệt theo
+          role và lịch nghỉ tháng ở dưới không thuộc lưới này. */}
+      {hasProfile && (
       <div className="grid items-start gap-6 lg:grid-cols-5">
         {/* === Cột trái: tạo đơn + số dư phép === */}
         <div className="space-y-6 lg:col-span-2">
@@ -388,8 +412,9 @@ export default function LeavePage() {
             )}
         </Card>
       </div>
+      )}
 
-      {/* === Khu vực duyệt đơn === */}
+      {/* === Khu vực duyệt đơn (chỉ Admin / HR / Manager, theo cấp duyệt của từng role) === */}
       {isApprover && (
         <Card className="mt-6">
           <CardHeader

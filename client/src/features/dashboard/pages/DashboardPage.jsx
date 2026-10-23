@@ -336,13 +336,20 @@ function EmployeePersonalStats() {
 }
 
 function EmployeeHome({ user }) {
+  // Hàng số liệu cá nhân chỉ dành cho tài khoản ĐÃ gắn hồ sơ nhân viên:
+  // mọi API my-* bên trong EmployeePersonalStats (phép, phiếu lương,
+  // điểm thưởng, chấm công của tôi) đều yêu cầu employeeId. Tài khoản
+  // chưa gắn hồ sơ thì ẨN HẲN cả hàng — không render, không gọi query.
+  // (user có thể đến từ AuthContext — đã chuẩn hoá employeeId — hoặc từ
+  // getCurrentUser() đọc localStorage dạng thô nên chấp cả employee_id.)
+  const employeeId = user?.employeeId ?? user?.employee_id ?? null;
   return (
     <div>
       <PageHeader
         title={`${greetingByHour()}${user?.fullName ? `, ${user.fullName}` : ''}`}
         subtitle={`${formatToday()} · Chấm công, gửi đơn nghỉ phép, xem phiếu lương và hỏi chatbot HR ngay trong hệ thống.`}
       />
-      <EmployeePersonalStats />
+      {employeeId ? <EmployeePersonalStats /> : null}
       <StaggerList className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {EMPLOYEE_FEATURES.map((feature, i) => {
           const FeatureIcon = feature.icon;

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -20,6 +20,7 @@ import {
   IconWallet,
 } from '../../../components/icons.jsx';
 import { useAuth } from '../../../app/AuthContext.jsx';
+import PageLoading from '../../../app/PageLoading.jsx';
 import {
   getLeaderboard,
   getMyBadges,
@@ -228,7 +229,20 @@ function lbEmployeeId(item) {
   return id == null ? null : Number(id);
 }
 
+// Guard đầu trang: "Hành trình của tôi" chỉ dành cho tài khoản đã gắn hồ
+// sơ nhân viên — mọi số liệu (chấm công năm, điểm, huy hiệu) đều là của hồ
+// sơ đó. Tài khoản không có hồ sơ (vd Admin hệ thống thuần) được điều
+// hướng về trang chủ thay vì vào trang rồi nhận banner lỗi. Component cha
+// mảnh này chỉ gọi useAuth và return sớm theo điều kiện phiên, không vi
+// phạm Rules of Hooks; toàn bộ hooks của trang nằm ở component nội dung.
 export default function JourneyPage() {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoading />;
+  if (user?.employeeId == null) return <Navigate to="/" replace />;
+  return <JourneyPageContent />;
+}
+
+function JourneyPageContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const year = new Date().getFullYear();

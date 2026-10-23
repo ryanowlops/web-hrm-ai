@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../../app/AuthContext.jsx';
 import {
   getPeriods,
   createPeriod,
@@ -121,11 +122,28 @@ function resolveUser(propUser) {
 /* ================= Trang chính — route /payroll ================= */
 
 export default function PayrollPage({ user: userProp }) {
-  const user = useMemo(() => resolveUser(userProp), [userProp]);
+  const { user: authUser } = useAuth();
+  const user = useMemo(() => resolveUser(userProp) || authUser, [userProp, authUser]);
   const role = String(user?.role || '').toLowerCase();
   const isHR = role === 'hr' || role === 'admin';
+  // Tín hiệu có hồ sơ nhân viên: AuthContext là nguồn chuẩn (employeeId);
+  // chấp thêm employee_id thô từ user đã resolve (localStorage) như Dashboard.
+  const hasProfile = Boolean(
+    authUser?.employeeId ?? authUser?.employee_id ?? user?.employeeId ?? user?.employee_id,
+  );
 
-  return isHR ? <HrPayrollView /> : <MyPayslipView />;
+  // Khối quản trị kỳ lương (tạo kỳ / tính lương / chốt kỳ) CHỈ thuộc HR/Admin:
+  // nằm trọn trong HrPayrollView, không role nào khác chạm tới được.
+  if (isHR) return <HrPayrollView />;
+
+  // Role còn lại (employee/manager) chỉ có phần tự phục vụ: phiếu lương của
+  // chính mình. Tài khoản CHƯA gắn hồ sơ nhân viên thì phần cá nhân vô nghĩa
+  // (API /payroll/my-payslip chỉ lỗi hoặc 404) — ẨN HẲN cả trang cá nhân,
+  // không render MyPayslipView nên cũng không gọi API cá nhân nào.
+  // (Admin/HR không có employeeId vẫn vào HrPayrollView ở nhánh trên.)
+  if (!hasProfile) return null;
+
+  return <MyPayslipView />;
 }
 
 /* ================= Góc nhìn HR / Admin ================= */

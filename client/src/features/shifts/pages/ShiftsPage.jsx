@@ -309,8 +309,10 @@ function AssignmentModal({ open, cell, definitions, onClose, onSaved }) {
   );
 }
 
-function ScheduleTab({ role }) {
-  const canAssign = ['admin', 'hr', 'manager'].includes(role);
+function ScheduleTab({ role, hasProfile }) {
+  // Gán ca: admin/hr không cần hồ sơ (backend chỉ bắt actor có hồ sơ với
+  // manager) — manager không gắn hồ sơ thì ẩn thao tác gán/xoá ca.
+  const canAssign = WRITE_ROLES.includes(role) || (role === 'manager' && hasProfile);
   const canManageDefs = WRITE_ROLES.includes(role);
   const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
   const [week, setWeek] = useState(null);
@@ -510,10 +512,16 @@ function ScheduleTab({ role }) {
 // Tab 2 + 3: danh sách đơn duyệt 2 cấp (tăng ca / giải trình)
 // ---------------------------------------------------------------------------
 
-function RequestList({ kind, role }) {
+function RequestList({ kind, role, hasProfile }) {
   const isOvertime = kind === 'overtime';
   const canCreateForOthers = WRITE_ROLES.includes(role);
-  const [scope, setScope] = useState(role === 'employee' ? 'mine' : role === 'manager' ? 'team' : 'all');
+  // Không có hồ sơ thì không có scope "của tôi": mặc định rơi về team
+  // (manager) hoặc toàn công ty (HR/Admin) — đúng phần duyệt/quản trị.
+  const [scope, setScope] = useState(
+    !hasProfile
+      ? (role === 'manager' ? 'team' : 'all')
+      : role === 'employee' ? 'mine' : role === 'manager' ? 'team' : 'all',
+  );
   const [status, setStatus] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -596,12 +604,14 @@ function RequestList({ kind, role }) {
         <CardHeader
           title={isOvertime ? 'Đơn tăng ca' : 'Đơn giải trình chấm công'}
           subtitle={isOvertime ? 'Tăng ca ngoài giờ làm việc — duyệt 2 cấp: Quản lý → HR' : 'Bổ sung / sửa giờ chấm công — HR duyệt xong sẽ cập nhật bản ghi chấm công'}
-          actions={<Button size="sm" variant="primary" onClick={() => setCreateOpen(true)}><IconPlus size={16} /> {isOvertime ? 'Tạo đơn tăng ca' : 'Tạo giải trình'}</Button>}
+          // Tạo đơn là thao tác cá nhân (backend bắt buộc tài khoản gắn hồ
+          // sơ nhân viên, kể cả khi HR/Admin tạo hộ) — không hồ sơ thì ẩn.
+          actions={hasProfile ? <Button size="sm" variant="primary" onClick={() => setCreateOpen(true)}><IconPlus size={16} /> {isOvertime ? 'Tạo đơn tăng ca' : 'Tạo giải trình'}</Button> : undefined}
         />
         <CardBody>
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <Select value={scope} onChange={(e) => setScope(e.target.value)} className="w-44">
-              <option value="mine">Đơn của tôi</option>
+              {hasProfile && <option value="mine">Đơn của tôi</option>}
               {role !== 'employee' && <option value="team">Đội của tôi</option>}
               {WRITE_ROLES.includes(role) && <option value="all">Toàn công ty</option>}
             </Select>
@@ -718,6 +728,8 @@ const TABS = [
 export default function ShiftsPage() {
   const { user } = useAuth();
   const role = user?.role || 'employee';
+  // Tín hiệu có hồ sơ nhân viên gắn với tài khoản (admin hệ thống có thể null).
+  const hasProfile = Boolean(user?.employeeId);
   const [tab, setTab] = useState('schedule');
 
   const subtitle = useMemo(() => {
@@ -726,24 +738,32 @@ export default function ShiftsPage() {
     return 'Giải trình chấm công: bổ sung giờ vào/ra, HR duyệt xong hệ thống tự cập nhật chấm công.';
   }, [tab]);
 
+  // Employee không gắn hồ sơ: tab Tăng ca/Giải trình thuần cá nhân (backend
+  // bắt buộc hồ sơ cho cả list lẫn tạo đơn) nên ẩn hẳn; Lịch ca vẫn xem được.
+  // Staff không hồ sơ vẫn giữ các tab để duyệt/team theo role.
+  const tabs = (role === 'employee' && !hasProfile)
+    ? TABS.filter((t) => t.key === 'schedule')
+    : TABS;
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : 'schedule';
+
   return (
     <div className="mx-auto w-full max-w-[1200px]">
       <PageHeader title="Ca làm việc" subtitle={subtitle} />
       <div className="mb-5 flex gap-1 border-b border-gray-200">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${tab === t.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${activeTab === t.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
           >
             {t.label}
           </button>
         ))}
       </div>
-      {tab === 'schedule' && <ScheduleTab role={role} />}
-      {tab === 'overtime' && <RequestList kind="overtime" role={role} />}
-      {tab === 'corrections' && <RequestList kind="corrections" role={role} />}
+      {activeTab === 'schedule' && <ScheduleTab role={role} hasProfile={hasProfile} />}
+      {activeTab === 'overtime' && <RequestList kind="overtime" role={role} hasProfile={hasProfile} />}
+      {activeTab === 'corrections' && <RequestList kind="corrections" role={role} hasProfile={hasProfile} />}
     </div>
   );
 }

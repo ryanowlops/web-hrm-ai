@@ -406,7 +406,12 @@ const QrIcon = (
 
 const NAV_ITEMS = [
   { to: '/', label: 'Tổng quan', icon: ICONS.dashboard, end: true },
-  { to: '/employees', label: 'Nhân viên', icon: ICONS.employees },
+  {
+    to: '/employees',
+    label: 'Nhân viên',
+    icon: ICONS.employees,
+    roles: ['admin', 'hr', 'manager'],
+  },
   {
     to: '/departments',
     label: 'Phòng ban',
@@ -423,14 +428,23 @@ const NAV_ITEMS = [
   { to: '/leave', label: 'Nghỉ phép', icon: ICONS.leave },
   { to: '/payroll', label: 'Bảng lương', icon: ICONS.payroll },
   { to: '/performance', label: 'Hiệu suất', icon: ICONS.performance },
+  // /onboarding giữ cho mọi role: trang có màn "Hội nhập của tôi" — employee
+  // tự xem và cập nhật checklist hội nhập của chính mình (tự phục vụ).
   { to: '/onboarding', label: 'Hội nhập', icon: ICONS.onboarding },
   { to: '/shifts', label: 'Ca làm', icon: ICONS.shifts },
   { to: '/documents', label: 'Hồ sơ & giấy tờ', icon: ICONS.documents },
-  { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: ICONS.orgChart },
-  { to: '/team-calendar', label: 'Lịch team', icon: ICONS.teamCalendar },
+  { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: ICONS.orgChart, roles: ['admin', 'hr', 'manager'] },
+  { to: '/team-calendar', label: 'Lịch team', icon: ICONS.teamCalendar, roles: ['admin', 'hr', 'manager'] },
+  // /skills giữ cho mọi role: tab mặc định "Kỹ năng của tôi" — employee tự
+  // cập nhật mức kỹ năng của chính mình; tab Quản trị đã tự ẩn trong trang.
   { to: '/skills', label: 'Bản đồ năng lực', icon: SkillsIcon },
   { to: '/mock-interview', label: 'Phỏng vấn thử AI', icon: InterviewIcon },
-  { to: '/offboarding', label: 'Nghỉ việc', icon: ICONS.offboarding },
+  {
+    to: '/offboarding',
+    label: 'Nghỉ việc',
+    icon: ICONS.offboarding,
+    roles: ['admin', 'hr'],
+  },
   { to: '/assets', label: 'Tài sản', icon: ICONS.assets },
   { to: '/training', label: 'Đào tạo', icon: ICONS.training },
   {
@@ -450,9 +464,24 @@ const NAV_ITEMS = [
   { to: '/kudos', label: 'Vinh danh', icon: ICONS.kudos },
   { to: '/surveys', label: 'Khảo sát', icon: ICONS.surveys },
   { to: '/feed', label: 'Bảng tin', icon: ICONS.feed },
-  { to: '/my-journey', label: 'Hành trình của tôi', icon: ICONS.journey },
-  { to: '/rewards', label: 'Cửa hàng quà', icon: ICONS.rewards },
-  { to: '/reports', label: 'Báo cáo', icon: ICONS.reports },
+  {
+    to: '/my-journey',
+    label: 'Hành trình của tôi',
+    icon: ICONS.journey,
+    needsEmployee: true,
+  },
+  {
+    to: '/rewards',
+    label: 'Cửa hàng quà',
+    icon: ICONS.rewards,
+    needsEmployee: true,
+  },
+  {
+    to: '/reports',
+    label: 'Báo cáo',
+    icon: ICONS.reports,
+    roles: ['admin', 'hr', 'manager'],
+  },
   {
     to: '/briefing',
     label: 'Báo cáo điều hành',
@@ -544,7 +573,17 @@ export default function AppLayout() {
   // Sidebar thu gọn (chỉ áp dụng ở desktop lg+; mobile giữ dạng thanh ngang).
   const [collapsed, setCollapsed] = useState(false);
   const sidebarWidth = isDesktop ? (collapsed ? 76 : 264) : undefined;
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user?.role));
+  // Lọc menu theo role + theo hồ sơ nhân viên: mục gắn cờ needsEmployee
+  // (điểm thưởng, hành trình cá nhân) chỉ hiện khi tài khoản có gắn hồ sơ
+  // nhân viên (user.employeeId) — tài khoản thuần hệ thống (vd admin)
+  // không thấy các mục này, đúng yêu cầu "màn hình của ai thì hiện cho
+  // người đó". Command palette ⌘K dùng lại chính danh sách này nên cũng
+  // tôn trọng bộ lọc.
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.roles && !item.roles.includes(user?.role)) return false;
+    if (item.needsEmployee && !user?.employeeId) return false;
+    return true;
+  });
   const navSections = groupNavItems(visibleItems, user?.role);
 
   /* ---------------- Command palette ⌘K (thuần client) ----------------

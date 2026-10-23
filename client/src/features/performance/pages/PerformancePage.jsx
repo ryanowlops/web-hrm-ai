@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../../app/AuthContext.jsx';
 import {
   approveObjective, checkInKeyResult, createCycle, createObjective, createReview,
   deleteObjective, getCheckins, getCycles, getDashboard, getEmployees,
@@ -165,13 +166,23 @@ function ObjectiveCard({ obj, isMine, onCheckin, onEdit, onSubmit, onDelete }) {
 /* ---------- Trang chính ---------- */
 
 export default function PerformancePage() {
-  const user = useMemo(getCurrentUser, []);
+  // Nguồn chuẩn là useAuth(); getCurrentUser (localStorage) chỉ là dự phòng
+  // khi context chưa nạp xong — cả hai đều cho cùng tín hiệu employeeId.
+  const { user: authUser } = useAuth();
+  const localUser = useMemo(getCurrentUser, []);
+  const user = authUser || localUser;
   const role = user?.role || '';
   const myId = user?.employeeId ?? null;
+  // Tín hiệu có hồ sơ nhân viên gắn với tài khoản (admin hệ thống có thể null).
+  const hasProfile = Boolean(myId);
   const isHR = ['hr', 'admin'].includes(role);
   const canTeam = ['hr', 'admin', 'manager'].includes(role);
+  // Backend performance: HR/Admin không gắn hồ sơ vẫn dùng được toàn cục;
+  // employee/manager không hồ sơ bị chặn ở mọi endpoint dữ liệu (400
+  // NO_EMPLOYEE_PROFILE) nên không gọi các API đó để tránh banner lỗi đỏ.
+  const canLoadData = isHR || hasProfile;
 
-  const [tab, setTab] = useState('mine');
+  const [tab, setTab] = useState(() => (hasProfile ? 'mine' : canTeam ? 'team' : 'review'));
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -203,7 +214,7 @@ export default function PerformancePage() {
   const [loadingData, setLoadingData] = useState(false);
 
   const loadData = useCallback(async () => {
-    if (!cycleId) {
+    if (!cycleId || !canLoadData) {
       setObjectives([]);
       setDashboard(null);
       setReviews([]);
@@ -224,7 +235,7 @@ export default function PerformancePage() {
     } finally {
       setLoadingData(false);
     }
-  }, [cycleId]);
+  }, [cycleId, canLoadData]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -286,7 +297,9 @@ export default function PerformancePage() {
   const [savingObj, setSavingObj] = useState(false);
 
   function openCreateObjective() {
-    setObjForm({ title: '', description: '', weight: 1, employee_id: 'me', key_results: [emptyKR()] });
+    // Không có hồ sơ thì không có lựa chọn "chính tôi": HR/Admin/Manager
+    // phải chọn nhân viên nhận mục tiêu.
+    setObjForm({ title: '', description: '', weight: 1, employee_id: hasProfile ? 'me' : '', key_results: [emptyKR()] });
     setObjModal({ open: true, editing: null });
     getSuggestions().then((r) => setSuggestions(r?.suggestions || [])).catch(() => setSuggestions([]));
   }
@@ -337,6 +350,10 @@ export default function PerformancePage() {
   async function handleSaveObjective() {
     const krs = objForm.key_results.filter((kr) => kr.title.trim());
     if (!objForm.title.trim()) { setError('Vui lòng nhập tên mục tiêu.'); return; }
+    if (!objModal.editing && !hasProfile && !(canTeam && objForm.employee_id)) {
+      setError('Vui lòng chọn nhân viên để tạo mục tiêu.');
+      return;
+    }
     if (krs.length < 1 || krs.length > 5) { setError('Mỗi mục tiêu cần có từ 1 đến 5 Key Result có tiêu đề.'); return; }
     if (krs.some((kr) => kr.target_value === '' || Number.isNaN(Number(kr.target_value)))) {
       setError('Key Result cần có giá trị mục tiêu (target) dạng số.');
@@ -513,11 +530,22 @@ export default function PerformancePage() {
   }
 
   /* --- Render --- */
+  // Tab "Mục tiêu của tôi" chỉ tồn tại khi có hồ sơ; tab "Đánh giá" chỉ
+  // tồn tại khi còn ít nhất 1 thẻ thuộc role (tự đánh giá của tôi khi có
+  // hồ sơ, hoặc chấm điểm nhân viên cho HR/Admin/Manager).
   const tabs = [
-    { key: 'mine', label: 'Mục tiêu của tôi' },
+    ...(hasProfile ? [{ key: 'mine', label: 'Mục tiêu của tôi' }] : []),
     ...(canTeam ? [{ key: 'team', label: 'Team' }] : []),
-    { key: 'review', label: 'Đánh giá' },
+    ...((hasProfile || canTeam) ? [{ key: 'review', label: 'Đánh giá' }] : []),
   ];
+
+  // Nếu tab đang chọn bị ẩn (vd tài khoản không hồ sơ), rơi về tab hợp lệ đầu tiên.
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.some((t) => t.key === tab)) {
+      setTab(tabs[0].key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasProfile, canTeam, tab]);
 
   return (
     <div className="page-shell">
@@ -531,9 +559,11 @@ export default function PerformancePage() {
                 Tạo chu kỳ
               </Button>
             )}
-            <Button type="button" onClick={openCreateObjective} disabled={!cycleId || cycle?.status === 'closed'}>
-              Tạo mục tiêu
-            </Button>
+            {(hasProfile || canTeam) && (
+              <Button type="button" onClick={openCreateObjective} disabled={!cycleId || cycle?.status === 'closed'}>
+                Tạo mục tiêu
+              </Button>
+            )}
           </>
         }
       />
@@ -617,13 +647,8 @@ export default function PerformancePage() {
         />
       )}
 
-      {cycleId && tab === 'mine' && (
+      {cycleId && tab === 'mine' && hasProfile && (
         <div>
-          {myId === null && (
-            <Alert tone="info" className="mb-4">
-              Tài khoản của bạn không gắn hồ sơ nhân viên nên không có mục tiêu cá nhân — hãy dùng tab Team để theo dõi và duyệt mục tiêu.
-            </Alert>
-          )}
           {loadingData && objectives.length === 0 ? (
             <div className="grid gap-4 lg:grid-cols-2">
               <Skeleton className="h-44 w-full" />
@@ -762,6 +787,7 @@ export default function PerformancePage() {
 
       {cycleId && tab === 'review' && (
         <div className="grid gap-5 lg:grid-cols-2">
+          {hasProfile && (
           <Card>
             <CardHeader
               title="Tự đánh giá của tôi"
@@ -772,9 +798,6 @@ export default function PerformancePage() {
               }
             />
             <CardBody>
-              {myId === null ? (
-                <p className="text-sm text-gray-500">Tài khoản không gắn hồ sơ nhân viên nên không có phần tự đánh giá.</p>
-              ) : (
                 <div className="space-y-4">
                   {mySelfReview && (
                     <Alert tone="success">
@@ -810,9 +833,9 @@ export default function PerformancePage() {
                     </Alert>
                   ))}
                 </div>
-              )}
             </CardBody>
           </Card>
+          )}
 
           {canTeam && (
             <Card>
@@ -946,7 +969,9 @@ export default function PerformancePage() {
           {canTeam && !objModal.editing && (
             <FormField label="Mục tiêu cho">
               <Select value={objForm.employee_id} onChange={(e) => setObjForm((f) => ({ ...f, employee_id: e.target.value }))}>
-                <option value="me">Chính tôi</option>
+                {hasProfile
+                  ? <option value="me">Chính tôi</option>
+                  : <option value="">— Chọn nhân viên —</option>}
                 {employees.filter((e) => e.id !== myId).map((e) => (
                   <option key={e.id} value={e.id}>{e.full_name} ({e.code})</option>
                 ))}

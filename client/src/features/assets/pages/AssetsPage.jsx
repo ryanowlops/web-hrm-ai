@@ -262,6 +262,8 @@ export default function AssetsPage() {
   const role = user?.role || getCurrentRole();
   const canWrite = role === 'admin' || role === 'hr';
   const canViewList = role === 'admin' || role === 'hr' || role === 'manager';
+  // Khối "của tôi" chỉ tồn tại khi tài khoản đã gắn hồ sơ nhân viên.
+  const hasProfile = Boolean(user?.employeeId);
 
   const [tab, setTab] = useState(canViewList ? 'all' : 'mine');
 
@@ -319,6 +321,12 @@ export default function AssetsPage() {
   }, [canViewList, page, qDebounced, statusFilter, categoryFilter]);
 
   const loadMyAssets = useCallback(async () => {
+    // Chưa gắn hồ sơ: tab "Tài sản của tôi" bị ẩn, không gọi /assets/my
+    // (endpoint này trả rỗng êm nhưng không cần thiết).
+    if (!hasProfile) {
+      setMyLoading(false);
+      return;
+    }
     setMyLoading(true);
     try {
       const { items } = await getMyAssets();
@@ -328,7 +336,7 @@ export default function AssetsPage() {
     } finally {
       setMyLoading(false);
     }
-  }, []);
+  }, [hasProfile]);
 
   useEffect(() => { loadAssets(); }, [loadAssets]);
   useEffect(() => { loadMyAssets(); }, [loadMyAssets]);
@@ -432,7 +440,9 @@ export default function AssetsPage() {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs — thanh tab chỉ hiện khi có ít nhất một tab thuộc quyền:
+          danh mục (admin/hr/manager) hoặc "của tôi" (đã gắn hồ sơ). */}
+      {(canViewList || hasProfile) && (
       <div className="mb-5 inline-flex rounded-lg border border-gray-200 bg-white p-1">
         {canViewList && (
           <button
@@ -443,14 +453,17 @@ export default function AssetsPage() {
             Tất cả tài sản
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setTab('mine')}
-          className={`rounded-md px-3.5 py-1.5 text-sm ${tab === 'mine' ? 'bg-brand-50 font-medium text-brand-700' : 'text-gray-600 hover:text-gray-900'}`}
-        >
-          Tài sản của tôi{myAssets.length ? ` (${myAssets.length})` : ''}
-        </button>
+        {hasProfile && (
+          <button
+            type="button"
+            onClick={() => setTab('mine')}
+            className={`rounded-md px-3.5 py-1.5 text-sm ${tab === 'mine' ? 'bg-brand-50 font-medium text-brand-700' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Tài sản của tôi{myAssets.length ? ` (${myAssets.length})` : ''}
+          </button>
+        )}
       </div>
+      )}
 
       {tab === 'all' && canViewList && (
         <>
@@ -569,7 +582,7 @@ export default function AssetsPage() {
         </>
       )}
 
-      {tab === 'mine' && (
+      {tab === 'mine' && hasProfile && (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card">
           {myLoading ? (
             <TableSkeleton />

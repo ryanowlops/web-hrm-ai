@@ -5,7 +5,9 @@
 //   (duyệt mới trừ điểm và giảm tồn kho — xử lý ở backend).
 // Trình bày theo hợp đồng thiết kế v4: thẻ phẳng border gray-200, UI kit.
 import { useCallback, useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../../app/AuthContext.jsx';
+import PageLoading from '../../../app/PageLoading.jsx';
 import {
   Button,
   Card,
@@ -97,7 +99,20 @@ const errorInputClass = (hasError) =>
 // Trang chính
 // ===========================================================================
 
+// Guard đầu trang: Cửa hàng quà chỉ dành cho tài khoản đã gắn hồ sơ nhân
+// viên — điểm thưởng / đổi quà đều gắn với hồ sơ. Tài khoản không có hồ sơ
+// (vd Admin hệ thống thuần) được điều hướng về trang chủ thay vì vào trang
+// rồi nhận banner lỗi. Component cha mảnh này chỉ gọi useAuth và return
+// sớm theo điều kiện phiên, không vi phạm Rules of Hooks; toàn bộ hooks
+// của trang nằm ở component nội dung bên dưới.
 export default function RewardsPage() {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoading />;
+  if (user?.employeeId == null) return <Navigate to="/" replace />;
+  return <RewardsPageContent />;
+}
+
+function RewardsPageContent() {
   const { user } = useAuth();
   const role = String(user?.role || getRoleFallback() || '').toLowerCase();
   const isHrAdmin = role === 'admin' || role === 'hr';
@@ -131,8 +146,9 @@ export default function RewardsPage() {
     } catch (err) {
       setPageError(parseApiError(err, 'Không tải được dữ liệu cửa hàng quà.').message);
     }
-    // Điểm của tôi: tài khoản không gắn hồ sơ nhân viên (vd Admin thuần)
-    // sẽ nhận 400 — chỉ ẩn khu số dư, không chặn cả trang.
+    // Điểm của tôi: trang đã được guard ở đầu — chỉ tài khoản có hồ sơ
+    // nhân viên mới vào được, nên lỗi ở đây là lỗi thật (mạng/server):
+    // chỉ ẩn khu số dư, không chặn cả trang.
     try {
       const data = await getMyPoints();
       setPoints(data);
@@ -251,12 +267,11 @@ export default function RewardsPage() {
             </p>
           </CardBody>
         </Card>
-      ) : (
+      ) : pointsError ? (
         <Alert tone="info" className="mb-6">
-          {pointsError ||
-            'Tài khoản chưa gắn hồ sơ nhân viên nên chưa có số dư điểm. Bạn vẫn xem được catalog quà bên dưới.'}
+          {pointsError}
         </Alert>
-      )}
+      ) : null}
 
       {/* ------------------------------ Lưới quà ------------------------------ */}
       <div className="mb-3 flex items-center gap-2">
