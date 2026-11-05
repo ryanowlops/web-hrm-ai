@@ -748,8 +748,15 @@ export default function AppLayout() {
         animate={sidebarWidth ? { width: sidebarWidth } : undefined}
         transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
       >
-        {/* Khối logo */}
-        <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-4">
+        {/* Khối logo — khi thu gọn chỉ còn logo căn giữa (nút thu/mở đã
+            chuyển lên topbar): hàng logo 76px không còn chỗ cho cả logo
+            32px + nút 32px + padding, trước đây nút tràn 20px ra ngoài
+            sidebar và bị topbar che nên không bấm mở lại được. */}
+        <div
+          className={`flex items-center gap-3 border-b border-gray-200 px-5 py-4 ${
+            collapsed ? 'lg:justify-center lg:px-0' : ''
+          }`}
+        >
           <img
             src="/logo.svg"
             alt=""
@@ -764,16 +771,6 @@ export default function AppLayout() {
               Quản lý nhân sự
             </span>
           </span>
-          {/* Nút thu/mở sidebar (desktop) */}
-          <button
-            type="button"
-            onClick={() => setCollapsed((v) => !v)}
-            aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
-            title={collapsed ? 'Mở rộng' : 'Thu gọn'}
-            className={`ml-auto hidden h-8 w-8 flex-none items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30 lg:flex ${collapsed ? 'lg:ml-0' : ''}`}
-          >
-            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          </button>
         </div>
 
         {/* Menu theo role, chia nhóm */}
@@ -783,7 +780,7 @@ export default function AppLayout() {
         >
           {navSections.map((section) => (
             <div key={section.id || section.label} className="flex items-start gap-1 lg:mt-5 lg:block lg:first:mt-0">
-              <p className={`hidden px-3 pb-1.5 text-xs font-medium text-gray-500 lg:block ${collapsed ? 'lg:invisible' : ''}`}>
+              <p className={`hidden px-3 pb-1.5 text-xs font-medium text-gray-500 lg:block ${collapsed ? 'lg:hidden' : ''}`}>
                 {section.label}
               </p>
               <div className="flex gap-1 lg:flex-col lg:gap-0.5">
@@ -869,6 +866,17 @@ export default function AppLayout() {
         {/* Topbar trắng */}
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
           <div className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-5 lg:px-8">
+            {/* Nút thu/mở sidebar (desktop) — đặt ở topbar để luôn bấm
+                được cả khi sidebar đã thu gọn 76px. */}
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+              title={collapsed ? 'Mở rộng' : 'Thu gọn'}
+              className="hidden h-10 w-10 flex-none items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/30 lg:flex"
+            >
+              {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
             {/* Ô tìm kiếm ⌘K — command palette nhảy nhanh tới trang (thuần client) */}
             <div ref={searchBoxRef} className="relative hidden w-full max-w-sm md:block">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
