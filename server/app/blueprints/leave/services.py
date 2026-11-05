@@ -76,6 +76,36 @@ def get_current_employee():
     return user, employee
 
 
+def get_current_employee_or_none():
+    """User hiện tại + hồ sơ nhân viên nếu có (None với tài khoản thuần hệ thống).
+
+    Dùng cho các endpoint theo phạm vi VAI TRÒ (hr/admin xem toàn công ty)
+    — những endpoint này không cần hồ sơ để xác định phạm vi.
+    """
+    user = get_current_user()
+    employee = None
+    if getattr(user, "employee_id", None):
+        employee = db.session.get(Employee, user.employee_id)
+    return user, employee
+
+
+def ensure_profile_if_needed(user, employee, scope=None):
+    """Bắt lỗi NO_EMPLOYEE_PROFILE chỉ khi phạm vi gọi API bắt buộc có hồ sơ.
+
+    Cần hồ sơ: scope=mine (mọi role), role employee, role manager (phạm vi
+    team/phòng). Không cần: hr/admin xem toàn công ty (danh sách đơn chờ
+    duyệt cấp cuối, lịch nghỉ toàn công ty) — tài khoản admin thuần hệ thống
+    vẫn dùng được các chức năng theo vai trò này.
+    """
+    needs_profile = scope == "mine" or user.role in ("employee", "manager")
+    if needs_profile and employee is None:
+        raise ApiError(
+            400,
+            "NO_EMPLOYEE_PROFILE",
+            "Tài khoản chưa được gắn với hồ sơ nhân viên.",
+        )
+
+
 def _find_user_id_for_employee(employee_id):
     user = User.query.filter_by(employee_id=employee_id).first()
     return user.id if user else None

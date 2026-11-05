@@ -43,6 +43,7 @@ const StatusBadge = ({ status }) => {
 
 const fmtDate = (d) => (d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('vi-VN') : '—');
 const errMsg = (e) => e?.response?.data?.error?.message || e?.message || 'Đã xảy ra lỗi, vui lòng thử lại.';
+const errCode = (e) => e?.response?.data?.error?.code || '';
 const toISODate = (d) => d.toISOString().slice(0, 10);
 
 // Đếm ngày làm việc (T2–T6) trong khoảng [from, to] — chỉ để hướng dẫn/validate sớm ở FE.
@@ -205,6 +206,11 @@ export default function LeavePage() {
   const [pending, setPending] = useState([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingError, setPendingError] = useState('');
+  // Khối duyệt bị ẨN HẲN khi tài khoản không gắn hồ sơ mà endpoint lại đòi
+  // hồ sơ (NO_EMPLOYEE_PROFILE): màn hình của role nào hiện của role đó,
+  // không hiện banner đỏ "chưa gắn hồ sơ" cho một chức năng vốn không thuộc
+  // về tài khoản này. Lỗi khác (mạng, server) vẫn báo đỏ + nút thử lại.
+  const [pendingHidden, setPendingHidden] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [decidingId, setDecidingId] = useState(null);
@@ -216,10 +222,17 @@ export default function LeavePage() {
       const res = await getPendingForMe({ page: 1, limit: 50 });
       setPending(Array.isArray(res) ? res : res.data || []);
       setPendingError('');
+      setPendingHidden(false);
     } catch (e) {
       // Lỗi tải phải tách khỏi trạng thái rỗng: giữ nguyên danh sách cũ và
       // báo lỗi riêng có nút thử lại, không "giả vờ" là không có đơn chờ.
-      setPendingError(errMsg(e));
+      // Ngoại lệ: thiếu hồ sơ nhân viên thì ẩn hẳn khối duyệt (xem trên).
+      if (errCode(e) === 'NO_EMPLOYEE_PROFILE') {
+        setPendingHidden(true);
+        setPendingError('');
+      } else {
+        setPendingError(errMsg(e));
+      }
     } finally { setPendingLoading(false); }
   }, [isApprover]);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -242,11 +255,22 @@ export default function LeavePage() {
   /* --- Lịch nghỉ tháng --- */
   const [calendar, setCalendar] = useState([]);
   const [calendarError, setCalendarError] = useState('');
+  // Như khối duyệt: thiếu hồ sơ thì ẩn hẳn lịch thay vì banner đỏ.
+  const [calendarHidden, setCalendarHidden] = useState(false);
   const loadCalendar = useCallback(async () => {
     try {
       setCalendar(await getCalendar(cursor.month, cursor.year));
       setCalendarError('');
-    } catch (e) { setCalendar([]); setCalendarError(errMsg(e)); }
+      setCalendarHidden(false);
+    } catch (e) {
+      setCalendar([]);
+      if (errCode(e) === 'NO_EMPLOYEE_PROFILE') {
+        setCalendarHidden(true);
+        setCalendarError('');
+      } else {
+        setCalendarError(errMsg(e));
+      }
+    }
   }, [cursor]);
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
@@ -415,7 +439,7 @@ export default function LeavePage() {
       )}
 
       {/* === Khu vực duyệt đơn (chỉ Admin / HR / Manager, theo cấp duyệt của từng role) === */}
-      {isApprover && (
+      {isApprover && !pendingHidden && (
         <Card className="mt-6">
           <CardHeader
             title={`Đơn chờ tôi duyệt ${user?.role === 'manager' ? '(cấp quản lý — phòng của tôi)' : '(cấp HR — duyệt cuối)'}`}
@@ -483,7 +507,8 @@ export default function LeavePage() {
         </Card>
       )}
 
-      {/* === Lịch nghỉ tháng === */}
+      {/* === Lịch nghỉ tháng (ẩn hẳn khi tài khoản thiếu hồ sơ mà endpoint đòi hồ sơ) === */}
+      {!calendarHidden && (
       <Card className="mt-6">
         <CardHeader
           title="Lịch nghỉ đã duyệt trong tháng"
@@ -528,6 +553,7 @@ export default function LeavePage() {
           </div>
         </CardBody>
       </Card>
+      )}
 
       <ConfirmDialog
         open={cancelTarget != null}

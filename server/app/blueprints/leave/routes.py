@@ -124,13 +124,19 @@ def create_request():
 @bp.get("/requests")
 @jwt_required()
 def list_requests():
-    user, employee = services.get_current_employee()
+    # Phạm vi VAI TRÒ (hr/admin, không scope=mine) xem toàn công ty nên không
+    # cần hồ sơ nhân viên — tài khoản admin thuần hệ thống vẫn xem được đơn
+    # chờ duyệt cấp cuối. Chỉ scope=mine / role employee / manager mới bắt
+    # buộc có hồ sơ (xem ensure_profile_if_needed).
+    user, employee = services.get_current_employee_or_none()
+    scope = request.args.get("scope")
+    services.ensure_profile_if_needed(user, employee, scope=scope)
     page, limit = _pagination_args()
     items, total = services.list_leave_requests(
         user,
         employee,
         status=request.args.get("status"),
-        scope=request.args.get("scope"),
+        scope=scope,
         page=page,
         limit=limit,
     )
@@ -171,7 +177,11 @@ def cancel_request(request_id):
 @bp.get("/calendar")
 @jwt_required()
 def calendar():
-    user, employee = services.get_current_employee()
+    # Lịch toàn công ty với hr/admin nên không cần hồ sơ nhân viên; manager /
+    # employee cần hồ sơ để xác định phạm vi team / phòng (xem
+    # ensure_profile_if_needed).
+    user, employee = services.get_current_employee_or_none()
+    services.ensure_profile_if_needed(user, employee)
     from datetime import date
 
     month = request.args.get("month") or date.today().strftime("%Y-%m")
