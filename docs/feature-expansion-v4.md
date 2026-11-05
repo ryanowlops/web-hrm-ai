@@ -160,6 +160,19 @@ trừ điểm qua ledger), NV0001 đổi bình giữ nhiệt đang pending. Seed
 sync_points cho NV0001–NV0004 trước khi tạo redemption để số dư nhất
 quán; idempotent (redemption kiểm tra theo employee+reward+status).
 
+> **Ghi chú quirk khi demo (§2.5):** NV0001 đổi bình giữ nhiệt 200đ trong
+> khi số dư chỉ 70đ — tạo redemption vẫn thành công ở trạng thái pending
+> (lúc tạo chưa trừ điểm), nhưng khi HR duyệt, service kiểm tra lại số
+> dư và trả **409** (`gamification/services.py:550-554`) vì không đủ
+> điểm. Đây là **đúng thiết kế** (trừ điểm khi duyệt, không trừ khi tạo
+> pending — xem §2.2), không phải lỗi; muốn demo duyệt thành công thì
+> nạp thêm điểm cho NV0001 trước (kudo/đào tạo/chấm công đúng giờ) hoặc
+> đổi món rẻ hơn.
+>
+> **Trỏ ngược:** quy tắc kudo +10 điểm ở §2.2 thay thế câu "(Điểm = số
+> kudo, không cần bảng điểm riêng.)" của `docs/feature-expansion-v3.md`
+> §4.1 — từ v4, điểm được ghi vào `PointsLedger`.
+
 ---
 
 ## 3. Đội JOURNEY — "Hành trình của tôi"

@@ -37,7 +37,9 @@
 - Đánh giá 360° đầy đủ (đồng nghiệp chéo nhiều người) — để giai đoạn 2 nếu còn thời gian; MVP chỉ có tự đánh giá + Manager.
 - Tự động lấy số liệu KPI từ chấm công/doanh thu — MVP nhập tay qua check-in.
 - Tự động quy điểm hiệu suất sang lương/thưởng — MVP chỉ *hiển thị* điểm ở hồ sơ; payroll giữ công thức hiện tại.
-- Offboarding (bàn giao khi nghỉ việc) — cùng khung template, để giai đoạn 2.
+- Offboarding (bàn giao khi nghỉ việc) — **đã làm xong ở v3**
+  (`docs/feature-expansion-v3.md` §3: blueprint `offboarding`, 6 route,
+  FE `OffboardingPage.jsx`, seed NV0005); không còn là "giai đoạn 2".
 - Chữ ký điện tử cho giấy tờ onboarding — MVP là HR xác nhận đã nhận đủ.
 
 ---
@@ -113,12 +115,26 @@ Quan hệ: `Employee` 1–N `objectives`, `performance_reviews`. Xóa mềm theo
 | `POST /reviews` · `GET /reviews?cycle_id=&employee_id=` | Gửi / xem tự đánh giá & đánh giá của Manager | Theo scope |
 | `GET /dashboard?cycle_id=` | Tổng hợp: tiến độ TB, phân bổ xếp loại, top phòng ban | HR/Admin: toàn công ty · Manager: team |
 
+> **Ghi chú:** còn có `GET /performance/suggestions` — trả mục tiêu + KR
+> mẫu theo chức vụ/phòng ban từ catalog tĩnh trong service (nhãn "Gợi ý
+> mẫu", không cần AI key) để người dùng bấm áp dụng khi tạo mục tiêu
+> (`performance/routes.py:66`; xem `docs/feature-expansion-v2.md` §1A).
+
 ### 4.5. Màn hình frontend — `client/src/features/performance/`
 
-- `PerformanceDashboardPage`: thẻ tổng quan chu kỳ hiện tại, biểu đồ cột tiến độ theo phòng ban, biểu đồ phân bổ xếp loại, danh sách nhân viên sắp đến hạn đánh giá.
-- `MyGoalsPage` (Employee/Manager): danh sách Objective dạng thẻ với vòng tiến độ %, nút check-in mở form cập nhật KR.
-- `TeamGoalsPage` (Manager/HR): hàng chờ duyệt mục tiêu, bảng tiến độ team.
-- `ReviewPage`: form tự đánh giá / đánh giá cấp dưới, hiển thị điểm hệ thống gợi ý cạnh điểm người đánh giá nhập.
+Thực tế chỉ có **1 file** `client/src/features/performance/pages/PerformancePage.jsx`
+gộp 3 tab trong cùng một trang (route `/performance`):
+
+- Tab **"Mục tiêu của tôi"** (`mine`): danh sách Objective dạng thẻ với vòng
+  tiến độ %, nút check-in mở form cập nhật KR. Tab này **chỉ hiện khi tài
+  khoản có hồ sơ nhân viên** (`PerformancePage.jsx:537` — tài khoản thuần
+  hệ thống như `admin@hrm.local` không thấy tab này và mặc định rơi về tab
+  hợp lệ đầu tiên).
+- Tab **Team** (`team`): hàng chờ duyệt mục tiêu, bảng tiến độ team (Manager/HR).
+- Tab **Đánh giá** (`review`): form tự đánh giá / đánh giá cấp dưới, hiển thị
+  điểm hệ thống gợi ý cạnh điểm người đánh giá nhập; đầu trang có thẻ tổng
+  quan chu kỳ hiện tại, biểu đồ cột tiến độ theo phòng ban, biểu đồ phân bổ
+  xếp loại, danh sách nhân viên sắp đến hạn đánh giá.
 - Điều hướng: thêm mục "Hiệu suất" vào sidebar (nhóm Quản trị nhân sự), route lazy-load như các feature hiện tại.
 
 ---
@@ -180,10 +196,20 @@ Sinh plan tự động: hook ở service tạo employee mới — nếu employee
 
 ### 5.5. Màn hình frontend — `client/src/features/onboarding/`
 
-- `OnboardingBoardPage` (HR/Manager): bảng nhân viên mới với avatar, ngày bắt đầu, thanh tiến độ %, số việc quá hạn đỏ — một màn hình trả lời ngay "ai đang hội nhập tới đâu".
-- `OnboardingPlanPage`: chi tiết theo timeline 3 giai đoạn (Trước ngày đầu / Ngày đầu / Tuần đầu), checklist tick trực tiếp, badge người phụ trách.
-- `MyOnboardingPage` (nhân viên mới): checklist của riêng mình, hiện ở dashboard cá nhân khi plan chưa hoàn thành.
-- `TemplateListPage` + editor (HR): CRUD template và task mẫu.
+Thực tế chỉ có **1 file** `client/src/features/onboarding/pages/OnboardingPage.jsx`
+gộp board theo dõi và "Hội nhập của tôi" trong cùng một trang (route
+`/onboarding`):
+
+- **Board theo dõi** (HR/Manager): bảng nhân viên mới với avatar, ngày bắt
+  đầu, thanh tiến độ %, số việc quá hạn đỏ — một màn hình trả lời ngay "ai
+  đang hội nhập tới đâu"; bấm vào xem chi tiết theo timeline 3 giai đoạn
+  (Trước ngày đầu / Ngày đầu / Tuần đầu), checklist tick trực tiếp, badge
+  người phụ trách.
+- **"Hội nhập của tôi"** (nhân viên mới): checklist của riêng mình
+  (`OnboardingPage.jsx:459-468`), hiện ở dashboard cá nhân khi plan chưa
+  hoàn thành.
+- **Quản lý template** (HR): CRUD template và task mẫu — không phải trang
+  riêng, nằm trong cùng `OnboardingPage.jsx`.
 - Điều hướng: mục "Hội nhập" trong sidebar; widget tiến độ onboarding trên Dashboard chung.
 
 ---

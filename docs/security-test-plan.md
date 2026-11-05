@@ -94,6 +94,12 @@ tạo sẵn các tài khoản kiểm thử đủ 4 vai trò. Kiểm tra app kh�
 tay/test tự động trước — Strix là lớp kiểm chứng bổ sung, không thay thế
 test phân quyền của chính nhóm.
 
+> Lưu ý 2026-11-05: **suite T1–T10 chưa tồn tại** — không có thư mục
+> `server/tests/` trong repo, CI bỏ qua pytest khi không có tests. Phải
+> **viết suite T1–T10 trước** (theo tiêu chí ở `docs/security.md` §10),
+> hoặc chạy checklist mục 10 bằng tay ở bước này; không giả định "chạy
+> suite" là đã có sẵn.
+
 **Bước 2 — Quét white-box mã nguồn.** Quét thư mục dự án ở chế độ chuẩn,
 kèm instruction file của dự án. Lệnh tham khảo (chưa chạy):
 
@@ -126,6 +132,19 @@ Critical/High = 0 mới coi như đạt cổng bảo mật cho bản demo.
 cảm (đường dẫn, payload, dữ liệu seed): lưu cục bộ, **rà soát và loại bỏ bí
 mật trước khi đưa bất cứ phần nào lên repo**, không commit nguyên thư mục
 `strix_runs/` lên repo công khai.
+
+## 5b. Bổ sung 2026-11-05 — bề mặt mới và bug mới phát hiện (đưa vào danh sách test)
+
+Kế hoạch trên viết trước v6; khi quét, bổ sung các bề mặt và bug sau (chi
+tiết xem `docs/security.md` §1.1/§11 và `docs/mobile-api-map.md`):
+
+**Bề mặt mới cần test:**
+- **QR+GPS check-in** (`POST /checkin/scan`, `GET /checkin/today-qr`, `GET/PUT /checkin/config`, `GET /checkin/logs`): token HMAC theo ngày + mã 6 số có đoán được/tái dùng được không (replay token hôm qua, brute-force code6 6 chữ số, quét mã của người khác để chấm công hộ); GPS spoofing (gửi `lat`/`lon` giả để qua kiểm tra 150m); ngoài phạm vi có đúng là 403 kèm `distance_m` thật không; `OFFICE_NOT_CONFIGURED` khi chưa cấu hình văn phòng; `GET /checkin/logs` và `PUT /checkin/config` có đúng chỉ HR/Admin không.
+- **AI JD / InterviewKit / briefing** (`POST /recruitment/jd/generate`, `.../interview-kit`, `POST /briefing/generate`): prompt injection qua nội dung JD/CV đầu vào (đọc JD người khác, ép model lộ dữ liệu); rate limit JD 10/giờ có bị vượt bằng nhiều tài khoản không; briefing có lọt số liệu không có căn cứ không (regex `prose_numbers_are_grounded`); chi phí AI khi gọi liên tục (đốt quota).
+
+**Bug mới phát hiện — đưa vào test tái hiện:**
+- **Logout không thu hồi refresh token:** đăng xuất (web không gửi token trong body; mobile không gọi `/auth/logout`) rồi dùng refresh token cũ gọi `/auth/refresh` — kỳ vọng sau khi vá: 401; hiện tại: vẫn cấp access token mới đủ 7 ngày. Đổi mật khẩu rồi dùng token cũ — kỳ vọng sau khi vá: 401.
+- **Endpoint chết `GET /notifications/unread-count`:** endpoint không tồn tại trên server nhưng cả web lẫn mobile đều gọi — kiểm tra sau khi sửa: web/mobile dùng `GET /notifications` lấy `unreadCount` (chuông hiện đúng số), hoặc endpoint mới đã được thêm và trả đúng số chưa đọc theo từng user (không lộ số của user khác).
 
 ## 6. Mẫu GitHub Actions workflow (CHỈ LÀ TÀI LIỆU THAM KHẢO)
 

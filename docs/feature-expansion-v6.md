@@ -1,7 +1,9 @@
 # Hợp đồng mở rộng v6 — Gói 3 "wow" (QR+GPS, AI tuyển dụng, báo cáo điều hành)
 
 Ngày soạn: 2026-10-22. **TRẠNG THÁI: ĐÃ ĐƯỢC USER DUYỆT 2026-10-22 ~22:33
-("làm thêm cho anh mấy tính năng hay hay") — ĐANG TRIỂN KHAI theo hợp đồng này.**
+("làm thêm cho anh mấy tính năng hay hay") — ĐÃ HOÀN THÀNH 2026-10-22
+(commit `d224a09` "v6 gói 3: chấm công QR+GPS, AI tạo JD + bộ câu hỏi
+phỏng vấn, báo cáo điều hành AI + provider dự phòng khi hết quota").**
 
 Nguồn phạm vi: gói 3 bị HOÃN từ vòng v4 (2026-10-21, user chọn "Làm gói 1 + 2
 trước") — gồm (1) QR+GPS check-in, (2) AI JD generator, (3) AI interview kit,
@@ -189,6 +191,27 @@ văn xuôi + bảng số liệu gốc (đối chiếu), lịch sử các kỳ tr
 - Mọi số trong `numbers` khớp kết quả gọi trực tiếp services gốc (viết test
   so sánh); provider tắt → template đầy đủ số; prose của AI (mock) không chứa
   số nào ngoài gói số (test regex trích số); suite ≥ 12 case; FE build pass.
+
+---
+
+## Trạng thái vận hành production (cập nhật 2026-11-05, đối chiếu code tại commit `5850581`)
+
+- **FallbackProvider đã ship nhưng CHƯA kích hoạt:** code `FallbackProvider`
+  (bọc primary + fallback qua `AI_FALLBACK_*`) có sẵn
+  (`ai_service/provider.py:285-364`, dựng qua `get_provider()` khi đủ
+  `AI_FALLBACK_API_KEY`/`AI_FALLBACK_BASE_URL`/`AI_FALLBACK_MODEL`); production
+  chưa đặt các biến này nên chưa có provider dự phòng thật — "đường dự
+  phòng" hiện tại vẫn là template/heuristic từng tính năng.
+- **Toạ độ văn phòng production đang trống:** seed không tạo office config
+  (đúng thiết kế demo ở mục Đăng ký); luồng quét QR có lat/lon ở production
+  trả lỗi nghiệp vụ `OFFICE_NOT_CONFIGURED` (400,
+  `checkin/services.py:231`), hướng dẫn HR cấu hình ở `/checkin-qr`. Luồng
+  mã 6 số vẫn chạy bình thường (method=`qr_code`, không kiểm khoảng cách).
+- **AI JD production:** `source="ai"` (đang dùng Gemini thật,
+  `gemini-3.5-flash-lite`); template chỉ là dự phòng khi provider lỗi.
+- **InterviewKit v1 production:** `generated_by="template"` (bản đầu tiên
+  sinh bằng template, fallback trung thực — xem `kit_service.py:7`); tái
+  tạo bằng AI khi có key sẽ ghi `generated_by="ai"` và tăng `version`.
 
 ---
 

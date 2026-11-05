@@ -13,7 +13,10 @@ test_client + JWT, không bọc chung app_context; frontend phẳng v4 +
 UI kit + services.js theo feature, đủ loading/rỗng/lỗi).
 
 Bối cảnh AI: production ĐÃ có Gemini thật (AI_BASE_URL Gemini
-OpenAI-compatible, AI_MODEL=gemini-2.5-flash). Mọi tính năng AI phải:
+OpenAI-compatible, AI_MODEL=gemini-3.5-flash-lite, AI_EMBEDDING_MODEL=
+gemini-embedding-001 — các giá trị này chỉ nằm ở biến môi trường trên
+Render; code mặc định vẫn là `gpt-4o-mini` / `text-embedding-3-small`.
+Lưu ý: `gemini-2.5-flash-lite` đã RETIRED → 404, không dùng nữa). Mọi tính năng AI phải:
 dùng `app.ai_service` (provider.chat_completion — tác vụ cấu trúc giữ
 mặc định json_mode + temperature nghiêm; hội thoại tự nhiên mới truyền
 json_mode=False), và có đường dự phòng xác định (template/heuristic)
@@ -153,7 +156,8 @@ Fixture job có JD; chạy không AI key (provider unavailable): start
 sinh đủ 5 câu từ ngân hàng mẫu; trả lời hết → finish chấm heuristic
 có điểm từng câu + overall; khách không có token → 401/403 khi đọc
 phiên; token sai → 403; user A đọc phiên user B → 403; finish 2 lần
-→ 409 hoặc trả lại báo cáo cũ (chọn 1, ghi rõ); job không tồn tại →
+→ **trả lại báo cáo cũ, HTTP 200 (idempotent — lựa chọn đã chốt trong
+code, `interviews/services.py:636-641`)**; job không tồn tại →
 404. FE esbuild parse OK.
 
 ---
@@ -275,7 +279,8 @@ vấn với AI" link sang /mock-interview?job=<id>).
   riêng chặt hơn mặc định — dùng cơ chế limiter hiện có của app,
   khai báo limit cụ thể trên route): body {job_id, cv_text} hoặc
   multipart file (PDF/TXT — tái dùng bộ trích text CV sẵn có của
-  recruitment). cv_text tối đa ~12.000 ký tự.
+  recruitment). cv_text tối đa ~12.000 ký tự. **Rate limit đã chốt:
+  10/phút + 30/giờ** (`recruitment/routes.py:246-247`).
 - Phân tích: AI (json mode) theo JD của vị trí → {score (0–100),
   verdict (1 câu), strengths[] (≤5), improvements[] (≤5),
   matched_keywords[], missing_keywords[]}; dự phòng xác định khi
@@ -286,7 +291,8 @@ vấn với AI" link sang /mock-interview?job=<id>).
 - KHÔNG lưu CV hay kết quả vào DB (phân tích xong bỏ) — ghi rõ
   trong docstring + câu chữ trên FE ("CV của bạn chỉ dùng để phân
   tích tức thời, không lưu lại").
-- Lỗi: job không tồn tại/đã đóng → 404/400; CV trống/quá dài →
+- Lỗi: job không tồn tại → 404; job đã đóng/hết hạn nộp hồ sơ → 400
+  `JOB_CLOSED` (`recruitment/cvcheck.py:356,363`); CV trống/quá dài →
   422; file sai định dạng → 422 theo bộ trích text hiện có.
 
 ### E.2 FE — trong PublicJobsPage

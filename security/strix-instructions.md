@@ -4,6 +4,8 @@
 > (kế hoạch đầy đủ: `docs/security-test-plan.md`).
 > Đây là tài liệu phạm vi — **không chứa thông tin đăng nhập thật** và
 > bản thân nó không khởi chạy bất kỳ lần quét nào.
+>
+> Trạng thái: **Chưa chạy lần nào (tính tới 05/11/2026 — chưa có Docker/LLM key trên VM).**
 
 ## 1. Căn cứ ủy quyền
 
@@ -20,7 +22,8 @@
    (`server/` — Flask, `client/` — React JS).
 2. **Ứng dụng chạy local bằng Docker Compose của dự án này** (black-box):
    - API Flask tại `http://localhost:5000` (cổng theo `docker-compose.yml`).
-   - Frontend React tại cổng local do compose của dự án cấp.
+   - Frontend React tại cổng local do compose của dự án cấp — **cổng 5173**
+     (`http://localhost:5173`, Nginx trong container phục vụ React build).
 - Mọi mục tiêu phải là `localhost`/`127.0.0.1` hoặc đường dẫn thư mục của
   repo này. Không có ngoại lệ.
 
@@ -45,12 +48,28 @@
    lương sau khi kỳ lương đã chốt, race condition khi chốt lương/duyệt đơn.
 7. **Cấu hình** — CORS mở quá rộng, thiếu security headers, response lộ
    `password_hash`/thông tin stack trace/dữ liệu người dùng khác.
+8. **QR+GPS check-in (mới, v6)** — `POST /checkin/scan`, `GET /checkin/today-qr`,
+   `GET/PUT /checkin/config`, `GET /checkin/logs`: đoán/tái dùng token HMAC
+   theo ngày, brute-force mã 6 số, quét mã của người khác để chấm công hộ,
+   GPS spoofing (gửi `lat`/`lon` giả để qua kiểm tra 150m), `GET /checkin/logs`
+   và `PUT /checkin/config` có đúng chỉ HR/Admin không.
+9. **AI JD / InterviewKit / briefing (mới, v6)** — `POST /recruitment/jd/generate`,
+   `.../interview-kit`, `POST /briefing/generate`: prompt injection qua nội
+   dung JD/CV đầu vào, vượt rate limit JD 10/giờ, briefing lọt số liệu không
+   có căn cứ, đốt quota AI bằng gọi liên tục.
+10. **Logout / refresh token (bug mới phát hiện 2026-11-05)** — đăng xuất rồi
+    dùng refresh token cũ gọi `/auth/refresh` (web không gửi token trong body
+    khi logout, mobile không gọi `/auth/logout` nên token sống đủ 7 ngày);
+    đổi mật khẩu rồi dùng token cũ.
 
 ## 4. Loại trừ TUYỆT ĐỐI (không được làm)
 
 - **Không** tấn công/quét bất kỳ dịch vụ bên thứ ba nào: API của nhà cung
   cấp AI/LLM, GitHub, máy chủ của trường, hay bất kỳ host nào không phải
-  `localhost` của máy chủ sở hữu. Nếu một luồng của app gọi ra ngoài, chỉ
+  `localhost` của máy chủ sở hữu. **Cụ thể, production nằm ngoài phạm vi:
+  `https://hrm-ai-api.onrender.com` (API Render) và
+  `https://hrm-ai-gray.vercel.app` (FE Vercel) — không quét, không tấn công,
+  không dùng làm mục tiêu black-box.** Nếu một luồng của app gọi ra ngoài, chỉ
   ghi nhận ở mức quan sát request từ phía app local — không kiểm thử đầu xa.
 - **Không** dùng dữ liệu thật: chỉ dùng tài khoản và dữ liệu **seed/giả lập**
   do dự án tạo cho môi trường local. Không nhập, không trích xuất, không

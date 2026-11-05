@@ -32,7 +32,7 @@ COPY . .
 
 # Thư mục upload (CV, tài liệu KB) + thư mục instance cho SQLite local.
 # Trên Render đây là đĩa tạm: file mất khi service khởi động lại (đã ghi chú
-# trong docs/deployment-golden-combo.md).
+# trong docs/deployment.md).
 RUN mkdir -p /app/uploads /app/instance \
     && useradd --create-home --uid 1001 appuser \
     && chown -R appuser:appuser /app

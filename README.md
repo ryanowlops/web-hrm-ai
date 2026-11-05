@@ -29,7 +29,7 @@
 
 | Vai trò | Email | Mật khẩu | Quyền tiêu biểu |
 |---|---|---|---|
-| Admin | `admin@hrm.local` | `Admin@123` | Toàn quyền, quản trị hệ thống |
+| Admin | `admin@hrm.local` | `Admin@123` | Toàn quyền, quản trị hệ thống — **không gắn hồ sơ nhân viên** (tài khoản thuần hệ thống) |
 | HR | `hr@hrm.local` | `Hr@12345` | Quản lý nhân sự, duyệt cấp cuối, cấp giấy xác nhận |
 | Manager | `manager@hrm.local` | `Manager@123` | Quản lý phòng ban của mình, duyệt cấp 1 |
 | Employee | `employee@hrm.local` | `Employee@123` | Tự phục vụ: chấm công, xin phép, xem phiếu lương |
@@ -44,7 +44,7 @@ Dữ liệu seed gồm **50 nhân viên / 5 phòng ban** (Kinh doanh, Kỹ thu�
 
 ### Quản lý nhân sự cốt lõi
 - **Nhân viên & phòng ban**: hồ sơ nhân viên, hợp đồng, sơ đồ tổ chức, lịch team.
-- **Chấm công**: check-in/check-out, tổng hợp tháng theo giờ Việt Nam.
+- **Chấm công QR + GPS**: HR mở trang "Chấm công QR" lấy mã QR theo ngày (token HMAC đổi mỗi ngày) kèm mã dự phòng 6 số; nhân viên quét QR bằng điện thoại, hệ thống đối chiếu GPS với toạ độ văn phòng (mặc định 150 m). Xem `docs/feature-expansion-v6.md`.
 - **Nghỉ phép**: số dư phép, gửi đơn và **duyệt 2 cấp** (quản lý trực tiếp → HR).
 - **Bảng lương**: kỳ lương, tính lương theo công thức cấu hình được, khoá kỳ và phát hành phiếu lương cá nhân.
 - **Tuyển dụng**: đăng tin, ứng viên nộp CV tại trang công khai, HR quản lý pipeline.
@@ -82,6 +82,8 @@ Dữ liệu seed gồm **50 nhân viên / 5 phòng ban** (Kinh doanh, Kỹ thu�
 - **Sàng lọc CV**: đọc PDF, trích xuất kỹ năng/kinh nghiệm, chấm điểm phù hợp với mô tả công việc và xếp hạng ứng viên. AI chỉ gợi ý — quyết định cuối luôn thuộc về HR.
 - **Chatbot quy chế (RAG)**: trả lời từ tài liệu nội bộ do HR tải lên, luôn kèm trích dẫn nguồn. Truy hồi lai (vector embedding + từ khoá, hợp nhất 0.7/0.3) và xếp hạng lại bằng LLM để chọn đoạn liên quan nhất.
 - **Chatbot tra dữ liệu thật**: hỏi bằng tiếng Việt tự nhiên — "Tôi còn bao nhiêu ngày phép?", "Phiếu lương tháng này của tôi", "Hôm nay ai đang nghỉ phép?" — chatbot tra trực tiếp dữ liệu hệ thống **theo đúng quyền của người hỏi** (nhân viên chỉ thấy của mình, quản lý thấy phòng mình, HR/Admin toàn công ty) và ghi rõ nguồn dữ liệu. Không có khoá AI vẫn chạy được nhờ bộ nhận diện ý định tất định.
+- **AI tạo mô tả công việc (JD) + bộ câu hỏi phỏng vấn (InterviewKit)**: HR nhập gợi ý, AI soạn JD có cấu trúc và bộ câu hỏi 3 vòng kèm rubric chấm điểm; JD chỉ là bản nháp, HR duyệt mới đăng tin.
+- **AI briefing điều hành**: tóm tắt tuần/tháng cho HR/Admin từ số liệu thật của hệ thống, mọi con số trong bài viết đều được kiểm chứng lại với dữ liệu gốc trước khi hiển thị.
 - **Dự báo nguy cơ nghỉ việc**: chấm điểm theo luật minh bạch (đi muộn, vắng không phép, biến động nghỉ phép, điểm hiệu suất, thâm niên — cửa sổ 60 ngày), liệt kê rõ từng yếu tố cộng điểm để HR chủ động chăm sóc nhân viên; điểm chỉ mang tính tham khảo.
 
 Chưa cấu hình `AI_API_KEY`: các tính năng AI dùng LLM trả về thông báo rõ ràng, toàn bộ nghiệp vụ HRM còn lại vẫn hoạt động bình thường.
@@ -108,11 +110,12 @@ Chatbot trả lời số ngày phép thật của người hỏi, kèm nhãn "D�
 
 Tài liệu chi tiết trong thư mục `docs/`:
 
-- [Phân tích & kiến trúc hệ thống](docs/architecture.md)
+- [Kiến trúc hiện tại](docs/architecture-current.md) · [Phân tích & kiến trúc gốc (21/10/2026)](docs/architecture.md)
+- [Triển khai production](docs/deployment.md) · [Biến môi trường](docs/env.md) · [Trạng thái vận hành](docs/operations-status.md)
 - [Mở rộng v2 — KPI/OKR, Onboarding, Tài sản, Đào tạo, Báo cáo](docs/feature-expansion-v2.md)
 - [Mở rộng v3 — Ca làm, Hồ sơ điện tử, Offboarding, Gắn kết, AI dữ liệu thật](docs/feature-expansion-v3.md)
 - [Nâng cấp RAG — embedding, truy hồi lai, rerank](docs/rag-upgrade.md)
-- [Triển khai production](docs/deployment-golden-combo.md) · [Bảo mật & kế hoạch kiểm thử Strix](docs/security.md)
+- [Bảo mật & kế hoạch kiểm thử Strix](docs/security.md)
 
 ## Chạy trên máy cá nhân
 
@@ -158,11 +161,12 @@ npm run dev
 
 ## Bật tính năng AI
 
-Tạo file `server/.env` từ mẫu `.env.example` và điền:
+Tạo file `server/.env` từ mẫu `server/.env.example` và điền (bảng đầy đủ xem `docs/env.md`):
 
 - `AI_API_KEY` — khoá API của nhà cung cấp tương thích OpenAI (ví dụ OpenAI, hoặc Gemini qua đầu mối tương thích của Google AI Studio).
-- `AI_MODEL` — model chat (ví dụ `gpt-4o-mini`, `gemini-2.0-flash`).
-- `AI_EMBEDDING_MODEL` — model embedding (ví dụ `text-embedding-3-small`, `text-embedding-004`).
+- `AI_BASE_URL` — base URL của đầu mối tương thích OpenAI; bắt buộc khi dùng Gemini, ví dụ `https://generativelanguage.googleapis.com/v1beta/openai/`.
+- `AI_MODEL` — model chat. Production đang dùng `gemini-3.5-flash-lite` (mặc định code là `gpt-4o-mini`).
+- `AI_EMBEDDING_MODEL` — model embedding. Production đang dùng `gemini-embedding-001` (mặc định code là `text-embedding-3-small`).
 
 Sau khi có khoá, mở trang Chatbot HR → panel "Tài liệu quy chế (KB)" → bấm **Bổ sung embedding còn thiếu** để chuyển các tài liệu đã tải từ chế độ từ khoá sang truy hồi lai.
 

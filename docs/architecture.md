@@ -1,5 +1,8 @@
 # Phân tích & Kiến trúc hệ thống — Web HRM tích hợp AI
 
+> **⚠️ Tài liệu phân tích ban đầu 21/10/2026 — một số mục đã thay đổi, xem [docs/architecture-current.md](architecture-current.md) để biết kiến trúc hiện tại.**
+> File này giữ nguyên làm tài liệu phân tích gốc (phân tích bài toán, quy trình nghiệp vụ, công thức lương, pipeline CV). Các khẳng định về endpoint, blueprint, model AI, cơ chế deploy và bảo mật trong file này có thể đã lỗi thời so với code hiện tại.
+
 > **Đề tài:** Web quản lý nhân sự (HRM) tích hợp trí tuệ nhân tạo — đồ án / bài tập lớn
 > **Tech stack:** Backend **Flask** (Python) · Frontend **React JS** (JavaScript, Vite) · Database **PostgreSQL** (MySQL tương đương)
 > **Phiên bản tài liệu:** 1.0 — 21/10/2026

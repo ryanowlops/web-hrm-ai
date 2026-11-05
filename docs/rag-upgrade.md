@@ -57,13 +57,26 @@ Câu hỏi
 
 ## 2. Cấu hình
 
-| Biến môi trường | Mặc định | Ý nghĩa |
+| Biến môi trường | Mặc định (code) | Ý nghĩa |
 |---|---|---|
 | `AI_API_KEY` | _(trống)_ | Khoá API — không có key thì không tạo được embedding/chat, hệ thống tự hạ cấp (mục 3) |
 | `AI_PROVIDER` / `AI_BASE_URL` | `openai` / `https://api.openai.com/v1` | Provider tương thích OpenAI (DeepSeek, Qwen, vLLM local...) |
 | `AI_MODEL` | `gpt-4o-mini` | Model chat (trả lời + rerank) |
 | `AI_EMBEDDING_MODEL` | `text-embedding-3-small` | Model embedding, gọi qua `POST {base}/embeddings` (hỗ trợ input 1 chuỗi hoặc batch list chuỗi) |
 | `CHAT_MIN_SIMILARITY` | `0.30` | Ngưỡng cosine tối thiểu của phía vector ở cổng liên quan |
+
+> **Phân biệt mặc định code vs production:** các giá trị OpenAI trong bảng
+> trên là **mặc định trong code** (`server/app/config.py:101-105`,
+> `provider.py:86-87`), **không phải production**. Production đang chạy
+> Gemini (chỉ đặt ở biến môi trường trên Render):
+>
+> | Môi trường | Model chat | Model embedding |
+> |---|---|---|
+> | Production (Render env) | `gemini-3.5-flash-lite` | `gemini-embedding-001` |
+> | Mặc định code | `gpt-4o-mini` | `text-embedding-3-small` |
+>
+> Lưu ý: `gemini-2.5-flash-lite` đã RETIRED → 404; `text-embedding-004`
+> 404 trên endpoint Google OpenAI-compat.
 
 Tầng AI vẫn provider-agnostic: mọi lời gọi đi qua
 `server/app/ai_service` (HTTP JSON thuần bằng `urllib`, không SDK).
@@ -88,7 +101,24 @@ Hạ cấp theo tầng: mất embedding → còn từ khoá; mất LLM → còn 
 nguyên văn kèm nguồn; mất cả hai → vẫn tra cứu từ khoá + trích đoạn được.
 Không trạng thái nào làm hỏng chức năng HRM lõi.
 
+> **Ghi chú về `retrieval_mode` (cập nhật):** từ v5, response
+> `POST /api/v1/chat/ask` tách riêng 2 trường — `mode` (loại đáp án tổng:
+> `rag` | `live_data` | `action`) và `retrieval_mode` (chế độ truy hồi chi
+> tiết bên trong nhánh RAG: `hybrid_rerank` | `hybrid` | `embedding` |
+> `keyword` | `none`). Khi `mode = rag` thì `retrieval_mode` là 1 trong 5
+> giá trị ở bảng trên; khi `mode = live_data` (tra dữ liệu thật qua tool,
+> v3 §5.1) hoặc `mode = action` (thẻ hành động, v5 §A) thì
+> `retrieval_mode = null` — hai mode này nằm ngoài pipeline RAG
+> (`chat/services.py:447,456,469,482`). FE hiện dùng cả 2 trường
+> (`ChatbotPage.jsx:335`).
+
 ## 4. Cách kiểm thử
+
+> **⚠️ Cần chạy lại kiểm thử:** kết quả 18/18 + 6/6 dưới đây là của script
+> tạm **ngoài repo** — script gốc không còn trong repo nên không đối chiếu
+> lại được từ code tại commit hiện tại. Coi các con số này là kết quả lịch
+> sử, không phải trạng thái đã kiểm chứng hiện hành; cần viết lại script
+> và chạy lại trước khi dùng làm bằng chứng.
 
 Đã kiểm chứng tự động bằng script tạm (ngoài repo) với Flask test client
 + DB SQLite tạm, **monkeypatch `app.ai_service`** bằng provider giả lập

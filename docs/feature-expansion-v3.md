@@ -45,8 +45,11 @@ folder của mình.
   `manager-decision` / `hr-decision` với body `{decision: "approve"|"reject", note}`.
 - `seed_demo()`: hàm trong `seed_demo.py`, IDEMPOTENT (kiểm tra tồn tại trước
   khi insert), tra cứu tài khoản demo bằng email (`admin@hrm.local`,
-  `hr@hrm.local`, `manager@hrm.local`, `employee@hrm.local` → employee
-  NV0002/NV0001/NV0003), ngày tháng tính TƯƠNG ĐỐI theo ngày chạy seed
+  `hr@hrm.local`, `manager@hrm.local`, `employee@hrm.local`). Lưu ý: chỉ
+  có 3 mã nhân viên cho 4 email — `admin@hrm.local` **không có hồ sơ nhân
+  viên** (tài khoản thuần hệ thống, `seed.py:57`); `hr@hrm.local` →
+  NV0002, `manager@hrm.local` → NV0001, `employee@hrm.local` → NV0003.
+  Ngày tháng tính TƯƠNG ĐỐI theo ngày chạy seed
   (không hardcode ngày quá khứ xa). Không commit trong seed_demo — parent
   seed.py quản lý transaction; dùng `db.session.flush()` khi cần id.
 - Kiểm chứng của đội (bắt buộc trước khi báo cáo): dùng DB TẠM
@@ -288,7 +291,10 @@ DashboardPage ở vòng này).
 
 - `Kudo`: id, from_user_id FK users, to_employee_id FK employees, badge
   (teamwork/innovation/dedication/leadership/thanks), message,
-  created_at. (Điểm = số kudo, không cần bảng điểm riêng.)
+  created_at. (Điểm = số kudo, không cần bảng điểm riêng — **ghi chú cập
+  nhật ở v4:** từ v4, mỗi kudo nhận được trị **+10 điểm** qua bảng
+  `PointsLedger` (`gamification/services.py`, `POINTS_PER_KUDO = 10`,
+  đồng bộ lười `sync_points`); xem `docs/feature-expansion-v4.md` §2.2.)
 - `Survey`: id, title, description, questions (JSON: list
   {id, type: enps|scale|single|text, text, options?}), status
   (draft/active/closed), created_by, ends_at nullable.
@@ -314,9 +320,10 @@ DashboardPage ở vòng này).
   đã trả lời hay chưa; `POST /engagement/surveys/<id>/responses`
   {answers} (mỗi user 1 lần → lần 2 trả 409 ALREADY_RESPONDED; validate
   answers theo questions: enps 0–10, scale 1–5, single thuộc options,
-  text ≤ 1000 ký tự); `GET /engagement/surveys/<id>/results` (hr/admin;
-  manager chỉ xem — quyết định: hr/admin only để bảo vệ ẩn danh nhóm
-  nhỏ): tổng lượt trả lời, eNPS trung bình + phân bổ promoter/passive/
+  text ≤ 1000 ký tự); `GET /engagement/surveys/<id>/results` (chỉ
+  hr/admin — `@require_roles(*HR_ROLES)`, `engagement/routes.py:178-182`;
+  manager cũng bị chặn, để bảo vệ ẩn danh nhóm nhỏ): tổng lượt trả lời,
+  eNPS trung bình + phân bổ promoter/passive/
   detractor, trung bình từng câu scale, đếm từng lựa chọn single, danh
   sách câu trả lời text. `POST /engagement/surveys/<id>/close` (hr/admin).
 
@@ -389,6 +396,11 @@ sửa `features/chatbot/pages/ChatbotPage.jsx` (chips gợi ý + nhãn chế đ�
   đọc model ChatLog trước).
 - API giữ nguyên endpoint chat hiện có (đọc routes trước); response bổ
   sung trường `mode` ("live_data" khi dùng tool) để FE hiện nhãn.
+  **Ghi chú cập nhật ở v5:** từ v5, `POST /chat/ask` còn trả `mode =
+  "action"` khi có thẻ hành động, và trường riêng `retrieval_mode`
+  (chế độ truy hồi chi tiết: `hybrid_rerank` | `hybrid` | `embedding` |
+  `keyword` | `none`) tách khỏi `mode` (`chat/services.py:447,456,469,482`);
+  xem `docs/feature-expansion-v5.md` §A và `docs/rag-upgrade.md` §3.
 
 ### 5.2 FE ChatbotPage
 

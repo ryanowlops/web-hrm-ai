@@ -1,3 +1,7 @@
+> **ĐÃ BỊ THAY THẾ BỞI `frontend-design-v4.md` (2026-10-23) — chỉ giữ lại làm lịch sử thiết kế. Không sửa nội dung.**
+>
+> v4 thay thế hoàn toàn v3: bỏ gradient navy, hero band, motion framework nặng và ngôn ngữ tự chế ("Nhịp nhân sự"); khung hiện tại là shadcn-admin × Untitled UI, xem `frontend-design-v4.md`. File này còn giá trị duy nhất là giải thích vì sao `client/src/app/motion.js` / `PulseBar` còn tồn tại trong repo (di sản v3, đã deprecated ở v4).
+
 # Kế hoạch thiết kế Frontend v3 — theo skill `frontend-design` (Anthropic)
 
 > Nguồn skill: https://github.com/anthropics/skills/tree/main/skills/frontend-design — áp dụng đúng quy trình của skill: **(1) lên kế hoạch tokens/layout → (2) tự phê bình đối chiếu brief, sửa phần nào giống mẫu generic → (3) mới code**.

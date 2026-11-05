@@ -7,6 +7,8 @@
 > 2. **Untitled UI** — hệ số đo: thang xám, border, radius, shadow siêu nhẹ, typography Inter.
 > 3. **TailAdmin React** — pattern component phụ (badge, dropdown, bảng).
 > 4. **thefrontkit HR Dashboard / BambooHR** — pattern nghiệp vụ HR: danh bạ nhân viên dạng bảng avatar 2 dòng, hàng chờ duyệt phép, bảng chấm công, pipeline tuyển dụng.
+>
+> Cập nhật 2026-11-05 (đợt kiểm kê docs, commit `5850581`): sửa 3 điểm sai so với code — ⌘K là command palette thật (không phải "chỉ trình bày"), logo là `<img src="/logo.svg">` (không phải "ô vuông CSS"), LoginPage không có khối demo — và bổ sung ngoại lệ dark `/display` + quy tắc `needsEmployee`/`RouteGuard`.
 
 ## 1. CẤM TUYỆT ĐỐI (dấu hiệu "AI")
 
@@ -16,6 +18,7 @@
 - Không shadow nổi (lift/pop/glow): thẻ chỉ dùng **border + shadow-xs**. Shadow lớn chỉ cho modal/dropdown (`shadow-lg` nhẹ).
 - Không font hiển thị riêng: **Inter cho mọi thứ** (bỏ Be Vietnam Pro trong giao diện; class `font-display` được W1 ánh xạ về Inter).
 - Không eyebrow chữ hoa trang trí trên tiêu đề trang; không số liệu khổng lồ trang trí.
+- **Ngoại lệ dark duy nhất:** trang `/display` (TV page, `DisplayPage.jsx`) dùng nền navy `#0B1B3A` toàn màn hình — cố ý, chỉ trang này; mọi trang khác đều trắng. Lệnh cấm "không hero band tối / không panel navy" ở trên không áp cho `/display`.
 
 ## 2. Palette (Untitled UI — ghi đè thang `gray` của Tailwind)
 
@@ -44,8 +47,8 @@
 
 ## 4. Khung ứng dụng (W8 — AppLayout theo shadcn-admin)
 
-- **Sidebar TRẮNG** 264px, border-r gray-200 (bỏ hẳn sidebar navy): logo = ô vuông brand-600 rounded-lg 32px chứa chữ "H" trắng + tên "Web HRM AI" 15px semibold gray-900, phụ đề 12px gray-500. Nhãn nhóm: 12px medium gray-500, không hoa. Mục menu: icon 18px (icons.jsx hoặc lucide-react), chữ 14px gray-700, rounded-lg, hover bg-gray-50; đang chọn: **bg-brand-50, chữ brand-700, medium**. Cuối sidebar: thẻ người dùng (avatar + tên + vai trò + nút đăng xuất) tách bằng border-t.
-- **Topbar trắng** 64px, border-b gray-200: trái = ô tìm kiếm giả lập kiểu shadcn-admin (border gray-300, rounded-lg, placeholder "Tìm kiếm...", phím ⌘K dạng kbd ở phải ô) — chỉ trình bày, giữ nguyên hành vi tìm kiếm hiện có nếu có; phải = chuông thông báo có chấm đỏ nhỏ + khối người dùng.
+- **Sidebar TRẮNG** 264px, border-r gray-200 (bỏ hẳn sidebar navy): logo = `<img src="/logo.svg">` 32px — file `client/public/logo.svg`, SVG phẳng: nền vuông bo góc màu `#274FEA`, chữ "H" trắng, tia spark AI xanh nhạt `#B9CCFF` — kèm tên "Web HRM AI" 15px semibold gray-900, phụ đề 12px gray-500. Thu gọn 76px: hàng logo chỉ còn logo căn giữa, nhãn nhóm menu ẩn hẳn (`lg:hidden`); nút thu/mở nằm trên topbar (luôn bấm được). Nhãn nhóm: 12px medium gray-500, không hoa. Mục menu: icon 18px (icons.jsx hoặc lucide-react), chữ 14px gray-700, rounded-lg, hover bg-gray-50; đang chọn: **bg-brand-50, chữ brand-700, medium**. Cuối sidebar: thẻ người dùng (avatar + tên + vai trò + nút đăng xuất) tách bằng border-t.
+- **Topbar trắng** 64px, border-b gray-200: trái = **command palette ⌘K thật** (inline trong `AppLayout.jsx`, không phải component riêng): ô tìm kiếm lọc `NAV_ITEMS` theo đúng role đang đăng nhập (kèm cờ `needsEmployee`), không phân biệt dấu, Enter/click để điều hướng, ↑/↓ chọn mục, Esc đóng, mở bằng Cmd/Ctrl+K ở bất cứ đâu trong app; phải = chuông thông báo có chấm đỏ nhỏ + khối người dùng. **Role-visibility:** menu lọc theo role + `needsEmployee` trong `NAV_ITEMS`; từng route kiểm tra bằng `RouteGuard.jsx` + `guardedPage()` (`router.jsx`) — sai role hoặc thiếu hồ sơ thì silent redirect về `/`, không hiện trang/banner lỗi. Riêng `/my-journey` và `/rewards` yêu cầu `needsEmployee` (ẩn khi `user.employeeId == null`).
 - Nội dung: bg-gray-50, padding 24px (lg 32px), không giới hạn max-width kiểu marketing.
 - Mobile: giữ hành vi thu gọn/hamburger hiện tại.
 
@@ -55,7 +58,7 @@
 2. Thanh lọc (nếu trang có): hàng ngang trên nền trắng trong thẻ mỏng hoặc ngay dưới header — input tìm kiếm + select lọc + nút.
 3. Nội dung chính: thẻ bảng full-width (bảng tràn viền thẻ, thead như mục 3) hoặc lưới thẻ theo nghiệp vụ; trạng thái tải = Skeleton đúng hình dạng; rỗng = EmptyState có nút hành động.
 4. Dashboard (W10, theo trang Overview của shadcn-admin): hàng **4 StatCard phẳng** (nhãn 13px gray-500, số 24px semibold, dòng phụ 13px — TUYỆT ĐỐI không bịa số liệu/số % không có từ API; không có dữ liệu phụ thì để dòng phụ mô tả nguồn số liệu); hàng 2: biểu đồ chấm công (2/3) + thẻ "Cần xử lý" (1/3) dạng danh sách việc có Badge; hàng 3: cơ cấu phòng ban + bảng đơn phép gần đây. **Không hero, không band tối.**
-5. Login (W11, theo auth của shadcn-admin/TailAdmin): nền gray-50, form giữa màn hình max-w ~400px: logo, tiêu đề 24px semibold, mô tả, thẻ trắng border chứa form (hoặc form trực tiếp trên nền như shadcn-admin), nút primary full-width; dưới form là khối tài khoản demo trình bày dạng bảng nhỏ/border. Không panel navy, không hero.
+5. Login (W11, theo auth của shadcn-admin/TailAdmin): nền gray-50, form giữa màn hình max-w ~400px: logo, tiêu đề 24px semibold, mô tả, thẻ trắng border chứa form (hoặc form trực tiếp trên nền như shadcn-admin), nút primary full-width. **LoginPage KHÔNG có khối tài khoản demo** — tài khoản demo chỉ ghi trong `README.md` + `docs/deployment.md`, không hiện trên màn đăng nhập. Không panel navy, không hero.
 6. Public Jobs (W12, theo trang careers Personio): nền trắng, header border-b (logo trái, nút "Đăng nhập nội bộ" phải), vùng đầu trang nền trắng — tiêu đề 30px semibold gray-900 + mô tả + ô tìm kiếm lớn; danh sách việc dạng hàng/thẻ border rounded-xl hover border-brand-300; chi tiết/ứng tuyển giữ nguyên luồng.
 7. Chatbot (W20): khung chat trong thẻ trắng border, tin nhắn user bg-brand-600 chữ trắng bo 12px, tin nhắn bot bg-gray-100 gray-900; không bong bóng gradient.
 
