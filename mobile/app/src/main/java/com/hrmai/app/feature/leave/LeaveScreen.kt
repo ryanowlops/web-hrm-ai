@@ -111,25 +111,39 @@ private fun LeaveScreen(vm: LeaveViewModel) {
 
     Box(modifier = Modifier.fillMaxSize().background(CanvasGray)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            val tabs = if (state.canApprove) {
-                listOf("Đơn của tôi", "Tạo đơn", "Duyệt đơn")
-            } else {
-                listOf("Đơn của tôi", "Tạo đơn")
+            // Tab theo hồ sơ: tài khoản không hồ sơ (vd admin) chỉ còn tab
+            // Duyệt đơn; tài khoản không hồ sơ mà cũng không có quyền duyệt
+            // thì không có tab nào — hiện trạng thái trống, không banner đỏ.
+            val tabs = when {
+                !state.hasEmployee && state.canApprove -> listOf(2 to "Duyệt đơn")
+                !state.hasEmployee -> emptyList()
+                state.canApprove -> listOf(0 to "Đơn của tôi", 1 to "Tạo đơn", 2 to "Duyệt đơn")
+                else -> listOf(0 to "Đơn của tôi", 1 to "Tạo đơn")
             }
-            TabRow(selectedTabIndex = state.tab.coerceAtMost(tabs.lastIndex)) {
-                tabs.forEachIndexed { index, label ->
-                    Tab(
-                        selected = state.tab == index,
-                        onClick = { vm.selectTab(index) },
-                        text = { Text(label) },
-                    )
+            if (tabs.isNotEmpty()) {
+                TabRow(selectedTabIndex = tabs.indexOfFirst { it.first == state.tab }.coerceAtLeast(0)) {
+                    tabs.forEach { (index, label) ->
+                        Tab(
+                            selected = state.tab == index,
+                            onClick = { vm.selectTab(index) },
+                            text = { Text(label) },
+                        )
+                    }
                 }
             }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (state.tab) {
-                    0 -> MyRequestsTab(state, vm, onCancel = { cancelTarget = it })
-                    1 -> CreateLeaveTab(state, vm)
-                    2 -> ApprovalTab(
+                when {
+                    tabs.isEmpty() -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            EmptyState("Tài khoản này chưa gắn hồ sơ nhân viên nên không có đơn nghỉ cá nhân. Nhờ HR gắn hồ sơ để dùng mục này nhé.")
+                        }
+                    }
+                    state.tab == 0 -> MyRequestsTab(state, vm, onCancel = { cancelTarget = it })
+                    state.tab == 1 -> CreateLeaveTab(state, vm)
+                    else -> ApprovalTab(
                         state = state,
                         vm = vm,
                         onDecide = { request, approved ->

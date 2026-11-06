@@ -130,7 +130,7 @@ private fun HomeScreen(
 
             item {
                 if (shortcutsFirst) {
-                    ShortcutsGrid(role = role, onOpenRoute = onOpenRoute)
+                    ShortcutsGrid(role = role, hasEmployee = state.user?.employeeId != null, onOpenRoute = onOpenRoute)
                 } else {
                     StatsRow(state = state)
                 }
@@ -140,7 +140,7 @@ private fun HomeScreen(
                 if (shortcutsFirst) {
                     StatsRow(state = state)
                 } else {
-                    ShortcutsGrid(role = role, onOpenRoute = onOpenRoute)
+                    ShortcutsGrid(role = role, hasEmployee = state.user?.employeeId != null, onOpenRoute = onOpenRoute)
                 }
             }
 
@@ -456,9 +456,10 @@ private fun StatsRow(state: HomeUiState) {
 }
 
 @Composable
-private fun ShortcutsGrid(role: String?, onOpenRoute: (String) -> Unit) {
+private fun ShortcutsGrid(role: String?, hasEmployee: Boolean, onOpenRoute: (String) -> Unit) {
     // Bộ lối tắt theo role — mọi route đều lấy từ Routes; "Duyệt đơn team" trỏ vào
     // màn Nghỉ phép (nơi có tab duyệt đơn của manager/HR).
+    // Hành trình cá nhân cần hồ sơ nhân viên (needsEmployee, như bản web).
     val shortcuts = when (role) {
         "manager" -> listOf(
             Triple(Routes.LEAVE, "Duyệt đơn team", Icons.Filled.FactCheck),
@@ -478,12 +479,14 @@ private fun ShortcutsGrid(role: String?, onOpenRoute: (String) -> Unit) {
             Triple(Routes.BRIEFING, "Báo cáo điều hành", Icons.Filled.Assessment),
             Triple(Routes.REPORTS, "Báo cáo & tổng quan", Icons.Filled.TrendingUp),
         )
-        else -> listOf(
-            Triple(Routes.CHECKIN_SCAN, "Quét QR chấm công", Icons.Filled.QrCodeScanner),
-            Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable),
-            Triple(Routes.PAYROLL, "Phiếu lương", Icons.Filled.Payments),
-            Triple(Routes.JOURNEY, "Hành trình của tôi", Icons.Filled.Timeline),
-        )
+        else -> buildList {
+            add(Triple(Routes.CHECKIN_SCAN, "Quét QR chấm công", Icons.Filled.QrCodeScanner))
+            add(Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable))
+            add(Triple(Routes.PAYROLL, "Phiếu lương", Icons.Filled.Payments))
+            if (hasEmployee) {
+                add(Triple(Routes.JOURNEY, "Hành trình của tôi", Icons.Filled.Timeline))
+            }
+        }
     }
     HrmCard(modifier = Modifier.fillMaxWidth()) {
         Row(

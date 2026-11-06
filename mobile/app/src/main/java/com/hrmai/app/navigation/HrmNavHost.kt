@@ -188,6 +188,33 @@ object Routes {
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
+/** Ma trận quyền mobile — mirror bản web (router.jsx guardedPage + AppLayout NAV_ITEMS).
+ *  Màn hình không thuộc về role/hồ sơ thì ẨN HẲN: điều hướng về Trang chủ,
+ *  không hiện trang/banner lỗi (đúng luật hiển thị theo role của bản web). */
+private fun isRouteAllowed(route: String, role: String?, hasEmployee: Boolean): Boolean {
+    val managerUp = role in setOf("manager", "hr", "admin")
+    val hrUp = role in setOf("hr", "admin")
+    // Route chi tiết đi kèm id thật ("employee/5") — xét theo route gốc.
+    val base = when {
+        route.startsWith("employee/") -> Routes.EMPLOYEES
+        route.startsWith("recruitment-job/") -> Routes.RECRUITMENT
+        route.startsWith("job/") -> Routes.JOBS
+        else -> route
+    }
+    return when (base) {
+        Routes.EMPLOYEES, Routes.DEPARTMENTS, Routes.ORG_CHART,
+        Routes.TEAM_CALENDAR, Routes.RECRUITMENT, Routes.REPORTS,
+        Routes.ATTRITION -> managerUp
+        Routes.ADMIN -> role == "admin"
+        Routes.OFFBOARDING, Routes.CHECKIN_ADMIN, Routes.BRIEFING,
+        Routes.PAYROLL_ADMIN -> hrUp
+        // Hành trình / cửa hàng đổi thưởng chỉ dành cho tài khoản có hồ sơ
+        // nhân viên (vd tài khoản admin thuần hệ thống thì ẩn).
+        Routes.REWARDS, Routes.JOURNEY -> hasEmployee
+        else -> true
+    }
+}
+
 private val TABS = listOf(
     Tab(Routes.HOME, "Trang chủ", Icons.Filled.Home),
     Tab(Routes.ATTENDANCE, "Chấm công", Icons.Filled.Fingerprint),
@@ -280,9 +307,18 @@ private fun MainShell(container: AppContainer) {
     val currentRoute = backStack?.destination?.route
     val isTab = TABS.any { it.route == currentRoute }
     val scope = rememberCoroutineScope()
+    val session by container.sessionStore.sessionFlow.collectAsState()
+    val sessionUser = session?.user
 
     fun openRoute(route: String) {
-        navController.navigate(route) {
+        // Guard lặng theo role/hồ sơ: route không thuộc về người dùng thì về
+        // Trang chủ thay vì mở màn hình rồi báo lỗi (mirror RouteGuard web).
+        val target = if (isRouteAllowed(route, sessionUser?.role, sessionUser?.employeeId != null)) {
+            route
+        } else {
+            Routes.HOME
+        }
+        navController.navigate(target) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
@@ -353,7 +389,13 @@ private fun MainShell(container: AppContainer) {
             composable(Routes.MORE) {
                 MoreRoute(
                     container = container,
-                    onOpenRoute = { navController.navigate(it) },
+                    onOpenRoute = { route ->
+                        // Menu đã ẩn mục không thuộc role; đây là chốt chặn
+                        // cuối nếu route lọt qua bằng đường khác.
+                        if (isRouteAllowed(route, sessionUser?.role, sessionUser?.employeeId != null)) {
+                            navController.navigate(route)
+                        }
+                    },
                     onLogout = { scope.launch { container.sessionStore.clear() } },
                 )
             }
@@ -450,38 +492,46 @@ private fun MoreRoute(
     val role = user?.role ?: "employee"
     val isManagerUp = role in listOf("manager", "hr", "admin")
     val isHrUp = role in listOf("hr", "admin")
+    // Tài khoản thuần hệ thống (vd admin) không gắn hồ sơ nhân viên thì ẩn
+    // các mục cá nhân cần hồ sơ — mirror needsEmployee của bản web.
+    val hasEmployee = user?.employeeId != null
 
     val sections = buildList {
         add(
             MenuSection(
                 null,
-                listOf(
-                    Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable),
-                    Triple(Routes.CHECKIN_SCAN, "Chấm công QR + GPS", Icons.Filled.QrCodeScanner),
-                    Triple(Routes.PAYROLL, "Lương của tôi", Icons.Filled.Payments),
-                    Triple(Routes.KUDOS, "Vinh danh & điểm thưởng", Icons.Filled.EmojiEvents),
-                    Triple(Routes.REWARDS, "Cửa hàng đổi thưởng", Icons.Filled.CardGiftcard),
-                    Triple(Routes.JOURNEY, "Hành trình của tôi", Icons.Filled.Timeline),
-                    Triple(Routes.ANNOUNCEMENTS, "Thông báo công ty", Icons.Filled.Campaign),
-                    Triple(Routes.NOTIFICATIONS, "Thông báo cá nhân", Icons.Filled.Notifications),
-                    Triple(Routes.PROFILE, "Hồ sơ cá nhân", Icons.Filled.Person),
-                ),
+                buildList {
+                    add(Triple(Routes.LEAVE, "Nghỉ phép", Icons.Filled.EventAvailable))
+                    add(Triple(Routes.CHECKIN_SCAN, "Chấm công QR + GPS", Icons.Filled.QrCodeScanner))
+                    add(Triple(Routes.PAYROLL, "Lương của tôi", Icons.Filled.Payments))
+                    add(Triple(Routes.KUDOS, "Vinh danh & điểm thưởng", Icons.Filled.EmojiEvents))
+                    if (hasEmployee) {
+                        add(Triple(Routes.REWARDS, "Cửa hàng đổi thưởng", Icons.Filled.CardGiftcard))
+                        add(Triple(Routes.JOURNEY, "Hành trình của tôi", Icons.Filled.Timeline))
+                    }
+                    add(Triple(Routes.ANNOUNCEMENTS, "Thông báo công ty", Icons.Filled.Campaign))
+                    add(Triple(Routes.NOTIFICATIONS, "Thông báo cá nhân", Icons.Filled.Notifications))
+                    add(Triple(Routes.PROFILE, "Hồ sơ cá nhân", Icons.Filled.Person))
+                },
             )
         )
         add(
             MenuSection(
                 "Công việc & phát triển",
-                listOf(
-                    Triple(Routes.PERFORMANCE, "KPI & OKR", Icons.Filled.TrendingUp),
-                    Triple(Routes.TRAINING, "Đào tạo", Icons.Filled.School),
-                    Triple(Routes.SHIFTS, "Ca làm việc", Icons.Filled.Schedule),
-                    Triple(Routes.ASSETS, "Tài sản của tôi", Icons.Filled.Devices),
-                    Triple(Routes.DOCUMENTS, "Tài liệu & giấy xác nhận", Icons.Filled.Description),
-                    Triple(Routes.ONBOARDING, "Onboarding", Icons.Filled.PersonAdd),
-                    Triple(Routes.SKILLS, "Bản đồ kỹ năng", Icons.Filled.Map),
-                    Triple(Routes.SURVEYS, "Khảo sát gắn kết", Icons.Filled.Poll),
-                    Triple(Routes.TEAM_CALENDAR, "Lịch nhóm", Icons.Filled.CalendarToday),
-                ),
+                buildList {
+                    add(Triple(Routes.PERFORMANCE, "KPI & OKR", Icons.Filled.TrendingUp))
+                    add(Triple(Routes.TRAINING, "Đào tạo", Icons.Filled.School))
+                    add(Triple(Routes.SHIFTS, "Ca làm việc", Icons.Filled.Schedule))
+                    add(Triple(Routes.ASSETS, "Tài sản của tôi", Icons.Filled.Devices))
+                    add(Triple(Routes.DOCUMENTS, "Tài liệu & giấy xác nhận", Icons.Filled.Description))
+                    add(Triple(Routes.ONBOARDING, "Onboarding", Icons.Filled.PersonAdd))
+                    add(Triple(Routes.SKILLS, "Bản đồ kỹ năng", Icons.Filled.Map))
+                    add(Triple(Routes.SURVEYS, "Khảo sát gắn kết", Icons.Filled.Poll))
+                    // Lịch team chỉ dành cho manager trở lên (bản web cũng vậy).
+                    if (isManagerUp) {
+                        add(Triple(Routes.TEAM_CALENDAR, "Lịch nhóm", Icons.Filled.CalendarToday))
+                    }
+                },
             )
         )
         if (isManagerUp) {
@@ -495,7 +545,6 @@ private fun MoreRoute(
                         add(Triple(Routes.RECRUITMENT, "Tuyển dụng", Icons.Filled.Assignment))
                         add(Triple(Routes.REPORTS, "Báo cáo", Icons.Filled.Assessment))
                         add(Triple(Routes.ATTRITION, "Rủi ro nghỉ việc", Icons.Filled.Warning))
-                        add(Triple(Routes.OFFBOARDING, "Quy trình nghỉ việc", Icons.Filled.ExitToApp))
                     },
                 )
             )
@@ -507,6 +556,7 @@ private fun MoreRoute(
                     buildList {
                         add(Triple(Routes.CHECKIN_ADMIN, "Mã QR chấm công", Icons.Filled.QrCode))
                         add(Triple(Routes.BRIEFING, "Báo cáo điều hành", Icons.Filled.Assessment))
+                        add(Triple(Routes.OFFBOARDING, "Quy trình nghỉ việc", Icons.Filled.ExitToApp))
                         add(Triple(Routes.PAYROLL_ADMIN, "Quản lý lương", Icons.Filled.Payments))
                         if (role == "admin") {
                             add(Triple(Routes.ADMIN, "Quản trị tài khoản", Icons.Filled.Settings))
@@ -588,7 +638,7 @@ private fun MoreRoute(
         )
         Spacer(Modifier.height(24.dp))
         Text(
-            "HRM AI Mobile v1.0 · Dữ liệu đồng bộ với bản web",
+            "HRM AI Mobile v1.1 · Dữ liệu đồng bộ với bản web",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

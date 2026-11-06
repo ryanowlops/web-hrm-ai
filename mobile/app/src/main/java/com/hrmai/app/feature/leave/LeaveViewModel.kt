@@ -17,6 +17,11 @@ data class LeaveUiState(
     val tab: Int = 0,
     val role: String? = null,
     val canApprove: Boolean = false,
+    /** false khi tài khoản chưa gắn hồ sơ nhân viên (vd admin hệ thống):
+     *  không có số dư / đơn của tôi / form tạo đơn — chỉ còn tab Duyệt đơn
+     *  (mirror bản web sau fix 5850581: khối theo role thì ẩn hẳn, không
+     *  hiện banner đỏ NO_EMPLOYEE_PROFILE). */
+    val hasEmployee: Boolean = true,
     // Số dư phép
     val balances: List<LeaveBalanceDto> = emptyList(),
     val balancesLoading: Boolean = true,
@@ -58,16 +63,33 @@ class LeaveViewModel(
         viewModelScope.launch {
             sessionStore.sessionFlow.collect { session ->
                 val role = session?.user?.role
-                if (_state.value.role != role) {
+                val hasEmployee = session?.user?.employeeId != null
+                val prev = _state.value
+                if (prev.role != role || prev.hasEmployee != hasEmployee) {
                     val canApprove = role in APPROVER_ROLES
-                    _state.update { it.copy(role = role, canApprove = canApprove) }
+                    _state.update {
+                        it.copy(
+                            role = role,
+                            hasEmployee = hasEmployee,
+                            canApprove = canApprove,
+                            // Tài khoản không hồ sơ mà có quyền duyệt (HR/Admin)
+                            // thì mở thẳng tab Duyệt đơn.
+                            tab = if (!hasEmployee && canApprove) 2 else it.tab,
+                        )
+                    }
+                    // Chỉ gọi API cá nhân (scope=mine / số dư của tôi) khi có hồ
+                    // sơ; tài khoản không hồ sơ gọi sẽ nhận 400
+                    // NO_EMPLOYEE_PROFILE — server đã sửa để không bắt buộc
+                    // với scope khác, nhưng phía mobile thì ẩn hẳn các khối đó.
+                    if (hasEmployee) {
+                        loadBalances()
+                        loadMine()
+                    }
                     if (canApprove) loadQueue()
                 }
             }
         }
         loadTypes()
-        loadBalances()
-        loadMine()
     }
 
     // ------------------------------------------------------------------
@@ -195,6 +217,7 @@ class LeaveViewModel(
     // ------------------------------------------------------------------
     fun selectTab(index: Int) {
         if (index == 2 && !_state.value.canApprove) return
+        if (index != 2 && !_state.value.hasEmployee) return
         _state.update { it.copy(tab = index) }
         if (index == 2) loadQueue()
     }
