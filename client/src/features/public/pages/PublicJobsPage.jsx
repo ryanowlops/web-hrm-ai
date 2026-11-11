@@ -35,21 +35,16 @@ import CvCheckModal from '../components/CvCheckModal';
  * - Không thay đổi logic, không thêm dữ liệu bịa (không lương, địa điểm,
  *   ảnh, phúc lợi — dữ liệu việc làm không có các trường đó).
  *
- * LƯU Ý (đã kiểm chứng bằng DevTools 2026-11-12): nút primary của Astryx
- * (Button variant="primary") và border của Card variant="default" BỊ
- * Tailwind preflight đè trong app này (thứ tự layer nạp vào không như
- * comment trong styles/astryx.css) — nút primary render trong suốt, Card
- * mất viền; preflight còn đặt `padding: 0` cho mọi <button> nên chữ nút
- * Astryx dính sát mép. App shell không dùng primary nên chưa ai phát hiện.
- * Vì vậy các nút Astryx dạng <button> ở trang này dùng class important
- * (`!bg-brand-600 !text-white hover:!bg-brand-700` cho primary,
- * `!bg-gray-100 !text-gray-700 hover:!bg-gray-200` cho secondary,
- * `!px-4` cho mọi nút — đã kiểm chứng hiển thị đúng cả
- * hover/disabled/loading) và Card default thêm `border border-gray-200`
- * bằng utility Tailwind; các component Astryx còn lại (Badge, TextInput,
- * Button dạng <a>, Card muted) render đúng nên giữ nguyên. Muốn sửa
- * triệt để thì phải sửa thứ tự layer trong styles/astryx.css ở cấp app
- * — ngoài phạm vi file này.
+ * LƯU Ý (đã sửa tận gốc 2026-11-12, nhánh astryx-layer-fix): trước đây
+ * nút primary của Astryx và border của Card variant="default" BỊ Tailwind
+ * preflight đè — nút primary render trong suốt, Card mất viền — nên trang
+ * này từng phải dùng class important (`!bg-*`, `!px-4`) và thêm
+ * `border border-gray-200` bằng utility Tailwind. Nguyên nhân gốc KHÔNG
+ * phải thứ tự layer nạp sai: Tailwind 3.4.19 không bọc output của nó
+ * trong `@layer` nào, mà style KHÔNG layer luôn thắng style CÓ layer bất
+ * kể specificity. Cách sửa: plugin `wrap-tailwind-base-in-layer` trong
+ * postcss.config.js gom preflight vào `@layer base`, xem comment trong
+ * styles/astryx.css. Các class workaround đã gỡ hết khỏi file này.
  */
 
 const CV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -537,7 +532,7 @@ export default function PublicJobsPage() {
             <Skeleton className="h-[68px]" />
           </div>
         ) : visibleJobs.length === 0 && !loadError ? (
-          <Card padding={6} className="border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+          <Card padding={6} className="shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
             <EmptyState
               icon={<BriefcaseIcon className="h-6 w-6" />}
               title={hasActiveFilter ? 'Không tìm thấy vị trí phù hợp' : 'Hiện chưa có vị trí nào đang tuyển'}
@@ -548,7 +543,7 @@ export default function PublicJobsPage() {
               }
               action={
                 hasActiveFilter ? (
-                  <Button type="button" variant="secondary" label="Xóa bộ lọc" onClick={clearFilters} className="!bg-gray-100 !px-4 !text-gray-700 hover:!bg-gray-200" />
+                  <Button type="button" variant="secondary" label="Xóa bộ lọc" onClick={clearFilters} />
                 ) : undefined
               }
             />
@@ -557,7 +552,7 @@ export default function PublicJobsPage() {
           <>
             {/* Tin nổi bật — hạn nộp gần nhất, chỉ một tin, lấp đầy chiều rộng. */}
             {featured && (
-              <Card padding={6} className="mb-10 border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+              <Card padding={6} className="mb-10 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-700">
                     Vị trí nổi bật
@@ -594,7 +589,6 @@ export default function PublicJobsPage() {
                     size="lg"
                     label="Xem chi tiết & ứng tuyển"
                     onClick={() => openJob(featured)}
-                    className="!bg-brand-600 !px-4 !text-white hover:!bg-brand-700"
                   />
                   <div className="flex items-center gap-5">
                     <button
@@ -763,7 +757,6 @@ export default function PublicJobsPage() {
                   label={submitLabel}
                   isLoading={submitting}
                   isDisabled={submitting || selectedExpired}
-                  className="!bg-brand-600 !px-4 !text-white hover:!bg-brand-700"
                 />
               </>
             )
@@ -813,7 +806,6 @@ export default function PublicJobsPage() {
                   variant="secondary"
                   label="Xem các vị trí khác"
                   onClick={closeJob}
-                  className="!bg-gray-100 !px-4 !text-gray-700 hover:!bg-gray-200"
                 />
               </Alert>
             </div>

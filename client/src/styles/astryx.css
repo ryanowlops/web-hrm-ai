@@ -3,9 +3,28 @@
  * Thứ tự layer (thấp → cao): reset → theme → base → astryx-base →
  * astryx-theme → components → utilities. Khai báo này PHẢI đứng đầu file
  * stylesheet được nạp đầu tiên (main.jsx import file này trước
- * tailwind.css); nếu không, cascade đảo ngược âm thầm (không lỗi build,
- * chỉ trang render sai). Các stylesheet của Astryx tự đăng ký thứ tự
- * layer của chúng, nên chỉ cần khai báo một lần ở đây.
+ * tailwind.css).
+ *
+ * SỰ THẬT VỀ LAYER (đã kiểm chứng 2026-11-12, đừng "sửa" theo cảm tính):
+ * Tailwind CSS 3.4.19 KHÔNG bọc output của nó trong `@layer` — chạy
+ * pipeline PostCSS của nó lên `@tailwind base;` cũng cho ra 0 lần xuất
+ * hiện `@layer`. Preflight/components/utilities của Tailwind đều KHÔNG
+ * layer, trong khi style component của Astryx nằm trong
+ * `@layer astryx-base` / `@layer astryx-theme`. Theo cascade, style
+ * KHÔNG layer luôn thắng style CÓ layer bất kể specificity — nên trước
+ * đây preflight `button{background:transparent}`, `button{padding:0}`,
+ * `*{border-width:0}` đè chết rule Astryx (nút primary trong suốt,
+ * Card mất viền). Khai báo thứ tự ở đây một mình KHÔNG sửa được lỗi đó
+ * vì Tailwind không đóng góp layer nào để sắp xếp.
+ * Cách sửa: plugin `wrap-tailwind-base-in-layer` trong postcss.config.js
+ * gom rule preflight (metadata `raws.tailwind.layer === 'base'`) vào
+ * `@layer base { ... }` sau khi Tailwind chạy — từ đó thứ tự khai báo
+ * trên mới thực sự đúng: Astryx thắng preflight, còn utilities của
+ * Tailwind vẫn KHÔNG layer nên tiếp tục override Astryx như app dựa vào.
+ * CẤM bọc `@tailwind` trong `@layer` ở tailwind.css: bước cleanup cuối
+ * pipeline của Tailwind xóa MỌI at-rule `@layer` tên
+ * base/components/utilities/variants — đã kiểm chứng input
+ * `@layer base { @tailwind base; }` cho ra output 0 byte.
  *
  * KHÔNG import @astryxdesign/core/tailwind-theme.css — file đó dùng cú
  * pháp Tailwind v4 (@theme reference inline), HRM đang dùng Tailwind 3.4.
