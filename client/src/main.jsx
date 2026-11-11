@@ -7,6 +7,10 @@ import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './app/AuthContext.jsx';
 import router from './app/router.jsx';
 import { ToastProvider } from './components/ui';
+import { Theme } from '@astryxdesign/core/theme';
+import { LinkProvider } from '@astryxdesign/core/Link';
+import { neutralTheme } from '@astryxdesign/theme-neutral/built';
+import { Link as RouterLink } from 'react-router-dom';
 
 // Tự chữa lỗi chunk cũ sau khi deploy bản mới: Vite bắn sự kiện
 // 'vite:preloadError' khi import động trúng chunk đã bị thay/thế xoá —
@@ -17,6 +21,11 @@ window.addEventListener('vite:preloadError', () => {
 
 // Font Inter Variable (đóng gói sẵn, không phụ thuộc CDN) — font duy nhất cho toàn bộ giao diện v4
 import '@fontsource-variable/inter';
+
+// Astryx — PHẢI nạp trước tailwind.css để khai báo thứ tự layer đứng
+// đầu cascade (xem src/styles/astryx.css). Theme khóa mode="light"
+// (HRM chỉ dùng light; dark chỉ có trang /display TV riêng).
+import './styles/astryx.css';
 
 // Design system v4: Tailwind → tokens → base → animations → motion
 import './styles/tailwind.css';
@@ -63,7 +72,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     >
       <AuthProvider>
         <ToastProvider>
-          <RouterProvider router={router} />
+          <Theme theme={neutralTheme} mode="light">
+            <LinkProvider component={RouterLink}>
+              <RouterProvider router={router} />
+            </LinkProvider>
+          </Theme>
         </ToastProvider>
       </AuthProvider>
     </PersistQueryClientProvider>

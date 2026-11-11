@@ -1,0 +1,34 @@
+/* Astryx design system — gắn vào HRM (nhánh astryx-shell).
+ *
+ * Thứ tự layer (thấp → cao): reset → theme → base → astryx-base →
+ * astryx-theme → components → utilities. Khai báo này PHẢI đứng đầu file
+ * stylesheet được nạp đầu tiên (main.jsx import file này trước
+ * tailwind.css); nếu không, cascade đảo ngược âm thầm (không lỗi build,
+ * chỉ trang render sai). Các stylesheet của Astryx tự đăng ký thứ tự
+ * layer của chúng, nên chỉ cần khai báo một lần ở đây.
+ *
+ * KHÔNG import @astryxdesign/core/tailwind-theme.css — file đó dùng cú
+ * pháp Tailwind v4 (@theme reference inline), HRM đang dùng Tailwind 3.4.
+ * Token Astryx dùng trực tiếp qua var(--color-...) khi cần.
+ */
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-neutral/theme.css";
+
+/* Ghi đè thương hiệu HRM lên theme neutral (hợp đồng v4):
+ * font Inter thay cho Figtree mặc định của theme, màu nhấn brand-600
+ * #274FEA thay cho accent xanh mặc định. Khối này KHÔNG nằm trong layer
+ * nên luôn thắng quy tắc trong layer astryx-theme của theme.css.
+ * mode="light" được khóa trong Theme provider (main.jsx) nên chỉ cần
+ * giá trị light ở đây. */
+[data-astryx-theme="neutral"] {
+  --font-family-body: "Inter Variable", Inter, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-family-heading: "Inter Variable", Inter, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --color-accent: #274fea;
+  --color-text-accent: #274fea;
+  --color-icon-accent: #274fea;
+  --color-accent-muted: #eef4ff;
+}
