@@ -24,7 +24,10 @@ import CvCheckModal from '../components/CvCheckModal';
  *
  * Trình bày: design v4 (careers kiểu Personio) — nền trắng, header border-b,
  * thẻ vị trí border gray-200 phẳng dùng Card/Badge, chi tiết + form ứng
- * tuyển trong Modal/Card chuẩn.
+ * tuyển trong Modal/Card chuẩn. Đợt làm đẹp 2026-11-11 (nhánh jobs-polish):
+ * hero có dải số liệu thật + lọc theo phòng ban, thẻ tin có nút chính rõ,
+ * thêm mục Quy trình ứng tuyển + footer thật, modal 2 cột với nút nộp luôn
+ * thấy được ở footer. Không thay đổi logic, không thêm dữ liệu bịa.
  */
 
 const CV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -50,6 +53,27 @@ function departmentName(job) {
 }
 
 const emptyForm = { fullName: '', email: '', phone: '' };
+
+/* Quy trình ứng tuyển thật của hệ thống: nộp CV → AI kiểm tra CV →
+   luyện phỏng vấn với AI → HR xem xét và liên hệ. */
+const PROCESS_STEPS = [
+  {
+    title: 'Nộp CV',
+    desc: 'Điền thông tin liên hệ và đính kèm CV PDF, tối đa 5 MB.',
+  },
+  {
+    title: 'AI kiểm tra CV',
+    desc: 'Xem mức phù hợp của CV với vị trí trước khi nộp hồ sơ.',
+  },
+  {
+    title: 'Luyện phỏng vấn với AI',
+    desc: 'Tập trả lời phỏng vấn thử ngay trên trình duyệt, không cần đặt lịch.',
+  },
+  {
+    title: 'HR xem xét và liên hệ',
+    desc: 'Đội ngũ HR xem xét hồ sơ và liên hệ qua email hoặc điện thoại nếu phù hợp.',
+  },
+];
 
 /* ------------------------------- Icon dùng chung ------------------------------ */
 function BriefcaseIcon({ className = 'h-5 w-5' }) {
@@ -88,11 +112,54 @@ function UsersIcon({ className = 'h-4 w-4' }) {
   );
 }
 
+function SparkleIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.1l-1.8-5.5L4.5 10.8 10.2 9 12 3.5ZM18.5 15.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MicIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* Mô tả + yêu cầu của 1 tin — dùng chung cho cả 2 nhánh của modal
+   (đang nộp hồ sơ và đã nộp thành công) để không lệch nhau. */
+function JobDescription({ job }) {
+  return (
+    <>
+      {job.description && (
+        <>
+          <h3 className="mb-2 text-[15px] font-semibold text-gray-900">Mô tả công việc</h3>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 [overflow-wrap:anywhere]">
+            {job.description}
+          </p>
+        </>
+      )}
+      {job.requirements && (
+        <>
+          <h3 className="mb-2 mt-6 text-[15px] font-semibold text-gray-900">Yêu cầu ứng viên</h3>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 [overflow-wrap:anywhere]">
+            {job.requirements}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function PublicJobsPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [deptFilter, setDeptFilter] = useState('all');
 
   const [selected, setSelected] = useState(null); // tin đang mở chi tiết
   const [detailLoading, setDetailLoading] = useState(false);
@@ -127,16 +194,53 @@ export default function PublicJobsPage() {
     };
   }, []);
 
+  /* Phòng ban đang tuyển (tên + số tin) — tính từ dữ liệu thật, để làm
+     chip lọc. Chỉ hiện khi có từ 2 phòng ban trở lên. */
+  const departments = useMemo(() => {
+    const counts = new Map();
+    jobs.forEach((j) => {
+      const name = departmentName(j);
+      counts.set(name, (counts.get(name) || 0) + 1);
+    });
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'vi'));
+  }, [jobs]);
+
+  /* Dải số liệu ở hero — chỉ dùng dữ liệu đã tải về, không bịa số. */
+  const stats = useMemo(() => {
+    if (jobs.length === 0) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcoming = jobs
+      .map((j) => (j.deadline ? new Date(j.deadline) : null))
+      .filter((d) => d && !Number.isNaN(d.getTime()) && d >= today)
+      .sort((a, b) => a - b)[0];
+    return {
+      openCount: jobs.length,
+      deptCount: new Set(jobs.map(departmentName)).size,
+      nearestDeadline: upcoming ? formatDate(upcoming.toISOString()) : 'Không giới hạn',
+    };
+  }, [jobs]);
+
   const visibleJobs = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    if (!kw) return jobs;
-    return jobs.filter(
-      (j) =>
+    return jobs.filter((j) => {
+      if (deptFilter !== 'all' && departmentName(j) !== deptFilter) return false;
+      if (!kw) return true;
+      return (
         (j.title || '').toLowerCase().includes(kw) ||
         departmentName(j).toLowerCase().includes(kw) ||
-        (j.description || '').toLowerCase().includes(kw),
-    );
-  }, [jobs, keyword]);
+        (j.description || '').toLowerCase().includes(kw)
+      );
+    });
+  }, [jobs, keyword, deptFilter]);
+
+  const hasActiveFilter = keyword.trim() !== '' || deptFilter !== 'all';
+  const clearFilters = useCallback(() => {
+    setKeyword('');
+    setDeptFilter('all');
+  }, []);
 
   /* ------------------------------ Mở chi tiết ------------------------------- */
   const openJob = useCallback(async (job) => {
@@ -242,20 +346,15 @@ export default function PublicJobsPage() {
       {/* ------------------------------- Header ------------------------------- */}
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-5 py-3 lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-white"
-            >
-              H
+          <a href="/jobs" className="flex min-w-0 shrink-0 items-center gap-2.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 rounded-lg">
+            <img src="/logo.svg" alt="Web HRM AI" className="h-8 w-8 shrink-0 rounded-lg" />
+            <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-gray-900">
+              HRM AI <span className="hidden font-normal text-gray-400 sm:inline">· Tuyển dụng</span>
             </span>
-            <span className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900">
-              HRM AI <span className="font-normal text-gray-400">· Tuyển dụng</span>
-            </span>
-          </div>
+          </a>
           <a
             href="/login"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
             Đăng nhập nội bộ
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -267,7 +366,7 @@ export default function PublicJobsPage() {
 
       {/* ---------------------------- Vùng đầu trang ---------------------------- */}
       <section className="border-b border-gray-200 bg-white">
-        <div className="mx-auto w-full max-w-[1200px] px-5 pb-8 pt-10 lg:px-8 lg:pt-12">
+        <div className="mx-auto w-full max-w-[1200px] px-5 pb-10 pt-10 lg:px-8 lg:pt-14">
           <h1 className="max-w-2xl text-[30px] font-semibold leading-[1.2] tracking-[-0.01em] text-gray-900">
             Cơ hội nghề nghiệp đang mở
           </h1>
@@ -288,6 +387,27 @@ export default function PublicJobsPage() {
               className="w-full min-w-0 bg-transparent text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none"
             />
           </div>
+
+          {/* Dải số liệu thật — chỉ hiện khi đã tải xong danh sách. */}
+          {stats && (
+            <div className="mt-8 grid grid-cols-3 divide-x divide-gray-200 rounded-xl border border-gray-200 bg-gray-50">
+              <div className="px-4 py-4 text-center sm:px-6 sm:text-left">
+                <p className="text-xl font-semibold tabular-nums tracking-[-0.01em] text-gray-900 sm:text-2xl">{stats.openCount}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">Vị trí đang mở</p>
+              </div>
+              <div className="px-4 py-4 text-center sm:px-6 sm:text-left">
+                <p className="text-xl font-semibold tabular-nums tracking-[-0.01em] text-gray-900 sm:text-2xl">{stats.deptCount}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">Phòng ban đang tuyển</p>
+              </div>
+              <div className="px-4 py-4 text-center sm:px-6 sm:text-left">
+                <p className="truncate text-xl font-semibold tabular-nums tracking-[-0.01em] text-gray-900 sm:text-2xl">
+                  <span className="hidden sm:inline">{stats.nearestDeadline}</span>
+                  <span className="sm:hidden">{stats.nearestDeadline.split('/').slice(0, 2).join('/')}</span>
+                </p>
+                <p className="mt-0.5 text-[13px] text-gray-500">Hạn nộp gần nhất</p>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -299,11 +419,55 @@ export default function PublicJobsPage() {
           </Alert>
         )}
 
+        {/* Lọc theo phòng ban — chip từ phòng ban thật của các tin đang mở. */}
+        {!loading && !loadError && departments.length > 1 && (
+          <div className="mb-5 flex flex-wrap items-center gap-2" role="group" aria-label="Lọc theo phòng ban">
+            <span className="mr-1 text-[13px] font-medium text-gray-500">Phòng ban:</span>
+            <button
+              type="button"
+              onClick={() => setDeptFilter('all')}
+              aria-pressed={deptFilter === 'all'}
+              className={`inline-flex h-9 items-center rounded-full border px-3.5 text-[13px] font-medium transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 ${
+                deptFilter === 'all'
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Tất cả ({jobs.length})
+            </button>
+            {departments.map((d) => (
+              <button
+                key={d.name}
+                type="button"
+                onClick={() => setDeptFilter(d.name)}
+                aria-pressed={deptFilter === d.name}
+                className={`inline-flex h-9 items-center rounded-full border px-3.5 text-[13px] font-medium transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 ${
+                  deptFilter === d.name
+                    ? 'border-brand-600 bg-brand-600 text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {d.name} ({d.count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {!loading && !loadError && (
           <p className="mb-5 text-sm text-gray-500" role="status">
             {visibleJobs.length > 0
               ? `Đang hiển thị ${visibleJobs.length} vị trí đang tuyển`
               : 'Không có vị trí nào khớp với tìm kiếm'}
+            {deptFilter !== 'all' && ` · Phòng ${deptFilter}`}
+            {hasActiveFilter && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="ml-2 font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 rounded"
+              >
+                Xóa bộ lọc
+              </button>
+            )}
           </p>
         )}
 
@@ -317,11 +481,18 @@ export default function PublicJobsPage() {
           <Card>
             <EmptyState
               icon={<BriefcaseIcon className="h-6 w-6" />}
-              title={keyword ? 'Không tìm thấy vị trí phù hợp' : 'Hiện chưa có vị trí nào đang tuyển'}
+              title={hasActiveFilter ? 'Không tìm thấy vị trí phù hợp' : 'Hiện chưa có vị trí nào đang tuyển'}
               description={
-                keyword
-                  ? 'Thử đổi từ khoá ngắn hơn, ví dụ "kế toán", "kỹ thuật", "kinh doanh".'
+                hasActiveFilter
+                  ? 'Thử đổi từ khoá khác hoặc chọn lại phòng ban.'
                   : 'Vui lòng quay lại sau — các vị trí mới sẽ được cập nhật tại trang này.'
+              }
+              action={
+                hasActiveFilter ? (
+                  <Button type="button" variant="secondary" onClick={clearFilters}>
+                    Xóa bộ lọc
+                  </Button>
+                ) : undefined
               }
             />
           </Card>
@@ -342,56 +513,62 @@ export default function PublicJobsPage() {
                       openJob(job);
                     }
                   }}
-                  className="group flex h-full cursor-pointer flex-col gap-3 p-5 transition-colors hover:border-brand-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
+                  className="group flex h-full cursor-pointer flex-col p-5 transition-colors hover:border-brand-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <h2 className="text-base font-semibold leading-snug tracking-[-0.01em] text-gray-900 transition-colors group-hover:text-brand-700">
-                      {job.title}
-                    </h2>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-200">
+                      <BuildingIcon className="h-3.5 w-3.5 text-gray-400" />
+                      {departmentName(job)}
+                    </span>
                     <Badge tone={expired ? 'red' : 'green'} dot className="shrink-0">
                       {expired ? 'Đã hết hạn nộp' : `Hạn nộp: ${formatDate(job.deadline)}`}
                     </Badge>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-gray-500">
-                    <span className="inline-flex items-center gap-1.5">
-                      <BuildingIcon className="h-4 w-4 text-gray-400" />
-                      {departmentName(job)}
-                    </span>
-                    {job.quantity ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <UsersIcon className="h-4 w-4 text-gray-400" />
-                        Tuyển {job.quantity} người
-                      </span>
-                    ) : null}
-                  </div>
+                  <h2 className="mt-3 text-[17px] font-semibold leading-snug tracking-[-0.01em] text-gray-900 transition-colors group-hover:text-brand-700">
+                    {job.title}
+                  </h2>
+                  {job.quantity ? (
+                    <p className="inline-flex items-center gap-1.5 text-[13px] text-gray-500">
+                      <UsersIcon className="h-4 w-4 text-gray-400" />
+                      Tuyển {job.quantity} người
+                    </p>
+                  ) : null}
                   {job.description && (
-                    <p className="line-clamp-3 text-sm leading-relaxed text-gray-500">{job.description}</p>
+                    <p className="line-clamp-2 text-sm leading-relaxed text-gray-500">{job.description}</p>
                   )}
-                  <div className="mt-auto pt-1">
-                    <div className="flex flex-wrap gap-2">
+                  <div className="mt-auto border-t border-gray-100 pt-4">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openJob(job);
+                      }}
+                    >
+                      Xem chi tiết &amp; ứng tuyển
+                    </Button>
+                    <div className="mt-2.5 flex items-center justify-center gap-5">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setCheckJob(job);
                         }}
-                        className="inline-flex h-9 items-center rounded-lg border border-brand-600 bg-white px-3 text-[13px] font-medium text-brand-700 transition hover:bg-brand-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
+                        className="inline-flex items-center gap-1.5 rounded text-[13px] font-medium text-gray-500 transition hover:text-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
                       >
+                        <SparkleIcon className="h-4 w-4 shrink-0 text-brand-600" />
                         AI kiểm tra CV
                       </button>
                       <a
                         href={`/mock-interview?job=${job.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-[13px] font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
+                        className="inline-flex items-center gap-1.5 rounded text-[13px] font-medium text-gray-500 transition hover:text-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/15"
                       >
-                        Luyện phỏng vấn với AI
+                        <MicIcon className="h-4 w-4 shrink-0 text-brand-600" />
+                        Luyện phỏng vấn AI
                       </a>
-                    </div>
-                    <div className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700">
-                      Xem chi tiết & ứng tuyển
-                      <span aria-hidden="true" className="inline-block transition-transform duration-200 group-hover:translate-x-1">
-                        →
-                      </span>
                     </div>
                   </div>
                 </Card>
@@ -402,8 +579,56 @@ export default function PublicJobsPage() {
         )}
       </main>
 
-      <footer className="border-t border-gray-200/80 px-6 py-6 text-center text-xs leading-relaxed text-gray-400">
-        Mọi hồ sơ ứng tuyển được bảo mật và chỉ dùng cho mục đích tuyển dụng của công ty.
+      {/* ------------------------- Quy trình ứng tuyển ------------------------- */}
+      <section className="border-t border-gray-200 bg-gray-50">
+        <div className="mx-auto w-full max-w-[1200px] px-5 py-12 lg:px-8">
+          <h2 className="text-xl font-semibold tracking-[-0.01em] text-gray-900">Quy trình ứng tuyển</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500">
+            Bốn bước đơn giản — bạn có thể kiểm tra CV bằng AI và luyện phỏng vấn thử trước khi
+            nộp hồ sơ chính thức.
+          </p>
+          <ol className="relative mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+            <div
+              aria-hidden="true"
+              className="absolute left-5 right-5 top-5 hidden border-t border-gray-200 lg:block"
+            />
+            {PROCESS_STEPS.map((step, i) => (
+              <li key={step.title} className="relative">
+                <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-[15px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
+                  {i + 1}
+                </span>
+                <h3 className="mt-4 text-[15px] font-semibold text-gray-900">{step.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-gray-500">{step.desc}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* -------------------------------- Footer -------------------------------- */}
+      <footer className="border-t border-gray-200 bg-white">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 px-5 py-8 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <img src="/logo.svg" alt="Web HRM AI" className="h-8 w-8 rounded-lg" />
+              <span className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900">
+                HRM AI <span className="font-normal text-gray-400">· Tuyển dụng</span>
+              </span>
+            </div>
+            <p className="mt-3 max-w-md text-xs leading-relaxed text-gray-400">
+              Mọi hồ sơ ứng tuyển được bảo mật và chỉ dùng cho mục đích tuyển dụng của công ty.
+            </p>
+          </div>
+          <a
+            href="/login"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20"
+          >
+            Đăng nhập nội bộ
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        </div>
       </footer>
 
       {/* --------------------------- Modal AI kiểm tra CV --------------------------- */}
@@ -420,7 +645,37 @@ export default function PublicJobsPage() {
 
       {/* --------------------------- Modal chi tiết + ứng tuyển --------------------------- */}
       {selected && (
-        <Modal open title={selected.title} onClose={closeJob} width="max-w-3xl">
+        <Modal
+          open
+          title={selected.title}
+          onClose={closeJob}
+          width="max-w-5xl"
+          actions={
+            submitted ? undefined : (
+              <>
+                <p className="mr-auto hidden text-left text-xs leading-relaxed text-gray-400 sm:block">
+                  Bằng việc nộp hồ sơ, bạn đồng ý để công ty lưu trữ và xử lý thông tin cho mục
+                  đích tuyển dụng vị trí này.
+                </p>
+                <Button
+                  type="submit"
+                  form="pj-apply-form"
+                  variant="primary"
+                  size="md"
+                  loading={submitting}
+                  disabled={submitting || selectedExpired}
+                  className="w-full sm:w-auto"
+                >
+                  {selectedExpired
+                    ? 'Vị trí đã hết hạn nộp hồ sơ'
+                    : submitting
+                      ? 'Đang gửi hồ sơ…'
+                      : 'Nộp hồ sơ ứng tuyển'}
+                </Button>
+              </>
+            )
+          }
+        >
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-500">
               <BuildingIcon className="h-4 w-4 text-gray-400" />
@@ -441,179 +696,151 @@ export default function PublicJobsPage() {
             <p className="mt-4 text-sm text-gray-400">Đang tải mô tả đầy đủ…</p>
           )}
 
-          {selected.description && (
-            <>
-              <h3 className="mb-2 mt-6 text-[15px] font-semibold text-gray-900">Mô tả công việc</h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 [overflow-wrap:anywhere]">
-                {selected.description}
-              </p>
-            </>
-          )}
-          {selected.requirements && (
-            <>
-              <h3 className="mb-2 mt-6 text-[15px] font-semibold text-gray-900">Yêu cầu ứng viên</h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 [overflow-wrap:anywhere]">
-                {selected.requirements}
-              </p>
-            </>
-          )}
-
           {submitted ? (
-            <Alert tone="success" className="mt-8 px-6 py-8 text-center">
-              <div
-                aria-hidden="true"
-                className="mx-auto mb-4 flex h-16 w-16 animate-scale-in items-center justify-center rounded-full bg-emerald-500 text-white"
-              >
-                <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none">
-                  <path d="m4.5 12.5 5 5 10-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-emerald-900">Nộp hồ sơ thành công!</h3>
-              <p className="mx-auto mb-5 mt-2 max-w-md text-sm font-normal leading-relaxed text-emerald-800/80">
-                Cảm ơn bạn đã ứng tuyển vị trí <strong>{selected.title}</strong>. Đội ngũ HR sẽ
-                xem xét hồ sơ và liên hệ qua email/số điện thoại bạn đã cung cấp nếu phù hợp.
-              </p>
-              <Button type="button" variant="secondary" onClick={closeJob}>
-                Xem các vị trí khác
-              </Button>
-            </Alert>
+            <div className="mt-6">
+              <JobDescription job={selected} />
+              <Alert tone="success" className="mt-8 px-6 py-8 text-center">
+                <div
+                  aria-hidden="true"
+                  className="mx-auto mb-4 flex h-16 w-16 animate-scale-in items-center justify-center rounded-full bg-emerald-500 text-white"
+                >
+                  <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none">
+                    <path d="m4.5 12.5 5 5 10-11" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-emerald-900">Nộp hồ sơ thành công!</h3>
+                <p className="mx-auto mb-5 mt-2 max-w-md text-sm font-normal leading-relaxed text-emerald-800/80">
+                  Cảm ơn bạn đã ứng tuyển vị trí <strong>{selected.title}</strong>. Đội ngũ HR sẽ
+                  xem xét hồ sơ và liên hệ qua email/số điện thoại bạn đã cung cấp nếu phù hợp.
+                </p>
+                <Button type="button" variant="secondary" onClick={closeJob}>
+                  Xem các vị trí khác
+                </Button>
+              </Alert>
+            </div>
           ) : (
-            <Card className="mt-8 bg-gray-50 p-5 shadow-none sm:p-6">
-              <form onSubmit={handleSubmit} noValidate>
-                <h3 className="mb-5 text-base font-semibold text-gray-900">Ứng tuyển vị trí này</h3>
+            <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div>
+                <JobDescription job={selected} />
+              </div>
+              <Card className="h-fit bg-gray-50 p-5 shadow-none sm:p-6 lg:sticky lg:top-0">
+                <form id="pj-apply-form" onSubmit={handleSubmit} noValidate>
+                  <h3 className="mb-5 text-base font-semibold text-gray-900">Ứng tuyển vị trí này</h3>
 
-                {submitError && (
-                  <Alert tone="error" className="mb-4">
-                    {submitError}
-                  </Alert>
-                )}
+                  {submitError && (
+                    <Alert tone="error" className="mb-4">
+                      {submitError}
+                    </Alert>
+                  )}
 
-                <div className="space-y-4">
-                  <FormField
-                    label={<>Họ và tên <span className="text-rose-500">*</span></>}
-                    error={fieldErrors.fullName}
-                  >
-                    <Input
-                      id="pj-fullname"
-                      type="text"
-                      autoComplete="name"
-                      placeholder="VD: Nguyễn Văn A"
-                      value={form.fullName}
-                      onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-                      className={fieldErrors.fullName ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
-                    />
-                  </FormField>
-
-                  <FormField
-                    label={<>Email liên hệ <span className="text-rose-500">*</span></>}
-                    error={fieldErrors.email}
-                  >
-                    <Input
-                      id="pj-email"
-                      type="email"
-                      autoComplete="email"
-                      placeholder="VD: ten.ban@email.com"
-                      value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      className={fieldErrors.email ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
-                    />
-                  </FormField>
-
-                  <FormField
-                    label={<>Số điện thoại <span className="text-rose-500">*</span></>}
-                    error={fieldErrors.phone}
-                  >
-                    <Input
-                      id="pj-phone"
-                      type="tel"
-                      autoComplete="tel"
-                      placeholder="VD: 0901 234 567"
-                      value={form.phone}
-                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                      className={fieldErrors.phone ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
-                    />
-                  </FormField>
-
-                  <FormField
-                    label={<>File CV (PDF, tối đa 5 MB) <span className="text-rose-500">*</span></>}
-                    error={fieldErrors.cv}
-                    hint={
-                      cvFile && !cvInvalid
-                        ? `Đã chọn: ${cvFile.name} (${(cvFile.size / 1024).toFixed(0)} KB)`
-                        : undefined
-                    }
-                  >
-                    <label
-                      htmlFor="pj-cv"
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOver(true);
-                      }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={handleFileDrop}
-                      className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition duration-200 ${
-                        cvInvalid
-                          ? 'border-rose-300 bg-rose-50/60 hover:border-rose-400'
-                          : dragOver
-                            ? 'border-brand-500 bg-brand-50'
-                            : 'border-gray-300 bg-white hover:border-brand-400 hover:bg-brand-50/60'
-                      }`}
+                  <div className="space-y-4">
+                    <FormField
+                      label={<>Họ và tên <span className="text-rose-500">*</span></>}
+                      error={fieldErrors.fullName}
                     >
-                      <span
-                        aria-hidden="true"
-                        className={`flex h-11 w-11 items-center justify-center rounded-full ring-1 ring-inset transition ${
+                      <Input
+                        id="pj-fullname"
+                        type="text"
+                        autoComplete="name"
+                        placeholder="VD: Nguyễn Văn A"
+                        value={form.fullName}
+                        onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                        className={fieldErrors.fullName ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
+                      />
+                    </FormField>
+
+                    <FormField
+                      label={<>Email liên hệ <span className="text-rose-500">*</span></>}
+                      error={fieldErrors.email}
+                    >
+                      <Input
+                        id="pj-email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="VD: ten.ban@email.com"
+                        value={form.email}
+                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                        className={fieldErrors.email ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
+                      />
+                    </FormField>
+
+                    <FormField
+                      label={<>Số điện thoại <span className="text-rose-500">*</span></>}
+                      error={fieldErrors.phone}
+                    >
+                      <Input
+                        id="pj-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        placeholder="VD: 0901 234 567"
+                        value={form.phone}
+                        onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                        className={fieldErrors.phone ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15' : ''}
+                      />
+                    </FormField>
+
+                    <FormField
+                      label={<>File CV (PDF, tối đa 5 MB) <span className="text-rose-500">*</span></>}
+                      error={fieldErrors.cv}
+                      hint={
+                        cvFile && !cvInvalid
+                          ? `Đã chọn: ${cvFile.name} (${(cvFile.size / 1024).toFixed(0)} KB)`
+                          : undefined
+                      }
+                    >
+                      <label
+                        htmlFor="pj-cv"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOver(true);
+                        }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={handleFileDrop}
+                        className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition duration-200 ${
                           cvInvalid
-                            ? 'bg-rose-100 text-rose-500 ring-rose-200'
-                            : 'bg-brand-50 text-brand-600 ring-brand-100'
+                            ? 'border-rose-300 bg-rose-50/60 hover:border-rose-400'
+                            : dragOver
+                              ? 'border-brand-500 bg-brand-50'
+                              : 'border-gray-300 bg-white hover:border-brand-400 hover:bg-brand-50/60'
                         }`}
                       >
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-                          <path
-                            d="M12 16V5m0 0 4 4m-4-4L8 9M4 19h16"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            transform="translate(0 -1)"
-                          />
-                        </svg>
-                      </span>
-                      <span className="max-w-full truncate text-sm font-semibold text-gray-700">
-                        {cvFile ? cvFile.name : 'Kéo thả file CV vào đây hoặc bấm để chọn file'}
-                      </span>
-                      <span className="text-xs text-gray-400">Chỉ nhận file PDF, dung lượng tối đa 5 MB</span>
-                    </label>
-                    <input
-                      id="pj-cv"
-                      ref={fileInputRef}
-                      className="sr-only"
-                      type="file"
-                      accept=".pdf,application/pdf"
-                      onChange={handleFileChange}
-                    />
-                  </FormField>
-                </div>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  loading={submitting}
-                  disabled={submitting || selectedExpired}
-                  className="mt-6 w-full"
-                >
-                  {selectedExpired
-                    ? 'Vị trí đã hết hạn nộp hồ sơ'
-                    : submitting
-                      ? 'Đang gửi hồ sơ…'
-                      : 'Nộp hồ sơ ứng tuyển'}
-                </Button>
-                <p className="mt-3 text-center text-xs leading-relaxed text-gray-400">
-                  Bằng việc nộp hồ sơ, bạn đồng ý để công ty lưu trữ và xử lý thông tin cho mục
-                  đích tuyển dụng vị trí này.
-                </p>
-              </form>
-            </Card>
+                        <span
+                          aria-hidden="true"
+                          className={`flex h-11 w-11 items-center justify-center rounded-full ring-1 ring-inset transition ${
+                            cvInvalid
+                              ? 'bg-rose-100 text-rose-500 ring-rose-200'
+                              : 'bg-brand-50 text-brand-600 ring-brand-100'
+                          }`}
+                        >
+                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                            <path
+                              d="M12 16V5m0 0 4 4m-4-4L8 9M4 19h16"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              transform="translate(0 -1)"
+                            />
+                          </svg>
+                        </span>
+                        <span className="max-w-full truncate text-sm font-semibold text-gray-700">
+                          {cvFile ? cvFile.name : 'Kéo thả file CV vào đây hoặc bấm để chọn file'}
+                        </span>
+                        <span className="text-xs text-gray-400">Chỉ nhận file PDF, dung lượng tối đa 5 MB</span>
+                      </label>
+                      <input
+                        id="pj-cv"
+                        ref={fileInputRef}
+                        className="sr-only"
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        onChange={handleFileChange}
+                      />
+                    </FormField>
+                  </div>
+                </form>
+              </Card>
+            </div>
           )}
         </Modal>
       )}
