@@ -823,7 +823,7 @@ export default function PublicJobsPage() {
                             />
                           </svg>
                         </span>
-                        <span className="max-w-full truncate text-sm font-semibold text-gray-700">
+                        <span className="max-w-full text-sm font-semibold leading-snug text-gray-700 [overflow-wrap:anywhere]">
                           {cvFile ? cvFile.name : 'Kéo thả file CV vào đây hoặc bấm để chọn file'}
                         </span>
                         <span className="text-xs text-gray-400">Chỉ nhận file PDF, dung lượng tối đa 5 MB</span>
