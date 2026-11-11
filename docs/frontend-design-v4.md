@@ -1,5 +1,7 @@
 # Hợp đồng thiết kế Frontend v4 — bám template thật (shadcn-admin × Untitled UI × pattern HR BambooHR)
 
+> Cập nhật 2026-11-11 (nhánh `astryx-shell` → main, commit `e363d9c` + `c2d1e4c`): khung chính (sidebar/topbar/⌘K) giờ render bằng **Astryx** (`AppShell` variant `section`, `SideNav`, `TopNav`, `CommandPalette`, theme `neutral` khóa light) trên **React 19.3.1**; chỉ file `layouts/AppLayout.jsx` đổi, mọi logic (menu theo role, prefetch, chuông, thu gọn) giữ nguyên. Mọi quy tắc hình ảnh bên dưới (phẳng, trắng, Inter, brand #274FEA, không gradient) vẫn giữ nguyên — Astryx được ghi đè token về đúng các giá trị này (`styles/astryx.css`). Giới hạn đã biết: registry icon của theme neutral chỉ có 29 tên nên 19/30 mục menu dùng icon gần nghĩa; palette ⌘K cần ↓/click trước khi Enter.
+
 > Lý do làm v4: người dùng nhận xét v3 "nhìn AI quá" (gradient navy, hero band trang trí, thẻ bo tròn đều, hiệu ứng trang trí). v4 bỏ hẳn ngôn ngữ tự chế, **bám sát các template do người thiết kế** dưới đây. Tài liệu này là HỢP ĐỒNG bắt buộc cho mọi worker v4 — lệch hợp đồng là sai.
 >
 > Mẫu tham chiếu (đã tra cứu 2026-10-21):
