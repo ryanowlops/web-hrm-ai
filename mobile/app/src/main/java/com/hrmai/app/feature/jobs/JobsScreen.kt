@@ -1,10 +1,13 @@
 package com.hrmai.app.feature.jobs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,22 +20,34 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hrmai.app.core.di.AppContainer
@@ -42,14 +57,28 @@ import com.hrmai.app.core.ui.HrmCard
 import com.hrmai.app.core.ui.SectionHeader
 import com.hrmai.app.core.ui.SkeletonBlock
 import com.hrmai.app.core.ui.StatusChip
+import com.hrmai.app.core.ui.theme.BorderGray
 import com.hrmai.app.core.ui.theme.BrandBlueDark
 import com.hrmai.app.core.ui.theme.BrandBlueSoft
 import com.hrmai.app.core.ui.theme.CanvasGray
 import com.hrmai.app.core.ui.theme.InkMuted
 import com.hrmai.app.core.ui.theme.SuccessGreen
 import com.hrmai.app.core.util.Format
+import java.time.LocalDate
 
 private val OpenBadgeBg = Color(0xFFECFDF3)
+private const val UnknownDepartment = "Chưa rõ phòng ban"
+
+/** Quy trình ứng tuyển thật của hệ thống — cùng nội dung với trang web /jobs. */
+private val ProcessSteps = listOf(
+    "Nộp CV" to "Điền thông tin liên hệ và đính kèm CV PDF, tối đa 5 MB.",
+    "AI kiểm tra CV" to "Xem mức phù hợp của CV với vị trí trước khi nộp hồ sơ.",
+    "Luyện phỏng vấn với AI" to "Tập trả lời phỏng vấn thử với AI, không cần đặt lịch.",
+    "HR xem xét và liên hệ" to "Đội ngũ HR xem xét hồ sơ và liên hệ qua email hoặc điện thoại nếu phù hợp.",
+)
+
+private fun departmentNameOf(job: JobPostingDto): String =
+    job.departmentName?.takeIf { it.isNotBlank() } ?: UnknownDepartment
 
 @Composable
 fun JobsRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
@@ -57,6 +86,40 @@ fun JobsRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
         factory = JobsViewModel.Factory(container.api(JobsApi::class.java))
     )
     val state by vm.state.collectAsState()
+
+    // Lọc client-side, giữ trong composable — không chạm ViewModel/API.
+    var keyword by remember { mutableStateOf("") }
+    var selectedDept by remember { mutableStateOf<String?>(null) }
+
+    // Phòng ban đang tuyển (tên + số tin) — tính từ dữ liệu thật.
+    val departments = remember(state.jobs) {
+        state.jobs.groupingBy { departmentNameOf(it) }.eachCount().toList()
+            .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+    }
+    // Dải số liệu — chỉ dùng dữ liệu đã tải về, không bịa số.
+    // Hạn nộp so sánh dạng chuỗi "yyyy-MM-dd" với ngày hôm nay.
+    val stats = remember(state.jobs) {
+        if (state.jobs.isEmpty()) {
+            null
+        } else {
+            val today = LocalDate.now().toString()
+            val nearest = state.jobs.mapNotNull { it.deadline }
+                .filter { it >= today }.minOrNull()
+            Triple(state.jobs.size, departments.size, nearest)
+        }
+    }
+    val filteredJobs = remember(state.jobs, keyword, selectedDept) {
+        val kw = keyword.trim().lowercase()
+        state.jobs.filter { job ->
+            val deptOk = selectedDept == null || departmentNameOf(job) == selectedDept
+            val kwOk = kw.isEmpty() ||
+                job.title.lowercase().contains(kw) ||
+                (job.departmentName?.lowercase()?.contains(kw) == true) ||
+                (job.description?.lowercase()?.contains(kw) == true)
+            deptOk && kwOk
+        }
+    }
+    val filtersActive = keyword.isNotBlank() || selectedDept != null
 
     Box(modifier = Modifier.fillMaxSize().background(CanvasGray)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -92,12 +155,192 @@ fun JobsRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(state.jobs, key = { it.id }) { job ->
-                        JobCard(job = job, onClick = { onOpenJob(job.id) })
+                    stats?.let { (openCount, deptCount, nearest) ->
+                        item {
+                            JobsStatsCard(
+                                openCount = openCount,
+                                deptCount = deptCount,
+                                nearestDeadline = nearest,
+                            )
+                        }
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = keyword,
+                            onValueChange = { keyword = it },
+                            placeholder = { Text("Tìm theo tên vị trí, phòng ban…") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Search, contentDescription = "Tìm kiếm", tint = InkMuted)
+                            },
+                            trailingIcon = if (keyword.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { keyword = "" }) {
+                                        Icon(Icons.Filled.Close, contentDescription = "Xóa tìm kiếm", tint = InkMuted)
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (departments.size >= 2) {
+                        item {
+                            DepartmentChipsRow(
+                                departments = departments,
+                                totalCount = state.jobs.size,
+                                selected = selectedDept,
+                                onSelect = { selectedDept = it },
+                            )
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = if (filteredJobs.isNotEmpty()) {
+                                    "Đang hiển thị ${filteredJobs.size} vị trí đang tuyển"
+                                } else {
+                                    "Không có vị trí nào khớp với tìm kiếm"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = InkMuted,
+                            )
+                            if (filtersActive) {
+                                TextButton(
+                                    onClick = { keyword = ""; selectedDept = null },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                ) {
+                                    Text("Xóa bộ lọc")
+                                }
+                            }
+                        }
+                    }
+                    if (filteredJobs.isEmpty()) {
+                        item {
+                            EmptyState(
+                                message = "Không tìm thấy vị trí phù hợp. Thử đổi từ khóa ngắn hơn hoặc chọn phòng ban khác.",
+                            )
+                        }
+                    } else {
+                        items(filteredJobs, key = { it.id }) { job ->
+                            JobCard(job = job, onClick = { onOpenJob(job.id) })
+                        }
+                        item {
+                            Spacer(Modifier.height(4.dp))
+                            ApplyProcessSection()
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/** Dải số liệu thật: số vị trí, số phòng ban, hạn nộp gần nhất (dạng ngắn dd/MM). */
+@Composable
+private fun JobsStatsCard(openCount: Int, deptCount: Int, nearestDeadline: String?) {
+    HrmCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            JobsStatCell(
+                value = openCount.toString(),
+                label = "Vị trí đang mở",
+                modifier = Modifier.weight(1f),
+            )
+            Box(modifier = Modifier.width(1.dp).height(36.dp).background(BorderGray))
+            JobsStatCell(
+                value = deptCount.toString(),
+                label = "Phòng ban đang tuyển",
+                modifier = Modifier.weight(1f),
+            )
+            Box(modifier = Modifier.width(1.dp).height(36.dp).background(BorderGray))
+            JobsStatCell(
+                value = nearestDeadline?.let {
+                    Format.date(it).split("/").take(2).joinToString("/")
+                } ?: "—",
+                label = "Hạn nộp gần nhất",
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun JobsStatCell(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = InkMuted,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun DepartmentChipsRow(
+    departments: List<Pair<String, Int>>,
+    totalCount: Int,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DeptFilterChip(
+            label = "Tất cả ($totalCount)",
+            selected = selected == null,
+            onClick = { onSelect(null) },
+        )
+        departments.forEach { (name, count) ->
+            DeptFilterChip(
+                label = "$name ($count)",
+                selected = selected == name,
+                onClick = { onSelect(name) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeptFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val borderModifier = if (selected) {
+        Modifier
+    } else {
+        Modifier.border(1.dp, BorderGray, RoundedCornerShape(50))
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) BrandBlueDark else Color.White)
+            .then(borderModifier)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Color.White else InkMuted,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 
@@ -107,45 +350,36 @@ private fun JobCard(job: JobPostingDto, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = job.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                StatusChip(text = "Đang tuyển", bg = OpenBadgeBg, fg = SuccessGreen)
-            }
-            if (!job.departmentName.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
+                if (!job.departmentName.isNullOrBlank()) {
+                    StatusChip(
+                        text = job.departmentName,
+                        bg = BrandBlueSoft,
+                        fg = BrandBlueDark,
+                    )
+                }
                 StatusChip(
-                    text = job.departmentName,
-                    bg = BrandBlueSoft,
-                    fg = BrandBlueDark,
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.CalendarToday,
-                    contentDescription = null,
-                    tint = InkMuted,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
                     text = job.deadline?.let { "Hạn nộp: ${Format.date(it)}" }
                         ?: "Hạn nộp: liên hệ HR",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = InkMuted,
+                    bg = OpenBadgeBg,
+                    fg = SuccessGreen,
                 )
-                if (job.quantity != null) {
-                    Spacer(Modifier.width(16.dp))
+                StatusChip(text = "Đang tuyển", bg = OpenBadgeBg, fg = SuccessGreen)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = job.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (job.quantity != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Filled.Group,
                         contentDescription = null,
@@ -158,6 +392,90 @@ private fun JobCard(job: JobPostingDto, onClick: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = InkMuted,
                     )
+                }
+            }
+            if (!job.description.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = job.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = InkMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Xem chi tiết",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BrandBlueDark,
+                )
+                Icon(
+                    Icons.Filled.ChevronRight,
+                    contentDescription = null,
+                    tint = BrandBlueDark,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Quy trình ứng tuyển 4 bước, dạng dọc gọn cho điện thoại. */
+@Composable
+private fun ApplyProcessSection() {
+    Column {
+        SectionHeader(title = "Quy trình ứng tuyển")
+        Spacer(Modifier.height(8.dp))
+        HrmCard(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                ProcessSteps.forEachIndexed { index, (title, desc) ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(BrandBlueSoft),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "${index + 1}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BrandBlueDark,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = desc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = InkMuted,
+                            )
+                        }
+                    }
+                    if (index < ProcessSteps.lastIndex) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 13.dp)
+                                .width(2.dp)
+                                .height(12.dp)
+                                .background(BorderGray),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                 }
             }
         }
@@ -224,15 +542,19 @@ fun JobDetailRoute(container: AppContainer, jobId: Int, onBack: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(12.dp))
-                        JobMetaLine(
-                            label = "Hạn nộp hồ sơ",
-                            value = job.deadline?.let { Format.date(it) } ?: "Liên hệ HR",
-                        )
-                        if (job.quantity != null) {
-                            JobMetaLine(label = "Số lượng tuyển", value = "${job.quantity} người")
-                        }
-                        if (job.createdAt != null) {
-                            JobMetaLine(label = "Ngày đăng", value = Format.dateTime(job.createdAt))
+                        HrmCard(modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                JobMetaLine(
+                                    label = "Hạn nộp hồ sơ",
+                                    value = job.deadline?.let { Format.date(it) } ?: "Liên hệ HR",
+                                )
+                                if (job.quantity != null) {
+                                    JobMetaLine(label = "Số lượng tuyển", value = "${job.quantity} người")
+                                }
+                                if (job.createdAt != null) {
+                                    JobMetaLine(label = "Ngày đăng", value = Format.dateTime(job.createdAt))
+                                }
+                            }
                         }
                         if (!job.description.isNullOrBlank()) {
                             Spacer(Modifier.height(20.dp))
