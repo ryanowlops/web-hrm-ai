@@ -27,6 +27,10 @@ import '@fontsource-variable/inter';
 // (HRM chỉ dùng light; dark chỉ có trang /display TV riêng).
 import './styles/astryx.css';
 
+// Icon riêng hrm:* — đăng ký vào registry Astryx trước khi app render
+// (xem src/theme/hrmIcons.jsx). Chạy ở module-level, một lần duy nhất.
+import './theme/hrmIcons.jsx';
+
 // Design system v4: Tailwind → tokens → base → animations → motion
 import './styles/tailwind.css';
 import './styles/tokens.css';

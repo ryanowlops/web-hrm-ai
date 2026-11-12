@@ -98,95 +98,98 @@ const logoutIcon = (
   />
 );
 
-// Bảng ánh xạ icon menu sang tên ngữ nghĩa của theme neutral. Registry
-// chỉ có 29 tên chung (không có icon người/phòng ban/tiền/túi quà...)
-// nên nhiều mục dùng tên gần nghĩa nhất — xem chi tiết trong báo cáo
-// bàn giao, không tự bịa thêm tên ngoài registry.
+// Bảng ánh xạ icon menu: 4 mục giữ tên built-in của theme neutral
+// (Chấm công=clock, Nghỉ phép=calendar, Phỏng vấn thử AI=microphone,
+// Nguy cơ nghỉ việc=warning); 26 mục còn lại dùng icon riêng hrm:*
+// đăng ký trong src/theme/hrmIcons.jsx (registerIcons) — registry
+// neutral chỉ có 29 tên chung nên không đủ icon người/phòng ban/tiền...
+// Thêm mục mới: dùng tên hrm:* đã đăng ký, hoặc thêm key mới vào
+// hrmIcons.jsx trước rồi mới dùng ở đây.
 const NAV_ITEMS = [
-  { to: '/', label: 'Tổng quan', icon: 'viewColumns', end: true },
+  { to: '/', label: 'Tổng quan', icon: 'hrm:dashboard', end: true },
   {
     to: '/employees',
     label: 'Nhân viên',
-    icon: 'menu',
+    icon: 'hrm:users',
     roles: ['admin', 'hr', 'manager'],
   },
   {
     to: '/departments',
     label: 'Phòng ban',
-    icon: 'funnel',
+    icon: 'hrm:building',
     roles: ['admin', 'hr', 'manager'],
   },
   { to: '/attendance', label: 'Chấm công', icon: 'clock' },
   {
     to: '/checkin-qr',
     label: 'Chấm công QR',
-    icon: 'check',
+    icon: 'hrm:qrcode',
     roles: ['admin', 'hr'],
   },
   { to: '/leave', label: 'Nghỉ phép', icon: 'calendar' },
-  { to: '/payroll', label: 'Bảng lương', icon: 'copy' },
-  { to: '/performance', label: 'Hiệu suất', icon: 'arrowUp' },
+  { to: '/payroll', label: 'Bảng lương', icon: 'hrm:payroll' },
+  { to: '/performance', label: 'Hiệu suất', icon: 'hrm:performance' },
   // /onboarding giữ cho mọi role: trang có màn "Hội nhập của tôi" — employee
   // tự xem và cập nhật checklist hội nhập của chính mình (tự phục vụ).
-  { to: '/onboarding', label: 'Hội nhập', icon: 'checkDouble' },
-  { to: '/shifts', label: 'Ca làm', icon: 'calendar' },
-  { to: '/documents', label: 'Hồ sơ & giấy tờ', icon: 'upload' },
-  { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: 'chevronDown', roles: ['admin', 'hr', 'manager'] },
-  { to: '/team-calendar', label: 'Lịch team', icon: 'calendar', roles: ['admin', 'hr', 'manager'] },
+  { to: '/onboarding', label: 'Hội nhập', icon: 'hrm:onboarding' },
+  { to: '/shifts', label: 'Ca làm', icon: 'hrm:shifts' },
+  { to: '/documents', label: 'Hồ sơ & giấy tờ', icon: 'hrm:documents' },
+  { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: 'hrm:orgchart', roles: ['admin', 'hr', 'manager'] },
+  { to: '/team-calendar', label: 'Lịch team', icon: 'hrm:teamcalendar', roles: ['admin', 'hr', 'manager'] },
   // /skills giữ cho mọi role: tab mặc định "Kỹ năng của tôi" — employee tự
   // cập nhật mức kỹ năng của chính mình; tab Quản trị đã tự ẩn trong trang.
-  { to: '/skills', label: 'Bản đồ năng lực', icon: 'viewColumns' },
+  { to: '/skills', label: 'Bản đồ năng lực', icon: 'hrm:skills' },
   { to: '/mock-interview', label: 'Phỏng vấn thử AI', icon: 'microphone' },
   {
     to: '/offboarding',
     label: 'Nghỉ việc',
-    icon: 'stop',
+    icon: 'hrm:offboarding',
     roles: ['admin', 'hr'],
   },
-  { to: '/assets', label: 'Tài sản', icon: 'moreHorizontal' },
-  { to: '/training', label: 'Đào tạo', icon: 'check' },
+  { to: '/assets', label: 'Tài sản', icon: 'hrm:assets' },
+  { to: '/training', label: 'Đào tạo', icon: 'hrm:training' },
   {
     to: '/recruitment',
     label: 'Tuyển dụng',
-    icon: 'search',
+    icon: 'hrm:recruitment',
     roles: ['admin', 'hr', 'manager'],
   },
-  { to: '/chatbot', label: 'Chatbot HR', icon: 'info' },
+  { to: '/chatbot', label: 'Chatbot HR', icon: 'hrm:chatbot' },
   {
     to: '/attrition-risk',
     label: 'Nguy cơ nghỉ việc',
     icon: 'warning',
     roles: ['admin', 'hr', 'manager'],
   },
-  { to: '/announcements', label: 'Thông báo', icon: 'info' },
-  { to: '/kudos', label: 'Vinh danh', icon: 'success' },
-  { to: '/surveys', label: 'Khảo sát', icon: 'funnel' },
-  { to: '/feed', label: 'Bảng tin', icon: 'menu' },
+  { to: '/announcements', label: 'Thông báo', icon: 'hrm:announcements' },
+  { to: '/kudos', label: 'Vinh danh', icon: 'hrm:kudos' },
+  { to: '/surveys', label: 'Khảo sát', icon: 'hrm:surveys' },
+  { to: '/feed', label: 'Bảng tin', icon: 'hrm:feed' },
   {
     to: '/my-journey',
     label: 'Hành trình của tôi',
-    icon: 'chevronRight',
+    icon: 'hrm:journey',
     needsEmployee: true,
   },
   {
     to: '/rewards',
     label: 'Cửa hàng quà',
-    icon: 'success',
+    icon: 'hrm:rewards',
     needsEmployee: true,
   },
   {
     to: '/reports',
     label: 'Báo cáo',
-    icon: 'arrowsUpDown',
+    icon: 'hrm:reports',
     roles: ['admin', 'hr', 'manager'],
   },
   {
     to: '/briefing',
     label: 'Báo cáo điều hành',
-    icon: 'arrowsUpDown',
+    icon: 'hrm:briefing',
     roles: ['admin', 'hr'],
   },
-  { to: '/admin', label: 'Quản trị', icon: 'wrench', roles: ['admin'] },
+  { to: '/admin', label: 'Quản trị', icon: 'hrm:admin', roles: ['admin'] },
 ];
 
 // Nhóm menu hiển thị trong sidebar. Thứ tự NHÓM được sắp xếp lại theo
