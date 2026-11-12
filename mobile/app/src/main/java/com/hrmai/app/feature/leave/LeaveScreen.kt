@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,12 +39,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -67,6 +73,7 @@ import com.hrmai.app.core.ui.LoadingState
 import com.hrmai.app.core.ui.SectionHeader
 import com.hrmai.app.core.ui.SkeletonBlock
 import com.hrmai.app.core.ui.StatusChip
+import com.hrmai.app.core.ui.listItemEnter
 import com.hrmai.app.core.ui.theme.BorderGray
 import com.hrmai.app.core.ui.theme.BrandBlue
 import com.hrmai.app.core.ui.theme.BrandBlueDark
@@ -310,11 +317,12 @@ private fun MyRequestsTab(
                     item { EmptyState("Bạn chưa có đơn nghỉ nào. Tạo đơn ở tab \"Tạo đơn\" nhé.") }
                 }
                 else -> {
-                    items(state.myRequests, key = { it.id ?: 0 }) { request ->
+                    itemsIndexed(state.myRequests, key = { _, request -> request.id ?: 0 }) { index, request ->
                         MyRequestCard(
                             request = request,
                             cancelling = state.actingId == request.id,
                             onCancel = { onCancel(request) },
+                            modifier = Modifier.listItemEnter(index),
                         )
                     }
                 }
@@ -395,8 +403,9 @@ private fun MyRequestCard(
     request: LeaveRequestDto,
     cancelling: Boolean,
     onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    HrmCard(modifier = Modifier.fillMaxWidth()) {
+    HrmCard(modifier = modifier.fillMaxWidth()) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -480,6 +489,7 @@ private fun DecisionNotes(request: LeaveRequestDto) {
 private fun CreateLeaveTab(state: LeaveUiState, vm: LeaveViewModel) {
     // null = đóng; true = chọn ngày bắt đầu; false = chọn ngày kết thúc.
     var pickingFrom by remember { mutableStateOf<Boolean?>(null) }
+    val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = Modifier
@@ -557,7 +567,10 @@ private fun CreateLeaveTab(state: LeaveUiState, vm: LeaveViewModel) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(
-                    onClick = { vm.submitCreate() },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        vm.submitCreate()
+                    },
                     enabled = !state.submitting,
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
@@ -689,11 +702,12 @@ private fun ApprovalTab(
                     item { EmptyState("Không có đơn nào đang chờ bạn duyệt. 🎉") }
                 }
                 else -> {
-                    items(state.queue, key = { it.id ?: 0 }) { request ->
+                    itemsIndexed(state.queue, key = { _, request -> request.id ?: 0 }) { index, request ->
                         ApprovalCard(
                             request = request,
                             acting = state.actingId == request.id,
                             onDecide = onDecide,
+                            modifier = Modifier.listItemEnter(index),
                         )
                     }
                 }
@@ -702,13 +716,67 @@ private fun ApprovalTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ApprovalCard(
     request: LeaveRequestDto,
     acting: Boolean,
     onDecide: (LeaveRequestDto, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    HrmCard(modifier = Modifier.fillMaxWidth()) {
+    // Vuốt để xử lý nhanh: phải = duyệt, trái = từ chối. Vuốt chỉ MỞ dialog
+    // xác nhận (giống bấm nút) — từ chối bắt buộc có ghi chú nên không quyết
+    // ngay; trả false để thẻ trượt về chỗ cũ sau khi mở dialog.
+    val haptic = LocalHapticFeedback.current
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onDecide(request, true)
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onDecide(request, false)
+                    false
+                }
+                SwipeToDismissBoxValue.Settled -> false
+            }
+        },
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier,
+        enableDismissFromStartToEnd = !acting,
+        enableDismissFromEndToStart = !acting,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val backgroundColor = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> BrandBlue
+                SwipeToDismissBoxValue.EndToStart -> DangerRed
+                SwipeToDismissBoxValue.Settled -> Color.Transparent
+            }
+            val label = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> "Duyệt"
+                SwipeToDismissBoxValue.EndToStart -> "Từ chối"
+                SwipeToDismissBoxValue.Settled -> ""
+            }
+            Box(
+                modifier = Modifier.fillMaxSize().background(backgroundColor).padding(horizontal = 20.dp),
+                contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                    Alignment.CenterStart
+                } else {
+                    Alignment.CenterEnd
+                },
+            ) {
+                if (label.isNotEmpty()) {
+                    Text(label, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+    ) {
+        HrmCard(modifier = Modifier.fillMaxWidth()) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 InitialAvatar(request.employeeName, 42)
@@ -749,7 +817,10 @@ private fun ApprovalCard(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = { onDecide(request, true) },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onDecide(request, true)
+                    },
                     enabled = !acting,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
@@ -765,7 +836,10 @@ private fun ApprovalCard(
                     }
                 }
                 OutlinedButton(
-                    onClick = { onDecide(request, false) },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onDecide(request, false)
+                    },
                     enabled = !acting,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed),
@@ -774,6 +848,7 @@ private fun ApprovalCard(
                 }
             }
         }
+    }
     }
 }
 

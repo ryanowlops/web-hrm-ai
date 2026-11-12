@@ -4,7 +4,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
@@ -63,6 +62,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hrmai.app.core.di.AppContainer
 import com.hrmai.app.core.ui.EmptyState
 import com.hrmai.app.core.ui.HrmCard
+import com.hrmai.app.core.ui.listItemEnter
+import com.hrmai.app.core.ui.pressable
 import com.hrmai.app.core.ui.InitialAvatar
 import com.hrmai.app.core.ui.SectionHeader
 import com.hrmai.app.core.ui.SkeletonBlock
@@ -167,10 +168,11 @@ private fun HomeScreen(
                     if (block.value.isEmpty()) {
                         item { EmptyState("Chưa có thông báo nào.") }
                     } else {
-                        items(block.value, key = { it.id ?: it.hashCode() }) { ann ->
+                        itemsIndexed(block.value, key = { _, ann -> ann.id ?: ann.hashCode() }) { index, ann ->
                             AnnouncementRow(
                                 announcement = ann,
                                 onClick = { onOpenRoute(Routes.ANNOUNCEMENTS) },
+                                modifier = Modifier.listItemEnter(index),
                             )
                         }
                     }
@@ -194,8 +196,11 @@ private fun HomeScreen(
                     if (block.value.isEmpty()) {
                         item { EmptyState("Chưa có hoạt động nào gần đây.") }
                     } else {
-                        items(block.value) { act ->
-                            ActivityRow(activity = act)
+                        itemsIndexed(block.value) { index, act ->
+                            ActivityRow(
+                                activity = act,
+                                modifier = Modifier.listItemEnter(index),
+                            )
                         }
                     }
                 }
@@ -506,7 +511,7 @@ private fun ShortcutItem(label: String, icon: ImageVector, onClick: () -> Unit) 
         modifier = Modifier
             .width(80.dp)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-            .clickable { onClick() }
+            .pressable { onClick() }
             .padding(horizontal = 6.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -528,9 +533,13 @@ private fun ShortcutItem(label: String, icon: ImageVector, onClick: () -> Unit) 
 }
 
 @Composable
-private fun AnnouncementRow(announcement: AnnouncementDto, onClick: () -> Unit) {
+private fun AnnouncementRow(
+    announcement: AnnouncementDto,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     HrmCard(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = modifier.fillMaxWidth().pressable { onClick() },
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -569,7 +578,7 @@ private fun AnnouncementRow(announcement: AnnouncementDto, onClick: () -> Unit) 
 }
 
 @Composable
-private fun ActivityRow(activity: ActivityDto) {
+private fun ActivityRow(activity: ActivityDto, modifier: Modifier = Modifier) {
     val (icon, tint) = when (activity.type) {
         "kudo" -> Icons.Filled.Favorite to Color(0xFFB42318)
         "announcement" -> Icons.Filled.Campaign to BrandBlue
@@ -579,7 +588,7 @@ private fun ActivityRow(activity: ActivityDto) {
         else -> Icons.Filled.DynamicFeed to InkMuted
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Box(

@@ -1,5 +1,7 @@
 package com.hrmai.app.feature.jobs
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.SharedTransitionScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +61,9 @@ import com.hrmai.app.core.ui.HrmCard
 import com.hrmai.app.core.ui.SectionHeader
 import com.hrmai.app.core.ui.SkeletonBlock
 import com.hrmai.app.core.ui.StatusChip
+import com.hrmai.app.core.ui.listItemEnter
+import com.hrmai.app.core.ui.pressable
+import com.hrmai.app.core.ui.sharedContent
 import com.hrmai.app.core.ui.theme.BorderGray
 import com.hrmai.app.core.ui.theme.BrandBlueDark
 import com.hrmai.app.core.ui.theme.BrandBlueSoft
@@ -81,8 +87,14 @@ private val ProcessSteps = listOf(
 private fun departmentNameOf(job: JobPostingDto): String =
     job.departmentName?.takeIf { it.isNotBlank() } ?: UnknownDepartment
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun JobsRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
+fun JobsRoute(
+    container: AppContainer,
+    onOpenJob: (Int) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     val vm: JobsViewModel = viewModel(
         factory = JobsViewModel.Factory(container.api(JobsApi::class.java))
     )
@@ -228,8 +240,14 @@ fun JobsRoute(container: AppContainer, onOpenJob: (Int) -> Unit) {
                             )
                         }
                     } else {
-                        items(filteredJobs, key = { it.id }) { job ->
-                            JobCard(job = job, onClick = { onOpenJob(job.id) })
+                        itemsIndexed(filteredJobs, key = { _, job -> job.id }) { index, job ->
+                            JobCard(
+                                job = job,
+                                onClick = { onOpenJob(job.id) },
+                                modifier = Modifier.listItemEnter(index),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                            )
                         }
                         item {
                             Spacer(Modifier.height(4.dp))
@@ -345,11 +363,17 @@ private fun DeptFilterChip(label: String, selected: Boolean, onClick: () -> Unit
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
-private fun JobCard(job: JobPostingDto, onClick: () -> Unit) {
+private fun JobCard(
+    job: JobPostingDto,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     HrmCard(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth().pressable { onClick() },
     ) {
         Column {
             FlowRow(
@@ -378,6 +402,11 @@ private fun JobCard(job: JobPostingDto, onClick: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.sharedContent(
+                    sharedTransitionScope,
+                    animatedVisibilityScope,
+                    key = "job-title-${job.id}",
+                ),
             )
             if (job.quantity != null) {
                 Spacer(Modifier.height(8.dp))
@@ -484,8 +513,15 @@ private fun ApplyProcessSection() {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun JobDetailRoute(container: AppContainer, jobId: Int, onBack: () -> Unit) {
+fun JobDetailRoute(
+    container: AppContainer,
+    jobId: Int,
+    onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     val vm: JobDetailViewModel = viewModel(
         factory = JobDetailViewModel.Factory(container.api(JobsApi::class.java), jobId)
     )
@@ -531,6 +567,11 @@ fun JobDetailRoute(container: AppContainer, jobId: Int, onBack: () -> Unit) {
                             text = job.title,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
+                            modifier = Modifier.sharedContent(
+                                sharedTransitionScope,
+                                animatedVisibilityScope,
+                                key = "job-title-${job.id}",
+                            ),
                         )
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

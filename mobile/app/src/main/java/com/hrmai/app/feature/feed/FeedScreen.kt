@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -64,6 +64,7 @@ import com.hrmai.app.core.di.AppContainer
 import com.hrmai.app.core.ui.EmptyState
 import com.hrmai.app.core.ui.ErrorState
 import com.hrmai.app.core.ui.HrmCard
+import com.hrmai.app.core.ui.listItemEnter
 import com.hrmai.app.core.ui.InitialAvatar
 import com.hrmai.app.core.ui.SkeletonBlock
 import com.hrmai.app.core.ui.StatusChip
@@ -182,8 +183,13 @@ private fun FeedScreen(state: FeedUiState, vm: FeedViewModel) {
                                 EmptyState("Chưa có bài viết nào. Hãy là người chia sẻ đầu tiên nhé!")
                             }
                         } else {
-                            items(state.posts, key = { it.id ?: 0 }) { post ->
-                                PostCard(post = post, state = state, vm = vm)
+                            itemsIndexed(state.posts, key = { _, post -> post.id ?: 0 }) { index, post ->
+                                PostCard(
+                                    post = post,
+                                    state = state,
+                                    vm = vm,
+                                    modifier = Modifier.listItemEnter(index),
+                                )
                             }
                         }
                     }
@@ -233,10 +239,15 @@ private fun ComposerCard(state: FeedUiState, vm: FeedViewModel) {
 }
 
 @Composable
-private fun PostCard(post: FeedPostDto, state: FeedUiState, vm: FeedViewModel) {
+private fun PostCard(
+    post: FeedPostDto,
+    state: FeedUiState,
+    vm: FeedViewModel,
+    modifier: Modifier = Modifier,
+) {
     val postId = post.id ?: return
     val expanded = state.expandedPostId == postId
-    HrmCard(modifier = Modifier.fillMaxWidth()) {
+    HrmCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.animateContentSize()) {
             // Đầu thẻ: tác giả + thời gian + menu
             Row(verticalAlignment = Alignment.CenterVertically) {

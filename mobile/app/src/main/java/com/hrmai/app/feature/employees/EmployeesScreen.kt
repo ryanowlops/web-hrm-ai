@@ -1,12 +1,14 @@
 package com.hrmai.app.feature.employees
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.SharedTransitionScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -43,6 +46,9 @@ import com.hrmai.app.core.ui.LoadingState
 import com.hrmai.app.core.ui.SectionHeader
 import com.hrmai.app.core.ui.SkeletonBlock
 import com.hrmai.app.core.ui.StatusChip
+import com.hrmai.app.core.ui.listItemEnter
+import com.hrmai.app.core.ui.pressable
+import com.hrmai.app.core.ui.sharedContent
 import com.hrmai.app.core.ui.theme.CanvasGray
 import com.hrmai.app.core.ui.theme.DangerRed
 import com.hrmai.app.core.ui.theme.InkMuted
@@ -50,18 +56,31 @@ import com.hrmai.app.core.ui.theme.SuccessGreen
 import com.hrmai.app.core.ui.theme.WarningAmber
 import com.hrmai.app.core.util.Format
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun EmployeesRoute(container: AppContainer, onOpenEmployee: (Int) -> Unit) {
+fun EmployeesRoute(
+    container: AppContainer,
+    onOpenEmployee: (Int) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     val vm: EmployeesViewModel = viewModel(
         factory = EmployeesViewModel.Factory(
             container.api(EmployeesApi::class.java),
         ),
     )
-    EmployeesScreen(vm, onOpenEmployee)
+    EmployeesScreen(vm, onOpenEmployee, sharedTransitionScope, animatedVisibilityScope)
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun EmployeeDetailRoute(container: AppContainer, employeeId: Int, onBack: () -> Unit) {
+fun EmployeeDetailRoute(
+    container: AppContainer,
+    employeeId: Int,
+    onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     val vm: EmployeeDetailViewModel = viewModel(
         key = "employee-detail-$employeeId",
         factory = EmployeeDetailViewModel.Factory(
@@ -69,16 +88,21 @@ fun EmployeeDetailRoute(container: AppContainer, employeeId: Int, onBack: () -> 
             employeeId,
         ),
     )
-    EmployeeDetailScreen(vm, onBack)
+    EmployeeDetailScreen(vm, onBack, sharedTransitionScope, animatedVisibilityScope)
 }
 
 // ----------------------------------------------------------------------
 // Danh sách nhân viên
 // ----------------------------------------------------------------------
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
-private fun EmployeesScreen(vm: EmployeesViewModel, onOpenEmployee: (Int) -> Unit) {
+private fun EmployeesScreen(
+    vm: EmployeesViewModel,
+    onOpenEmployee: (Int) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     val state by vm.state.collectAsState()
     Column(modifier = Modifier.fillMaxSize().background(CanvasGray)) {
         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
@@ -144,10 +168,13 @@ private fun EmployeesScreen(vm: EmployeesViewModel, onOpenEmployee: (Int) -> Uni
                         }
                     }
                     else -> {
-                        items(state.employees, key = { it.id ?: 0 }) { employee ->
+                        itemsIndexed(state.employees, key = { _, employee -> employee.id ?: 0 }) { index, employee ->
                             EmployeeCard(
                                 employee = employee,
                                 onClick = { employee.id?.let(onOpenEmployee) },
+                                modifier = Modifier.listItemEnter(index),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
                             )
                         }
                     }
@@ -157,14 +184,29 @@ private fun EmployeesScreen(vm: EmployeesViewModel, onOpenEmployee: (Int) -> Uni
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun EmployeeCard(employee: EmployeeDto, onClick: () -> Unit) {
+private fun EmployeeCard(
+    employee: EmployeeDto,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     HrmCard(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = modifier.fillMaxWidth().pressable { onClick() },
         contentPadding = PaddingValues(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            InitialAvatar(employee.fullName, 46)
+            InitialAvatar(
+                employee.fullName,
+                46,
+                modifier = Modifier.sharedContent(
+                    sharedTransitionScope,
+                    animatedVisibilityScope,
+                    key = "employee-avatar-${employee.id}",
+                ),
+            )
             Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -173,7 +215,13 @@ private fun EmployeeCard(employee: EmployeeDto, onClick: () -> Unit) {
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .sharedContent(
+                                sharedTransitionScope,
+                                animatedVisibilityScope,
+                                key = "employee-name-${employee.id}",
+                            ),
                     )
                     if (!employee.code.isNullOrBlank()) {
                         Text(
@@ -208,8 +256,14 @@ private fun EmployeeCard(employee: EmployeeDto, onClick: () -> Unit) {
 // Chi tiết nhân viên
 // ----------------------------------------------------------------------
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun EmployeeDetailScreen(vm: EmployeeDetailViewModel, onBack: () -> Unit) {
+private fun EmployeeDetailScreen(
+    vm: EmployeeDetailViewModel,
+    onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     val state by vm.state.collectAsState()
     Column(modifier = Modifier.fillMaxSize().background(CanvasGray)) {
         Row(
@@ -242,13 +296,20 @@ private fun EmployeeDetailScreen(vm: EmployeeDetailViewModel, onBack: () -> Unit
             state.employee == null -> {
                 EmptyState("Không tìm thấy nhân viên này.")
             }
-            else -> state.employee?.let { EmployeeDetailContent(it) }
+            else -> state.employee?.let {
+                EmployeeDetailContent(it, sharedTransitionScope, animatedVisibilityScope)
+            }
         }
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun EmployeeDetailContent(employee: EmployeeDto) {
+private fun EmployeeDetailContent(
+    employee: EmployeeDto,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -257,12 +318,25 @@ private fun EmployeeDetailContent(employee: EmployeeDto) {
         item {
             HrmCard(modifier = Modifier.fillMaxWidth()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    InitialAvatar(employee.fullName, 72)
+                    InitialAvatar(
+                        employee.fullName,
+                        72,
+                        modifier = Modifier.sharedContent(
+                            sharedTransitionScope,
+                            animatedVisibilityScope,
+                            key = "employee-avatar-${employee.id}",
+                        ),
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         employee.fullName ?: "Nhân viên",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.sharedContent(
+                            sharedTransitionScope,
+                            animatedVisibilityScope,
+                            key = "employee-name-${employee.id}",
+                        ),
                     )
                     if (!employee.code.isNullOrBlank()) {
                         Text(

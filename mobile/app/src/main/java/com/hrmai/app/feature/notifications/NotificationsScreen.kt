@@ -1,7 +1,6 @@
 package com.hrmai.app.feature.notifications
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
@@ -33,9 +32,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,6 +56,8 @@ import com.hrmai.app.core.di.AppContainer
 import com.hrmai.app.core.ui.EmptyState
 import com.hrmai.app.core.ui.ErrorState
 import com.hrmai.app.core.ui.SkeletonBlock
+import com.hrmai.app.core.ui.listItemEnter
+import com.hrmai.app.core.ui.pressable
 import com.hrmai.app.core.ui.theme.BrandBlue
 import com.hrmai.app.core.ui.theme.BrandBlueSoft
 import com.hrmai.app.core.ui.theme.CanvasGray
@@ -178,11 +182,54 @@ private fun NotificationsScreen(state: NotificationsUiState, vm: NotificationsVi
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            items(state.items, key = { it.id ?: 0 }) { item ->
-                                NotificationRow(
-                                    item = item,
-                                    onClick = { vm.markRead(item) },
-                                )
+                            itemsIndexed(state.items, key = { _, item -> item.id ?: 0 }) { index, item ->
+                                val enter = Modifier.listItemEnter(index)
+                                if (item.isRead != true) {
+                                    // Chưa đọc: vuốt phải để đánh dấu đã đọc
+                                    // (giống chạm vào dòng). Trả false để dòng
+                                    // trượt về chỗ cũ sau khi đánh dấu.
+                                    val dismissState = rememberSwipeToDismissBoxState(
+                                        confirmValueChange = { value ->
+                                            if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                                vm.markRead(item)
+                                                false
+                                            } else {
+                                                false
+                                            }
+                                        },
+                                    )
+                                    SwipeToDismissBox(
+                                        state = dismissState,
+                                        modifier = enter,
+                                        enableDismissFromEndToStart = false,
+                                        backgroundContent = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(BrandBlue)
+                                                    .padding(horizontal = 20.dp),
+                                                contentAlignment = Alignment.CenterStart,
+                                            ) {
+                                                Text(
+                                                    "Đã đọc",
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        NotificationRow(
+                                            item = item,
+                                            onClick = { vm.markRead(item) },
+                                        )
+                                    }
+                                } else {
+                                    NotificationRow(
+                                        item = item,
+                                        onClick = { vm.markRead(item) },
+                                        modifier = enter,
+                                    )
+                                }
                             }
                         }
                     }
@@ -217,15 +264,15 @@ private fun tintForType(type: String?): Color = when {
 }
 
 @Composable
-private fun NotificationRow(item: NotificationDto, onClick: () -> Unit) {
+private fun NotificationRow(item: NotificationDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val unread = item.isRead != true
     val tint = tintForType(item.type)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
             .background(if (unread) BrandBlueSoft else Color.White)
-            .clickable { onClick() }
+            .pressable { onClick() }
             .padding(14.dp),
         verticalAlignment = Alignment.Top,
     ) {

@@ -1,6 +1,8 @@
 package com.hrmai.app.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.SharedTransitionLayout
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -70,6 +73,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +84,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -277,9 +282,22 @@ fun HrmNavHost(container: AppContainer) {
     }
 }
 
-/** Màn chờ nhẹ trong lúc khôi phục phiên đã lưu (logo mới + vòng tải). */
+/** Màn chờ nhẹ trong lúc khôi phục phiên đã lưu (logo hiện dần + vòng tải). */
 @Composable
 private fun SessionSplash() {
+    // Logo hiện dần + phóng nhẹ 0.9 -> 1 (500ms) thay vì đứng yên.
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    val logoScale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.9f,
+        animationSpec = tween(500),
+        label = "splashScale",
+    )
+    val logoAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(500),
+        label = "splashAlpha",
+    )
     Box(
         modifier = Modifier.fillMaxSize().background(CanvasGray),
         contentAlignment = Alignment.Center,
@@ -289,7 +307,11 @@ private fun SessionSplash() {
             Image(
                 painter = painterResource(R.drawable.logo_mark),
                 contentDescription = "HRM AI",
-                modifier = Modifier.size(72.dp),
+                modifier = Modifier.size(72.dp).graphicsLayer {
+                    scaleX = logoScale
+                    scaleY = logoScale
+                    alpha = logoAlpha
+                },
             )
             Spacer(Modifier.height(20.dp))
             LoadingState()
@@ -297,7 +319,7 @@ private fun SessionSplash() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainShell(container: AppContainer) {
     val navController = rememberNavController()
@@ -357,10 +379,15 @@ private fun MainShell(container: AppContainer) {
             }
         },
     ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxSize().padding(padding),
+        // SharedTransitionLayout: cho shared element Job/Employee bay sang màn
+        // chi tiết (xem core/ui/Motion.kt sharedContent). Chuyển màn trượt+mờ
+        // 260ms bên trong giữ nguyên.
+        SharedTransitionLayout(modifier = Modifier.fillMaxSize().padding(padding)) {
+            val sharedScope = this
+            NavHost(
+                navController = navController,
+                startDestination = Routes.HOME,
+                modifier = Modifier.fillMaxSize(),
             enterTransition = {
                 slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(260)) + fadeIn(tween(260))
             },
@@ -416,7 +443,12 @@ private fun MainShell(container: AppContainer) {
             composable(Routes.SURVEYS) { SurveysRoute(container) }
             composable(Routes.TEAM_CALENDAR) { TeamCalendarRoute(container) }
             composable(Routes.EMPLOYEES) {
-                EmployeesRoute(container, onOpenEmployee = { id -> navController.navigate("employee/$id") })
+                EmployeesRoute(
+                    container,
+                    onOpenEmployee = { id -> navController.navigate("employee/$id") },
+                    sharedTransitionScope = sharedScope,
+                    animatedVisibilityScope = this,
+                )
             }
             composable(
                 Routes.EMPLOYEE_DETAIL,
@@ -426,6 +458,8 @@ private fun MainShell(container: AppContainer) {
                     container,
                     entry.arguments?.getInt("employeeId") ?: 0,
                     onBack = { navController.popBackStack() },
+                    sharedTransitionScope = sharedScope,
+                    animatedVisibilityScope = this,
                 )
             }
             composable(Routes.DEPARTMENTS) { DepartmentsRoute(container) }
@@ -453,7 +487,12 @@ private fun MainShell(container: AppContainer) {
             composable(Routes.PAYROLL_ADMIN) { PayrollAdminRoute(container) }
             composable(Routes.ADMIN) { AdminRoute(container) }
             composable(Routes.JOBS) {
-                JobsRoute(container, onOpenJob = { id -> navController.navigate("job/$id") })
+                JobsRoute(
+                    container,
+                    onOpenJob = { id -> navController.navigate("job/$id") },
+                    sharedTransitionScope = sharedScope,
+                    animatedVisibilityScope = this,
+                )
             }
             composable(
                 Routes.JOB_DETAIL,
@@ -463,6 +502,8 @@ private fun MainShell(container: AppContainer) {
                     container,
                     entry.arguments?.getInt("jobId") ?: 0,
                     onBack = { navController.popBackStack() },
+                    sharedTransitionScope = sharedScope,
+                    animatedVisibilityScope = this,
                 )
             }
             composable(Routes.CV_CHECK) { CvCheckRoute(container) }
@@ -472,6 +513,7 @@ private fun MainShell(container: AppContainer) {
             composable(Routes.CHECKIN_ADMIN) { CheckinAdminRoute(container) }
             composable(Routes.JD_GENERATOR) { JdGeneratorRoute(container) }
             composable(Routes.BRIEFING) { BriefingRoute(container) }
+            }
         }
     }
 }

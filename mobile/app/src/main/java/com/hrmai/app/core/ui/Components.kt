@@ -1,10 +1,5 @@
 package com.hrmai.app.core.ui
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,28 +104,21 @@ fun EmptyState(message: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Khối xương nhấp nháy trong lúc tải dữ liệu. */
+/** Khối xương shimmer trong lúc tải dữ liệu (dải xám chạy ngang). */
 @Composable
 fun SkeletonBlock(modifier: Modifier = Modifier, heightDp: Int = 84) {
-    val transition = rememberInfiniteTransition(label = "skeleton")
-    val alpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
-        label = "skeletonAlpha",
-    )
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(heightDp.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFFE4E7EC).copy(alpha = alpha)),
+            .background(shimmerBrush()),
     )
 }
 
 /** Avatar tròn với chữ cái đầu của họ tên, màu nền theo tên. */
 @Composable
-fun InitialAvatar(name: String?, sizeDp: Int = 40) {
+fun InitialAvatar(name: String?, sizeDp: Int = 40, modifier: Modifier = Modifier) {
     val initials = name?.trim()?.split(" ")
         ?.filter { it.isNotEmpty() }
         ?.let { parts -> listOfNotNull(parts.firstOrNull(), parts.lastOrNull()) }
@@ -143,7 +130,7 @@ fun InitialAvatar(name: String?, sizeDp: Int = 40) {
     )
     val bg = palette[(name?.hashCode()?.mod(palette.size) ?: 0).let { if (it < 0) -it else it }]
     Box(
-        modifier = Modifier.size(sizeDp.dp).clip(CircleShape).background(bg),
+        modifier = modifier.size(sizeDp.dp).clip(CircleShape).background(bg),
         contentAlignment = Alignment.Center,
     ) {
         Text(
