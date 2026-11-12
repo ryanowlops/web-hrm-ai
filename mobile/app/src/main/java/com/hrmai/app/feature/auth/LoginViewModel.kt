@@ -16,6 +16,7 @@ data class LoginUiState(
     val email: String = "",
     val password: String = "",
     val baseUrl: String = "",
+    val showPassword: Boolean = false,
     val showServerField: Boolean = false,
     val loading: Boolean = false,
     val error: String? = null,
@@ -34,6 +35,7 @@ class LoginViewModel(private val sessionStore: SessionStore) : ViewModel() {
     fun onEmailChange(v: String) = _state.update { it.copy(email = v, error = null) }
     fun onPasswordChange(v: String) = _state.update { it.copy(password = v, error = null) }
     fun onBaseUrlChange(v: String) = _state.update { it.copy(baseUrl = v) }
+    fun togglePasswordVisibility() = _state.update { it.copy(showPassword = !it.showPassword) }
     fun toggleServerField() = _state.update { it.copy(showServerField = !it.showServerField) }
 
     fun fillDemo(email: String, password: String) =

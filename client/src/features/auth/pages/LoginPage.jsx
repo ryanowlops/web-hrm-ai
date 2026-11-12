@@ -6,6 +6,7 @@ import { prefetchRoute } from '../../../app/pages.js';
 import api from '../../../api/axiosClient';
 import { login } from '../services';
 import { Alert, Button, Input } from '../../../components/ui';
+import { IconEye, IconEyeOff } from '../../../components/icons.jsx';
 
 // ============================================================
 // Trang đăng nhập — route /login (v4: auth kiểu shadcn-admin/TailAdmin)
@@ -202,10 +203,12 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-brand-600 transition hover:bg-brand-50 hover:text-brand-700"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
                   tabIndex={-1}
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                 >
-                  {showPassword ? 'Ẩn' : 'Hiện'}
+                  {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
                 </button>
               </div>
               {fieldErrors.password && (
