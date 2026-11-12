@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -80,8 +81,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.hrmai.app.R
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -274,7 +277,7 @@ fun HrmNavHost(container: AppContainer) {
     }
 }
 
-/** Màn chờ nhẹ trong lúc khôi phục phiên đã lưu (logo H + vòng tải). */
+/** Màn chờ nhẹ trong lúc khôi phục phiên đã lưu (logo mới + vòng tải). */
 @Composable
 private fun SessionSplash() {
     Box(
@@ -282,17 +285,12 @@ private fun SessionSplash() {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(BrandBlue),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "H",
-                    color = Color.White,
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            // Logo mới: 3 người vươn lên (khớp logo web client/public/logo.svg)
+            Image(
+                painter = painterResource(R.drawable.logo_mark),
+                contentDescription = "HRM AI",
+                modifier = Modifier.size(72.dp),
+            )
             Spacer(Modifier.height(20.dp))
             LoadingState()
         }

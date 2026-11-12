@@ -1,7 +1,7 @@
 package com.hrmai.app.feature.auth
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,16 +36,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import com.hrmai.app.R
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hrmai.app.core.di.AppContainer
-import com.hrmai.app.core.ui.theme.BrandBlue
 
 private val DEMO_ACCOUNTS = listOf(
     "Quản trị" to ("admin@hrm.local" to "Admin@123"),
@@ -69,13 +69,12 @@ fun LoginRoute(container: AppContainer) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(72.dp))
-        // Logo: khối xanh bo góc + chữ H (khớp logo web)
-        Box(
-            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(BrandBlue),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("H", color = Color.White, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-        }
+        // Logo mới: 3 người vươn lên (khớp logo web client/public/logo.svg)
+        Image(
+            painter = painterResource(R.drawable.logo_mark),
+            contentDescription = "HRM AI",
+            modifier = Modifier.size(72.dp),
+        )
         Spacer(Modifier.height(16.dp))
         Text("HRM AI", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
