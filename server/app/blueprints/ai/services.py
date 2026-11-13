@@ -68,6 +68,26 @@ def _get_first(obj, field_names, default=None):
     return default
 
 
+def _job_data(ai_job: AiJob) -> dict:
+    """Dữ liệu của đợt phân tích, đọc từ cột JSON payload.
+
+    AiJob KHÔNG có cột riêng cho candidate_ids/job_id/total/processed
+    (xem comment ở model) nên toàn bộ dữ liệu của job sống trong
+    payload: {candidate_ids, job_id, total, processed, success}.
+    """
+    payload = getattr(ai_job, "payload", None)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _set_job_data(ai_job: AiJob, **updates) -> None:
+    """Gộp updates vào payload.
+
+    Phải gán lại cả dict — sửa trực tiếp trên dict của cột JSON thì
+    SQLAlchemy không nhận diện thay đổi nên không flush.
+    """
+    ai_job.payload = {**_job_data(ai_job), **updates}
+
+
 def batch_limit() -> int:
     """Giới hạn CV/lượt: config AI_CV_BATCH_LIMIT, mặc định 20."""
     try:
@@ -238,15 +258,18 @@ def create_cv_analysis_job(job_id, candidate_ids, created_by=None) -> AiJob:
     # 5) AI chưa cấu hình -> báo 503 NGAY, không tạo job chết (không bịa kết quả).
     get_provider().ensure_available()
 
-    # 6) Tạo bản ghi job.
+    # 6) Tạo bản ghi job. Dữ liệu đợt phân tích sống trong cột JSON
+    # payload (AiJob không có cột candidate_ids/job_id/total).
     ai_job = AiJob()
     _set_first(ai_job, ("type", "job_type", "kind"), "cv_analysis")
     _set_first(ai_job, ("status",), JOB_PENDING)
-    _set_first(ai_job, ("job_posting_id", "job_id"), job_id)
-    _set_first(ai_job, ("candidate_ids",), unique_ids)
-    _set_first(ai_job, ("total_count", "total"), len(unique_ids))
-    _set_first(ai_job, ("processed_count", "processed"), 0)
-    _set_first(ai_job, ("success_count",), 0)
+    ai_job.payload = {
+        "candidate_ids": unique_ids,
+        "job_id": job_id,
+        "total": len(unique_ids),
+        "processed": 0,
+        "success": 0,
+    }
     _set_first(ai_job, ("error", "error_message"), None)
     if created_by is not None:
         _set_first(ai_job, ("created_by", "requested_by", "user_id"), created_by)
@@ -274,8 +297,9 @@ def _run_cv_analysis_job(app, ai_job_id: int) -> None:
         ai_job = db.session.get(AiJob, ai_job_id)
         if ai_job is None:
             return
-        candidate_ids = list(_get_first(ai_job, ("candidate_ids",), []) or [])
-        job_id = _get_first(ai_job, ("job_posting_id", "job_id"))
+        job_data = _job_data(ai_job)
+        candidate_ids = list(job_data.get("candidate_ids") or [])
+        job_id = job_data.get("job_id")
         job = db.session.get(JobPosting, job_id) if job_id is not None else None
         jd_text = build_jd_text(job) if job is not None else ""
 
@@ -305,9 +329,8 @@ def _run_cv_analysis_job(app, ai_job_id: int) -> None:
             except Exception:  # lỗi bất ngờ: rollback, ghi nhận, không làm sập thread
                 db.session.rollback()
                 failures.append(f"#{candidate_id}: lỗi không xác định khi phân tích")
-            _set_first(ai_job, ("processed_count", "processed"),
-                       successes + len(failures))
-            _set_first(ai_job, ("success_count",), successes)
+            _set_job_data(ai_job, processed=successes + len(failures),
+                          success=successes)
             db.session.commit()
 
         if successes == 0:
@@ -319,8 +342,8 @@ def _run_cv_analysis_job(app, ai_job_id: int) -> None:
             if failures:
                 _set_first(ai_job, ("error", "error_message"),
                            "Một số CV không phân tích được: " + "; ".join(failures))
-        _set_first(ai_job, ("processed_count", "processed"),
-                   successes + len(failures))
+        _set_job_data(ai_job, processed=successes + len(failures),
+                      success=successes)
         db.session.commit()
 
 
@@ -377,15 +400,16 @@ def _iso(value):
 
 
 def serialize_job(ai_job: AiJob) -> dict:
+    job_data = _job_data(ai_job)
     return {
         "job_id": ai_job.id,
         "id": ai_job.id,
         "type": _get_first(ai_job, ("type", "job_type", "kind"), "cv_analysis"),
         "status": getattr(ai_job, "status", None),
-        "job_posting_id": _get_first(ai_job, ("job_posting_id", "job_id")),
-        "candidate_ids": list(_get_first(ai_job, ("candidate_ids",), []) or []),
-        "total": _get_first(ai_job, ("total_count", "total")),
-        "processed": _get_first(ai_job, ("processed_count", "processed")),
+        "job_posting_id": job_data.get("job_id"),
+        "candidate_ids": list(job_data.get("candidate_ids") or []),
+        "total": job_data.get("total"),
+        "processed": job_data.get("processed"),
         "error": _get_first(ai_job, ("error", "error_message")),
         "created_at": _iso(getattr(ai_job, "created_at", None)),
         "updated_at": _iso(getattr(ai_job, "updated_at", None)),

@@ -11,7 +11,7 @@ Nguyên tắc ẩn danh khảo sát (feature-expansion-v3 mục 4):
 """
 
 import calendar
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 
 from sqlalchemy.exc import IntegrityError
 
@@ -231,22 +231,24 @@ def milestones(month_str):
         }
         dob = getattr(employee, "date_of_birth", None)
         if dob is not None and dob.month == month:
+            day = min(dob.day, calendar.monthrange(year, month)[1])
             birthdays.append({
                 **base,
                 "type": "birthday",
-                "day": dob.day,
-                "date": date(year, month, dob.day).isoformat(),
+                "day": day,
+                "date": date(year, month, day).isoformat(),
                 "turning_age": year - dob.year,
             })
         start_date = getattr(employee, "start_date", None)
         if start_date is not None and start_date.month == month:
             years = year - start_date.year
             if years >= 1:
+                day = min(start_date.day, calendar.monthrange(year, month)[1])
                 anniversaries.append({
                     **base,
                     "type": "anniversary",
-                    "day": start_date.day,
-                    "date": date(year, month, start_date.day).isoformat(),
+                    "day": day,
+                    "date": date(year, month, day).isoformat(),
                     "years": years,
                 })
     birthdays.sort(key=lambda item: (item["day"], item["name"]))
@@ -275,6 +277,21 @@ def _response_count(survey_id):
     return SurveyResponse.query.filter_by(survey_id=survey_id).count()
 
 
+def _survey_ended(survey) -> bool:
+    """True nếu khảo sát đã quá hạn trả lời (ends_at đã trôi qua).
+
+    ends_at lưu ở cột DateTime naive — coi như giờ UTC khi không có tzinfo,
+    để so sánh được với giờ hiện tại (UTC). None nghĩa là không đặt hạn.
+    Chỉ đọc, không đổi status (FE/manager vẫn thấy khảo sát đã hết hạn).
+    """
+    ends_at = getattr(survey, "ends_at", None)
+    if ends_at is None:
+        return False
+    if ends_at.tzinfo is None:
+        ends_at = ends_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) > ends_at
+
+
 def list_surveys(user):
     query = Survey.query.order_by(Survey.created_at.desc(), Survey.id.desc())
     if user.role in MANAGER_ROLES:
@@ -287,8 +304,9 @@ def list_surveys(user):
             )
             for survey in surveys
         ]
-    # employee/manager: chỉ khảo sát đang active.
+    # employee/manager: chỉ khảo sát đang active và chưa quá hạn trả lời.
     surveys = query.filter(Survey.status == Survey.STATUS_ACTIVE).all()
+    surveys = [s for s in surveys if not _survey_ended(s)]
     return [
         schemas.survey_to_dict(survey, responded=_responded(survey.id, user.id))
         for survey in surveys
@@ -297,7 +315,9 @@ def list_surveys(user):
 
 def get_survey_for_user(survey_id, user):
     survey = get_or_404(Survey, survey_id, "SURVEY_NOT_FOUND", "Không tìm thấy khảo sát.")
-    if user.role not in MANAGER_ROLES and survey.status != Survey.STATUS_ACTIVE:
+    if user.role not in MANAGER_ROLES and (
+        survey.status != Survey.STATUS_ACTIVE or _survey_ended(survey)
+    ):
         raise ApiError(404, "SURVEY_NOT_FOUND", "Không tìm thấy khảo sát.")
     return survey
 
@@ -328,6 +348,10 @@ def respond_survey(user, survey_id, answers):
     if survey.status != Survey.STATUS_ACTIVE:
         raise ApiError(
             409, "SURVEY_NOT_ACTIVE", "Khảo sát không còn mở để trả lời."
+        )
+    if _survey_ended(survey):
+        raise ApiError(
+            409, "SURVEY_ENDED", "Khảo sát đã hết hạn trả lời."
         )
     if _responded(survey.id, user.id):
         raise ApiError(

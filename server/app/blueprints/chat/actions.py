@@ -37,7 +37,7 @@ from app.blueprints.leave import schemas as leave_schemas
 from app.blueprints.leave import services as leave_services
 from app.errors import ApiError
 from app.extensions import db
-from app.models import LeaveRequest, LeaveType
+from app.models import Employee, LeaveRequest, LeaveType
 
 _NO_PROFILE_TEXT = (
     "Tài khoản của bạn chưa được gắn với hồ sơ nhân viên nên mình chưa "
@@ -313,10 +313,8 @@ def _pending_for_approver(user, employee) -> list[tuple[str, LeaveRequest]]:
     return pending
 
 
-def _request_matches_employee(request: LeaveRequest, question: str,
-                              folded: str) -> bool:
-    """Khớp đơn theo Mã NV hoặc tên người xin nhắc trong câu hỏi."""
-    employee = request.employee
+def _employee_mentioned(employee, question: str, folded: str) -> bool:
+    """Câu hỏi có nhắc tới nhân viên này (mã NV hoặc tên) hay không."""
     if employee is None:
         return False
     code = (getattr(employee, "code", None) or "").strip()
@@ -327,6 +325,39 @@ def _request_matches_employee(request: LeaveRequest, question: str,
         return True
     given_name = full_name.split()[-1] if full_name else ""
     return bool(given_name) and given_name in set(folded.split())
+
+
+def _request_matches_employee(request: LeaveRequest, question: str,
+                              folded: str) -> bool:
+    """Khớp đơn theo Mã NV hoặc tên người xin nhắc trong câu hỏi."""
+    return _employee_mentioned(
+        request.employee if request is not None else None, question, folded)
+
+
+def _find_mentioned_employee(user, employee, question: str, folded: str):
+    """Nhân viên trong phạm vi của người gọi mà câu hỏi nhắc tới.
+
+    Kể cả người KHÔNG có đơn đang chờ duyệt — dùng để phân biệt "không
+    nhắc tên ai" (được rơi về đơn duy nhất đang chờ) với "nhắc tên người
+    không có đơn" (phải hỏi lại, không được lấy đơn của người khác).
+    Trả Employee đầu tiên khớp (theo id) hoặc None.
+    """
+    role = getattr(user, "role", "employee")
+    if role in ("hr", "admin"):
+        # HR duyệt đơn đã qua vòng manager trên toàn công ty.
+        employees = Employee.query.order_by(Employee.id).all()
+    elif role == "manager" and employee is not None:
+        team_ids = sorted(leave_services._team_employee_ids(employee))
+        if not team_ids:
+            return None
+        employees = (Employee.query.filter(Employee.id.in_(team_ids))
+                     .order_by(Employee.id).all())
+    else:
+        return None
+    for candidate in employees:
+        if _employee_mentioned(candidate, question, folded):
+            return candidate
+    return None
 
 
 def _request_line(request: LeaveRequest) -> str:
@@ -356,6 +387,19 @@ def _detect_decide_leave(user, question: str, folded: str) -> dict | None:
 
     named = [item for item in candidates
              if _request_matches_employee(item[1], question, folded)]
+    if not named:
+        # Người gọi nhắc tên một người cụ thể nhưng người đó không có đơn
+        # đang chờ duyệt: hỏi lại, KHÔNG được rơi về đơn của người khác.
+        mentioned = _find_mentioned_employee(user, employee, question, folded)
+        if mentioned is not None:
+            return {
+                "answer": (
+                    f"Không có đơn nghỉ phép nào đang chờ bạn duyệt của "
+                    f"{mentioned.full_name}. Bạn kiểm tra lại tên người xin "
+                    "nghỉ giúp mình nhé."
+                ),
+                "action": None,
+            }
     pool = named or candidates
 
     if len(pool) > 1:

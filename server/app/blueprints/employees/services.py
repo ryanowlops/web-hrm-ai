@@ -376,6 +376,27 @@ def update_employee(employee_id, data):
                        code="EMPLOYEE_EMAIL_EXISTS",
                        message="Email nhân viên đã tồn tại.")
     _ensure_references_exist(data)
+    if "status" in data and data["status"] is not None:
+        new_status = data["status"]
+        if new_status != employee.status:
+            # Nghỉ việc chỉ qua offboarding (complete_process) hoặc xóa mềm
+            # (delete_employee): PATCH thẳng sẽ bỏ qua thu hồi tài sản, gỡ
+            # trưởng phòng/cấp dưới, khóa tài khoản và chấm dứt hợp đồng.
+            # Chiều ngược lại cũng chặn: tài khoản đã khóa từ offboarding
+            # trước thì "hồi sinh" bằng PATCH sẽ thành nhân viên đang làm
+            # việc mà không đăng nhập được.
+            if (
+                new_status == Employee.STATUS_RESIGNED
+                or employee.status == Employee.STATUS_RESIGNED
+            ):
+                raise ApiError(
+                    409,
+                    "EMPLOYEE_STATUS_TRANSITION_BLOCKED",
+                    "Không thể đổi trạng thái nghỉ việc trực tiếp. Nhân viên "
+                    "nghỉ việc phải đi qua quy trình offboarding (hoặc xóa "
+                    "mềm) để thu hồi tài sản, gỡ liên kết quản lý, khóa tài "
+                    "khoản và chấm dứt hợp đồng.",
+                )
     set_fields(employee, data, EMPLOYEE_WRITABLE)
     db.session.commit()
     return employee

@@ -286,12 +286,175 @@ def _allowed_number_values(numbers: dict) -> set[float]:
     return allowed
 
 
+def _metric_number_values(numbers: dict) -> tuple[dict[str, set[float]], dict[str, set[float]]]:
+    """Gói số -> ({đường dẫn metric: {giá trị số}}, {chuỗi lá: {số trong chuỗi}}).
+
+    Mọi số lá được gắn với đúng metric chứa nó theo đường dẫn (vd
+    'attendance.present', 'engagement.enps.score'), thay vì đổ chung vào
+    một tập phẳng — để bước kiểm chứng gắn mỗi con số trong prose với
+    metric mà nó đang nói tới, thay vì chấp nhận số của metric khác.
+    Số nằm trong chuỗi lá (vd 'Q4' trong tiêu đề khảo sát) được trả riêng
+    để prose trích nguyên văn tiêu đề vẫn được chấp nhận.
+    """
+    metrics: dict[str, set[float]] = {}
+    string_numbers: dict[str, set[float]] = {}
+
+    def collect(path, value):
+        if isinstance(value, bool) or value is None:
+            return
+        if isinstance(value, (int, float)):
+            metrics.setdefault(path, set()).add(float(value))
+        elif isinstance(value, str):
+            tokens = {
+                float(token.replace(",", "."))
+                for token in _NUMBER_TOKEN_RE.findall(value)
+            }
+            if tokens:
+                metrics.setdefault(path, set()).update(tokens)
+                string_numbers[value] = tokens
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                collect(f"{path}.{key}" if path else str(key), item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                collect(path, item)
+
+    collect("", numbers)
+    return metrics, string_numbers
+
+
+def _date_component_values(numbers: dict) -> set[float]:
+    """Thành phần ngày/tháng/năm của kỳ (cho prose viết 'ngày 19/10')."""
+    parts: set[float] = set()
+    for key in ("period_start", "period_end", "ref_date"):
+        raw = numbers.get(key)
+        if isinstance(raw, str):
+            for part in re.findall(r"\d+", raw):
+                parts.add(float(part))
+    return parts
+
+
+# Từ khoá (tiếng Việt) -> metric mà con số đứng cạnh nó phải thuộc về.
+# Một từ khoá có thể trỏ tới nhiều metric khi cùng ngữ cảnh (vd 'đúng giờ'
+# vừa là số lượt vừa là tỉ lệ).
+_METRIC_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("tổng nhân sự", ("headcount_total",)),
+    ("tổng số nhân viên", ("headcount_total",)),
+    ("vào mới", ("new_hires",)),
+    ("nhân viên mới", ("new_hires",)),
+    ("nhân sự mới", ("new_hires",)),
+    ("nghỉ việc", ("departures",)),
+    ("nguy cơ cao", ("attrition_high_risk",)),
+    ("rủi ro cao", ("attrition_high_risk",)),
+    ("cửa sổ", ("attrition_window_days",)),
+    ("bản ghi chấm công", ("attendance.total_records",)),
+    ("bản ghi", ("attendance.total_records",)),
+    ("đúng giờ", ("attendance.present", "attendance.on_time_rate")),
+    ("tỉ lệ", ("attendance.on_time_rate",)),
+    ("tỷ lệ", ("attendance.on_time_rate",)),
+    ("đi muộn", ("attendance.late",)),
+    ("muộn", ("attendance.late",)),
+    ("vắng mặt", ("attendance.absent",)),
+    ("vắng", ("attendance.absent",)),
+    ("nghỉ phép", ("attendance.on_leave", "leave.approved_in_period")),
+    ("chờ duyệt", ("leave.pending_requests",)),
+    ("đã duyệt", ("leave.approved_in_period",)),
+    ("tin tuyển", ("recruitment.open_job_postings",)),
+    ("đang mở", ("recruitment.open_job_postings",)),
+    ("ứng viên", ("recruitment.new_candidates",)),
+    ("kudos", ("engagement.kudos_in_period",)),
+    ("vinh danh", ("engagement.kudos_in_period",)),
+    ("enps", ("engagement.enps.score", "engagement.enps.responses")),
+    ("phản hồi", ("engagement.enps.responses",)),
+)
+
+def _near(value: float, candidates) -> bool:
+    """So sánh số với sai số cho phép (giữ ngưỡng cũ 0,051)."""
+    return any(abs(value - candidate) < 0.051 for candidate in candidates)
+
+
 def prose_numbers_are_grounded(prose: str, numbers: dict) -> bool:
-    """True nếu MỌI con số trích được từ prose đều thuộc gói số."""
-    allowed = _allowed_number_values(numbers)
-    for token in _NUMBER_TOKEN_RE.findall(prose or ""):
-        value = float(token.replace(",", "."))
-        if not any(abs(value - candidate) < 0.051 for candidate in allowed):
+    """True nếu MỌI con số trong prose đều đúng metric của nó.
+
+    Thứ tự kiểm tra cho mỗi con số:
+    1. Thành phần ngày/tháng/năm của kỳ (vd '19/10/2026') -> cho qua.
+    2. Số nằm trong một chuỗi của gói số được prose trích nguyên văn
+       (vd tiêu đề khảo sát '... Q4') -> cho qua.
+    3. Số phải thuộc một trong các metric mà từ khoá của mệnh đề chứa nó
+       đang nói tới (mệnh đề = đoạn câu tách bằng dấu phẩy/chấm phẩy;
+       mệnh đề không có từ khoá thì lấy cả câu). Đây là điểm chặn tráo
+       số: '47 người đã nghỉ việc' bị loại khi departures = 2 dù
+       headcount_total = 47, vì mệnh đề đó chỉ nhắc tới 'nghỉ việc'.
+    4. Câu không nhắc metric nào -> dự phòng như trước: số phải thuộc gói số.
+    """
+    metrics, string_numbers = _metric_number_values(numbers)
+    flat = _allowed_number_values(numbers)
+    date_parts = _date_component_values(numbers)
+    text = prose or ""
+    folded = text.casefold()
+
+    # Vị trí mọi lần prose trích nguyên văn một chuỗi lá có chứa số.
+    quoted_spans: list[tuple[int, int, set[float]]] = []
+    for string_value, tokens in string_numbers.items():
+        start = 0
+        while True:
+            idx = folded.find(string_value.casefold(), start)
+            if idx < 0:
+                break
+            quoted_spans.append((idx, idx + len(string_value), tokens))
+            start = idx + 1
+
+    def _keywords_in(span_text: str) -> tuple[str, ...]:
+        lowered = span_text.casefold()
+        found: list[str] = []
+        for keyword, _paths in _METRIC_KEYWORDS:
+            if keyword in lowered:
+                found.append(keyword)
+        return tuple(found)
+
+    # Ranh giới câu: sau dấu kết câu / xuống dòng. Ranh giới mệnh đề trong
+    # câu: dấu phẩy / chấm phẩy.
+    sentence_bounds = [0]
+    for match in re.finditer(r"[.!?\n]+", text):
+        sentence_bounds.append(match.end())
+    sentence_bounds.append(len(text))
+    sentences = [
+        (sentence_bounds[i], sentence_bounds[i + 1])
+        for i in range(len(sentence_bounds) - 1)
+    ]
+
+    keyword_paths = dict(_METRIC_KEYWORDS)
+    for match in _NUMBER_TOKEN_RE.finditer(text):
+        value = float(match.group(0).replace(",", "."))
+        if _near(value, date_parts):
+            continue
+        token_start, token_end = match.span()
+        if any(
+            start <= token_start and token_end <= end and _near(value, tokens)
+            for start, end, tokens in quoted_spans
+        ):
+            continue
+        sent_start, sent_end = next(
+            (s, e) for s, e in sentences if s <= token_start < e
+        )
+        clause_start, clause_end = sent_start, sent_end
+        for sep in re.finditer(r"[,;]", text[sent_start:sent_end]):
+            boundary = sent_start + sep.start() + 1
+            if boundary <= token_start:
+                clause_start = max(clause_start, boundary)
+            elif boundary > token_end and clause_end == sent_end:
+                clause_end = boundary
+        keywords = _keywords_in(text[clause_start:clause_end])
+        if not keywords:
+            keywords = _keywords_in(text[sent_start:sent_end])
+        if keywords:
+            allowed: set[float] = set()
+            for keyword in keywords:
+                for path in keyword_paths[keyword]:
+                    allowed |= metrics.get(path, set())
+            if not _near(value, allowed):
+                return False
+        elif not _near(value, flat):
             return False
     return True
 

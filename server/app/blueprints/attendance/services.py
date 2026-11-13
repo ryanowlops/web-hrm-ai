@@ -254,6 +254,96 @@ def summarize(records):
     return summary
 
 
+def materialize_absences(first, next_first):
+    """Tạo bản ghi absent/on_leave cho các ngày làm việc đã qua mà chưa có
+    bản ghi chấm công nào.
+
+    Trước đây hệ thống chỉ tạo bản ghi khi nhân viên check-in, nên nhân
+    viên không chấm thì "không có gì cả": bảng công tháng không hiện ngày
+    đó, tổng absent luôn = 0, và nút chặn check-in vào ngày nghỉ phép
+    (record on_leave) không bao giờ kích hoạt. Hàm này lấp các ngày trống:
+    ngày có đơn nghỉ đã duyệt -> "on_leave", còn lại -> "absent". Chỉ tới
+    hết hôm qua (ngày hôm nay nhân viên vẫn có thể chấm). Idempotent: chỉ
+    tạo nơi chưa có bản ghi, chạy lại bao nhiêu lần cũng không trùng.
+    """
+    from app.models import LeaveRequest
+
+    today = _now().date()
+    last_day = min(next_first - timedelta(days=1), today - timedelta(days=1))
+    if last_day < first:
+        return {"created_absent": 0, "created_on_leave": 0}
+
+    employees = (
+        db.session.query(Employee)
+        .filter(
+            Employee.status.in_(
+                (Employee.STATUS_WORKING, Employee.STATUS_ON_LEAVE)
+            )
+        )
+        .all()
+    )
+    if not employees:
+        return {"created_absent": 0, "created_on_leave": 0}
+
+    approved = (
+        db.session.query(LeaveRequest)
+        .filter(
+            LeaveRequest.status == LeaveRequest.STATUS_APPROVED,
+            LeaveRequest.from_date <= last_day,
+            LeaveRequest.to_date >= first,
+        )
+        .all()
+    )
+    leave_days = set()
+    for req in approved:
+        day = max(req.from_date, first)
+        end = min(req.to_date, last_day)
+        while day <= end:
+            leave_days.add((req.employee_id, day))
+            day += timedelta(days=1)
+
+    existing = {
+        (row.employee_id, row.work_date)
+        for row in db.session.query(Attendance)
+        .filter(
+            Attendance.work_date >= first,
+            Attendance.work_date <= last_day,
+        )
+        .all()
+    }
+
+    created_absent = created_on_leave = 0
+    new_rows = []
+    day = first
+    while day <= last_day:
+        if day.weekday() < 5:
+            for emp in employees:
+                if emp.start_date is not None and emp.start_date > day:
+                    continue
+                if (emp.id, day) in existing:
+                    continue
+                status = (
+                    "on_leave" if (emp.id, day) in leave_days else "absent"
+                )
+                new_rows.append(
+                    Attendance(
+                        employee_id=emp.id, work_date=day, status=status
+                    )
+                )
+                if status == "absent":
+                    created_absent += 1
+                else:
+                    created_on_leave += 1
+        day += timedelta(days=1)
+    if new_rows:
+        db.session.add_all(new_rows)
+        db.session.commit()
+    return {
+        "created_absent": created_absent,
+        "created_on_leave": created_on_leave,
+    }
+
+
 def _get_record(employee_id, work_date):
     return (
         db.session.query(Attendance)
@@ -330,6 +420,9 @@ def get_my_month(month_value):
     """Danh sách chấm công của chính mình trong tháng + tổng hợp."""
     employee = get_current_employee()
     first, next_first = parse_month(month_value)
+    # Lấp các ngày trống đã qua thành absent/on_leave để bảng công phản
+    # ánh đúng ngày nghỉ (xem materialize_absences).
+    materialize_absences(first, next_first)
     records = (
         db.session.query(Attendance)
         .filter(
@@ -366,21 +459,56 @@ def parse_year(value):
     return year
 
 
-def compute_streaks(records):
+def _weekdays_between(start, end):
+    """Số ngày T2–T6 nằm giữa start và end (không tính hai đầu)."""
+    count = 0
+    day = start + timedelta(days=1)
+    while day < end:
+        if day.weekday() < 5:
+            count += 1
+        day += timedelta(days=1)
+    return count
+
+
+def _last_workday_before(day):
+    """Ngày làm việc gần nhất TRƯỚC day (day chưa tính — ngày hôm nay
+    nhân viên vẫn còn có thể chấm công)."""
+    day = day - timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def compute_streaks(records, today=None):
     """(current_streak, best_streak) từ bản ghi đã sắp xếp theo ngày tăng dần.
 
-    Chuỗi đúng giờ = các bản ghi liên tiếp có status "present" (đi làm đúng
-    giờ theo đúng quy ước trạng thái của module: check-in không muộn).
-    Bất kỳ trạng thái nào khác (late / absent / on_leave) đều ngắt chuỗi.
-    current_streak là chuỗi đang chạy tính tới ngày công gần nhất.
+    Chuỗi đúng giờ chỉ nối khi hai ngày "present" liên tiếp là hai ngày làm
+    việc kề nhau (T2–T6; T6 -> T2 vẫn nối). Bất kỳ ngày làm việc nào không
+    có bản ghi "present" (nghỉ không phép, nghỉ phép, đi muộn) đều ngắt
+    chuỗi — trước đây hàm chỉ đếm bản ghi liên tiếp trong danh sách nên
+    ngày trống không ngắt được chuỗi. current_streak còn bị về 0 khi ngày
+    làm việc gần nhất đã qua mà không có bản ghi (chuỗi đã đứt, không còn
+    "đang chạy"); best_streak là chuỗi dài nhất trong toàn bộ bản ghi.
     """
     best = run = 0
+    prev_date = None
     for record in records:
-        if getattr(record, "status", None) == "present":
-            run += 1
+        work_date = getattr(record, "work_date", None)
+        if getattr(record, "status", None) == "present" and work_date is not None:
+            if prev_date is None or _weekdays_between(prev_date, work_date) > 0:
+                run = 1
+            else:
+                run += 1
             if run > best:
                 best = run
         else:
+            run = 0
+        if work_date is not None:
+            prev_date = work_date
+    if today is not None and records:
+        last_workday = _last_workday_before(today)
+        last_date = getattr(records[-1], "work_date", None)
+        if last_date is not None and last_date < last_workday:
             run = 0
     return run, best
 
@@ -418,7 +546,9 @@ def get_my_year(year_value):
         }
         for record in records
     ]
-    current_streak, best_streak = compute_streaks(records)
+    current_streak, best_streak = compute_streaks(
+        records, _now().date() if year == _now().date().year else None
+    )
     summary = {
         "total_days": sum(1 for r in records if r.check_in_at is not None),
         "on_time_days": sum(1 for r in records if r.status == "present"),
@@ -469,6 +599,9 @@ def get_monthly(month_value, args, current_role):
     if year_arg and month_arg:
         month_value = f"{year_arg:04d}-{month_arg:02d}"
     first, next_first = parse_month(month_value)
+    # Lấp các ngày trống đã qua thành absent/on_leave để bảng công phản
+    # ánh đúng ngày nghỉ (xem materialize_absences).
+    materialize_absences(first, next_first)
     page, limit = parse_pagination(args)
 
     from .schemas import attendance_list_schema
@@ -645,8 +778,15 @@ def update_attendance(attendance_id, data):
         if data["status"] != record.status:
             changes["status"] = [record.status, data["status"]]
             record.status = data["status"]
-    elif "check_in_at" in changes and record.status in ("present", "late"):
+    elif "check_in_at" in changes and record.status in (
+        "present",
+        "late",
+        "absent",
+    ):
         # Không chỉ định status mà sửa giờ vào -> tính lại muộn/đúng giờ.
+        # "absent" cũng tính lại: HR nhập giờ vào cho một ngày vắng tức là
+        # ngày đó thực ra đã đi làm (trước đây bản ghi absent không tồn tại
+        # nên nhánh này không bao giờ chạm tới).
         if record.check_in_at is not None:
             record.status = (
                 "late"

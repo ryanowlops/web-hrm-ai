@@ -114,6 +114,21 @@ def monthly_attendance():
     return jsonify(body), 200
 
 
+@bp.post("/attendance/materialize")
+@jwt_required()
+@require_roles(*HR_ROLES)
+def materialize_attendance():
+    """HR/Admin lấp ngày trống của 1 tháng thành absent/on_leave.
+
+    Query: ?month=YYYY-MM (mặc định tháng hiện tại). Chỉ lấp tới hết hôm
+    qua; chạy lại không tạo trùng. Bảng công tháng (monthly/my) cũng tự
+    gọi bước này mỗi lần mở, endpoint này để HR chủ động lấp trước.
+    """
+    first, next_first = services.parse_month(request.args.get("month"))
+    result = services.materialize_absences(first, next_first)
+    return jsonify({"data": {**result, "month": first.strftime("%Y-%m")}}), 200
+
+
 @bp.patch("/attendance/<int:attendance_id>")
 @jwt_required()
 @require_roles(*HR_ROLES)
