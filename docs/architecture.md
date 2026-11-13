@@ -137,7 +137,7 @@ Bảng công đã chốt cho kỳ lương thì khóa, không sửa trực tiếp
 Công thức:
   Lương theo ngày công = Lương cơ bản × (Ngày công hưởng lương / Ngày công chuẩn)
     Ngày công hưởng lương = ngày làm thực tế + ngày nghỉ có phép (không gồm nghỉ không lương)
-  Khấu trừ bảo hiểm = Lương cơ bản × Tỷ lệ BHXH/BHYT/BHTN (lấy từ cấu hình)
+  Khấu trừ bảo hiểm = Lương theo ngày công × Tỷ lệ BHXH/BHYT/BHTN (lấy từ cấu hình)
   Thu nhập tính được = Lương theo ngày công + Phụ cấp − Khấu trừ bảo hiểm − Khấu trừ khác (nếu có)
 HR xem trước toàn bộ bảng lương → kiểm tra bất thường → Chốt kỳ lương
   → sinh phiếu lương cho từng nhân viên (nhân viên xem được phiếu của mình ngay khi đã chốt).

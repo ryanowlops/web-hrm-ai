@@ -6,9 +6,17 @@ trực tiếp mà không cần dựng app.
 Công thức (A5.3):
 
     Lương theo ngày công = Lương cơ bản x (Ngày công hưởng lương / Ngày công chuẩn)
-    Khấu trừ bảo hiểm    = Lương cơ bản x Tỷ lệ BHXH/BHYT/BHTN (từ cấu hình)
+    Khấu trừ bảo hiểm    = Lương theo ngày công x Tỷ lệ BHXH/BHYT/BHTN (từ cấu hình)
     Thực lĩnh            = Lương theo ngày công + Phụ cấp
                            - Khấu trừ bảo hiểm - Khấu trừ khác
+
+Bảo hiểm tính trên lương theo ngày công (không phải lương cơ bản đủ tháng):
+bảng lương của app là bản đơn giản hoá, không theo luật BHXH đầy đủ — mọi
+khoản gắn với lương đều co giãn theo ngày công thực tế. Nhờ vậy thực lĩnh
+không bao giờ âm chỉ vì bảo hiểm khi nhân viên chưa có ngày công (kỳ nháp
+giữa tháng, chưa chấm công): ngày công = 0 thì bảo hiểm = 0, thực lĩnh
+= phụ cấp. Tháng làm đủ thì công thức này trùng với cách tính trên lương
+cơ bản (ngày công = ngày chuẩn).
 
 Trong đó "ngày công hưởng lương" (``paid_workdays``) = ngày làm thực tế
 + ngày nghỉ CÓ phép; ngày nghỉ KHÔNG lương (``unpaid_days``) không nằm trong
@@ -66,10 +74,10 @@ def calculate_salary(
         ...                      unpaid_days=1, insurance_rate=0.105)
         >>> r["breakdown"]["workday_salary"]   # 12.000.000 x 21/22
         11454545
-        >>> r["insurance_deduction"]           # 12.000.000 x 10,5%
-        1260000
-        >>> r["total_salary"]                  # 11.454.545 + 1.000.000 - 1.260.000
-        11194545
+        >>> r["insurance_deduction"]           # 11.454.545 x 10,5%
+        1202727
+        >>> r["total_salary"]                  # 11.454.545 + 1.000.000 - 1.202.727
+        11251818
 
     Ví dụ kiểm chứng 2 — đi làm đủ tháng:
         >>> r = calculate_salary(base_salary=10_000_000, allowance=500_000,
@@ -77,6 +85,13 @@ def calculate_salary(
         ...                      unpaid_days=0, insurance_rate=0.105)
         >>> r["breakdown"]["workday_salary"], r["insurance_deduction"], r["total_salary"]
         (10000000, 1050000, 9450000)
+
+    Ví dụ kiểm chứng 3 — kỳ nháp giữa tháng, chưa có ngày công nào:
+        >>> r = calculate_salary(base_salary=11_500_000, allowance=1_000_000,
+        ...                      standard_workdays=21, paid_workdays=0,
+        ...                      unpaid_days=0, insurance_rate=0.105)
+        >>> r["breakdown"]["workday_salary"], r["insurance_deduction"], r["total_salary"]
+        (0, 0, 1000000)
     """
     base = int(base_salary)
     allow = int(allowance)
@@ -94,7 +109,9 @@ def calculate_salary(
         raise ValueError("Tỷ lệ bảo hiểm phải nằm trong khoảng [0, 1)")
 
     workday_salary = _money(Decimal(base) * paid / standard)
-    insurance_deduction = _money(Decimal(base) * rate)
+    # Bảo hiểm tính trên lương theo ngày công (xem ghi chú ở đầu module):
+    # ngày công = 0 thì khấu trừ = 0, thực lĩnh không âm vì bảo hiểm.
+    insurance_deduction = _money(Decimal(workday_salary) * rate)
     total_salary = workday_salary + allow - insurance_deduction - other
 
     return {
