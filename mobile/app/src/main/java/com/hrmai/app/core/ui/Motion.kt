@@ -3,7 +3,6 @@ package com.hrmai.app.core.ui
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.rememberSharedContentState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -118,6 +117,9 @@ fun Modifier.sharedContent(
     key: String,
 ): Modifier {
     if (scope == null || animatedVisibilityScope == null) return this
+    // NOTE (Compose 1.7): rememberSharedContentState là hàm thành viên của
+    // SharedTransitionScope, không phải hàm top-level trong
+    // androidx.compose.animation — phải gọi trong with(scope).
     return with(scope) {
         this@sharedContent.sharedElement(
             state = rememberSharedContentState(key = key),
