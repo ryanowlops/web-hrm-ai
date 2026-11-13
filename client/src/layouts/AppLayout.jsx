@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@astryxdesign/core/AppShell';
@@ -9,7 +9,11 @@ import {
   SideNavSection,
 } from '@astryxdesign/core/SideNav';
 import { TopNav } from '@astryxdesign/core/TopNav';
-import { CommandPalette } from '@astryxdesign/core/CommandPalette';
+import {
+  CommandPalette,
+  CommandPaletteInput,
+  useCommandPaletteContext,
+} from '@astryxdesign/core/CommandPalette';
 import { createStaticSource } from '@astryxdesign/core/Typeahead';
 import { Avatar } from '@astryxdesign/core/Avatar';
 import { Button } from '@astryxdesign/core/Button';
@@ -253,6 +257,39 @@ function stripDiacritics(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'd');
+}
+
+/* Input riêng cho palette ⌘K — sửa Enter (Astryx 0.7.13):
+   CommandPalette mặc định để highlight ở -1 khi mở (không có mục nào
+   được chọn sẵn) và handler Enter của nó chỉ chạy khi highlightedIndex
+   >= 0, nên gõ xong bấm Enter không đi đâu cho tới khi bấm ↓/click.
+   Chặn Enter ở đây: khi chưa có mục nào được highlight mà đang có kết
+   quả thì chọn kết quả đầu tiên (đúng bằng ↓ + Enter) rồi đóng palette.
+   Chỉ can thiệp Enter; gõ, lọc, ↓/↑, Esc, hover, click vẫn đi đúng
+   đường mặc định của Astryx (CommandPaletteInput bỏ qua handler của nó
+   khi event đã bị preventDefault). Bỏ qua Enter đang gõ bằng IME. */
+function PaletteInput() {
+  const ctx = useCommandPaletteContext();
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (
+        e.key === 'Enter' &&
+        !e.nativeEvent.isComposing &&
+        e.nativeEvent.keyCode !== 229 &&
+        ctx &&
+        ctx.highlightedIndex === -1
+      ) {
+        const first = ctx.selectableItems.find((item) => !item.disabled);
+        if (first) {
+          e.preventDefault();
+          ctx.selectItem(first.value);
+          ctx.onClose();
+        }
+      }
+    },
+    [ctx],
+  );
+  return <CommandPaletteInput onKeyDown={handleKeyDown} />;
 }
 
 export default function AppLayout() {
@@ -573,6 +610,7 @@ export default function AppLayout() {
         isOpen={paletteOpen}
         onOpenChange={setPaletteOpen}
         searchSource={paletteSource}
+        input={<PaletteInput />}
         renderItem={(item, _isSelected) => (
           <span className="flex items-center gap-2">
             <Icon icon={item.auxiliaryData.icon} />

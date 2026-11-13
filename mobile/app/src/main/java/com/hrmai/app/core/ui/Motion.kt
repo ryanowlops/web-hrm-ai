@@ -2,6 +2,8 @@ package com.hrmai.app.core.ui
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.rememberSharedContentState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -9,14 +11,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.SharedTransitionScope
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.composed
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,8 +38,12 @@ import androidx.compose.ui.unit.dp
  * Chỉ chạy khi item xuất hiện lần đầu (remember + LaunchedEffect(Unit)) —
  * recompose không chạy lại. Lưu ý: item nào cuộn khỏi hẳn vùng đệm của
  * LazyColumn rồi quay lại sẽ chạy lại 1 lần (hành vi chuẩn của Compose).
+ *
+ * NOTE: viết dạng @Composable trực tiếp, KHÔNG dùng Modifier.composed —
+ * API đó đã bị xóa khỏi Compose 1.7 (BOM 2024.09.00 của app).
  */
-fun Modifier.listItemEnter(index: Int): Modifier = composed {
+@Composable
+fun Modifier.listItemEnter(index: Int): Modifier {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     val delay = index.coerceIn(0, 8) * 40
@@ -52,7 +57,7 @@ fun Modifier.listItemEnter(index: Int): Modifier = composed {
         animationSpec = tween(durationMillis = 250, delayMillis = delay),
         label = "listEnterOffset",
     )
-    this.alpha(alpha).offset(y = offsetY)
+    return this.alpha(alpha).offset(y = offsetY)
 }
 
 /** Cọ xám chạy ngang (shimmer) cho khung xương lúc tải dữ liệu. */
@@ -76,8 +81,11 @@ fun shimmerBrush(): Brush {
  * Thẻ bấm vào: thu nhỏ nhẹ (0.97) + rung khẽ khi chạm, giữ ripple mặc định.
  * Dùng thay `.clickable { }` cho thẻ list. KHÔNG dùng cho Button (Button đã
  * có ripple riêng, gắn thêm clickable sẽ bấm 2 lần).
+ * NOTE: @Composable trực tiếp, không dùng Modifier.composed (đã bị xóa ở
+ * Compose 1.7).
  */
-fun Modifier.pressable(onClick: () -> Unit): Modifier = composed {
+@Composable
+fun Modifier.pressable(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -89,9 +97,12 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier = composed {
     LaunchedEffect(pressed) {
         if (pressed) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
-    this
+    return this
         .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interactionSource = interactionSource) { onClick() }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+        ) { onClick() }
 }
 
 /**
