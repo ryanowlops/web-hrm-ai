@@ -362,6 +362,12 @@ def manager_decision(manager_employee, request_id, data):
             "INVALID_STATE",
             "Đơn không ở trạng thái chờ Manager duyệt (có thể đã được xử lý).",
         )
+    if request.employee_id == manager_employee.id:
+        raise ApiError(
+            403,
+            "FORBIDDEN",
+            "Bạn không được duyệt đơn nghỉ của chính mình.",
+        )
     requester = db.session.get(Employee, request.employee_id)
     if request.employee_id != manager_employee.id and not _is_manager_of(
         manager_employee, requester
@@ -387,7 +393,10 @@ def manager_decision(manager_employee, request_id, data):
     return request
 
 
-def hr_decision(request_id, data):
+def hr_decision(request_id, data, actor_employee=None):
+    """HR duyệt cuối. actor_employee (nếu có) là người đang bấm duyệt —
+    không được duyệt đơn của chính mình; service gọi trực tiếp (chatbot,
+    test) không truyền actor thì bỏ qua kiểm tra này."""
     request = _get_request_or_404(request_id)
     if request.status != STATUS_MANAGER_APPROVED:
         raise ApiError(
@@ -395,8 +404,31 @@ def hr_decision(request_id, data):
             "INVALID_STATE",
             "Đơn chưa qua duyệt của Manager hoặc đã được HR xử lý.",
         )
+    if actor_employee is not None and request.employee_id == actor_employee.id:
+        raise ApiError(
+            403,
+            "FORBIDDEN",
+            "Bạn không được duyệt đơn nghỉ của chính mình.",
+        )
 
     decision, note = _validate_decision(data)
+    if decision == "approved":
+        # Kiểm tra lại số dư TRƯỚC khi trừ: hai đơn có thể cùng được tạo
+        # khi còn đủ phép nhưng duyệt cả hai sẽ làm số dư âm.
+        leave_type = db.session.get(LeaveType, request.leave_type_id)
+        if leave_type is not None and _has_quota(leave_type):
+            balance = get_or_create_balance(
+                request.employee_id, leave_type, request.from_date.year
+            )
+            remaining = (balance.total_days or 0) - (balance.used_days or 0)
+            if (request.days_count or 0) > remaining:
+                raise ApiError(
+                    409,
+                    "INSUFFICIENT_LEAVE_BALANCE",
+                    f"Số dư phép không đủ: còn {remaining} ngày, "
+                    f"đơn xin {request.days_count} ngày.",
+                )
+
     request.hr_decision = decision
     request.hr_note = note or None
     request.decided_at = func.now()

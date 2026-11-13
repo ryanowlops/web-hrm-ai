@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Department, Employee, Notification, User
+from app.models import Contract, Department, Employee, Notification, User
 from app.models.assets import AssetAssignment
 from app.models.offboarding import OffboardingProcess, OffboardingTask
 
@@ -283,6 +283,25 @@ def complete_process(process_id):
         account = User.query.filter_by(employee_id=employee.id).first()
         if account is not None:
             account.is_active = False
+        # Don dep lien ket: phong nao do nguoi nay lam truong phong thi
+        # khong con truong phong; cap duoi truc tiep khong con tro ve
+        # nguoi da nghi; hop dong dang active thi cham dut. Cung mot
+        # transaction voi phan hoan tat o tren.
+        Department.query.filter_by(manager_id=employee.id).update(
+            {Department.manager_id: None}, synchronize_session=False
+        )
+        Employee.query.filter_by(manager_id=employee.id).update(
+            {Employee.manager_id: None}, synchronize_session=False
+        )
+        Contract.query.filter_by(
+            employee_id=employee.id, status=Contract.STATUS_ACTIVE
+        ).update(
+            {
+                Contract.status: Contract.STATUS_TERMINATED,
+                Contract.end_date: process.completed_at.date(),
+            },
+            synchronize_session=False,
+        )
     db.session.commit()
     return process
 

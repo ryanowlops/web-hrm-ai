@@ -101,25 +101,37 @@ def set_fields(obj, data, allowed):
             setattr(obj, field, data[field])
 
 
-def employee_count(department_id):
-    return Employee.query.filter_by(department_id=department_id).count()
+def employee_count(department_id, active_only=True):
+    """Số nhân viên của một phòng ban.
+
+    Mặc định (active_only=True) chỉ đếm nhân viên đang làm việc / đang
+    nghỉ phép — đây là con số hiển thị. Delete-department guard truyền
+    active_only=False để đếm mọi bản ghi kể cả người đã nghỉ việc.
+    """
+    query = Employee.query.filter_by(department_id=department_id)
+    if active_only:
+        query = query.filter(Employee.status.in_(
+            (Employee.STATUS_WORKING, Employee.STATUS_ON_LEAVE)))
+    return query.count()
 
 
-def employee_counts():
+def employee_counts(active_only=True):
     """Số nhân viên của MỌI phòng ban trong MỘT truy vấn GROUP BY.
 
     Thay cho employee_count() gọi lặp theo từng phòng (N+1 — danh sách
     phòng ban từng tốn ~1,8s trên production vì mỗi count là một vòng
     khứ hồi tới Neon). Trả {department_id: count}; phòng chưa có nhân
-    viên thì vắng mặt trong dict (coi như 0).
+    viên thì vắng mặt trong dict (coi như 0). Mặc định chỉ đếm nhân viên
+    đang làm việc / đang nghỉ phép (xem employee_count).
     """
     from app.extensions import db
 
-    rows = (
-        db.session.query(Employee.department_id, db.func.count(Employee.id))
-        .group_by(Employee.department_id)
-        .all()
-    )
+    query = db.session.query(
+        Employee.department_id, db.func.count(Employee.id))
+    if active_only:
+        query = query.filter(Employee.status.in_(
+            (Employee.STATUS_WORKING, Employee.STATUS_ON_LEAVE)))
+    rows = query.group_by(Employee.department_id).all()
     return {dept_id: count for dept_id, count in rows if dept_id is not None}
 
 
@@ -186,7 +198,9 @@ def update_department(department_id, data):
 def delete_department(department_id):
     """Chặn xóa phòng ban còn nhân viên hoặc còn chức vụ (A7 — toàn vẹn)."""
     department = get_department(department_id)
-    if employee_count(department.id) > 0:
+    # Guard đếm MỌI bản ghi (kể cả người đã nghỉ): phòng còn hồ sơ nhân
+    # viên thì không được xóa, dù con số hiển thị chỉ tính người đang làm.
+    if employee_count(department.id, active_only=False) > 0:
         raise ApiError(
             409,
             "DEPARTMENT_HAS_EMPLOYEES",

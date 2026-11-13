@@ -293,11 +293,25 @@ class TestCancel:
 # Tự duyệt đơn của chính mình (HTTP — cần JWT identity)
 # ---------------------------------------------------------------------------
 
+def _clear_cached_user():
+    """Xóa user đã cache trong flask.g.
+
+    conftest giữ MỘT app context cho cả test nên mọi request HTTP của
+    test đều dùng chung `g`; guards.load_current_user cache user đầu
+    tiên vào g.current_user và các request sau (dù mang token khác)
+    sẽ bị xác thực nhầm thành user đó. Phải xóa cache trước mỗi
+    request làm với một user khác.
+    """
+    from flask import g
+    g.pop("current_user", None)
+
+
 def test_manager_cannot_approve_own_request(
         app, client, session, team, leave_type):
     """[BUG] Manager đang tự duyệt đơn nghỉ của chính mình ở vòng 1."""
     token = login(client, "nv0001@hrm.local", "Manager@123")
     headers = auth_headers(token)
+    _clear_cached_user()
     created = client.post("/api/v1/leave/requests", json={
         "leave_type_id": leave_type.id,
         "from_date": "2026-11-09", "to_date": "2026-11-10",
@@ -305,6 +319,7 @@ def test_manager_cannot_approve_own_request(
     }, headers=headers)
     assert created.status_code == 201, created.get_json()
     request_id = created.get_json()["id"]
+    _clear_cached_user()
     resp = client.post(
         f"/api/v1/leave/requests/{request_id}/manager-decision",
         json={"decision": "approved", "note": ""}, headers=headers)
@@ -319,6 +334,7 @@ def test_hr_cannot_approve_own_request(app, client, session, team, leave_type):
     session.commit()
     hr_token = login(client, "nv0003@hrm.local", "Hr@12345")
     hr_headers = auth_headers(hr_token)
+    _clear_cached_user()
     created = client.post("/api/v1/leave/requests", json={
         "leave_type_id": leave_type.id,
         "from_date": "2026-11-09", "to_date": "2026-11-10",
@@ -328,10 +344,12 @@ def test_hr_cannot_approve_own_request(app, client, session, team, leave_type):
     request_id = created.get_json()["id"]
     mgr_token = login(client, "nv0001@hrm.local", "Manager@123")
     mgr_headers = auth_headers(mgr_token)
+    _clear_cached_user()
     mgr_resp = client.post(
         f"/api/v1/leave/requests/{request_id}/manager-decision",
         json={"decision": "approved", "note": ""}, headers=mgr_headers)
     assert mgr_resp.status_code == 200, mgr_resp.get_json()
+    _clear_cached_user()
     resp = client.post(
         f"/api/v1/leave/requests/{request_id}/hr-decision",
         json={"decision": "approved", "note": ""}, headers=hr_headers)

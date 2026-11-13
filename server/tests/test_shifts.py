@@ -106,15 +106,35 @@ class TestCorrectionWrongDate:
     def test_approval_does_not_touch_other_date_record(
             self, app, session, team):
         """[BUG] Dù tạo được đơn sai ngày, duyệt nó cũng không được ghi đè
-        bản ghi của ngày khác."""
+        bản ghi của ngày khác.
+
+        Đơn sai ngày không tạo được qua create_correction nữa (test anh em
+        yêu cầu raise 400), nên test này chèn trực tiếp dòng dữ liệu cũ
+        (legacy, tạo trước khi có validate) để kiểm tra lớp phòng thủ
+        trong _apply: duyệt phải ghi vào đúng ngày 10/11, không đụng 05/11.
+        """
+        from app.models.shifts import AttendanceCorrection
+
         att = _attendance(session, team["employee"].id, 5, "present",
                           check_in=datetime(2026, 11, 5, 8, 0))
-        corr = _correction(team, 10, check_in=datetime(2026, 11, 10, 8, 0),
-                           attendance_id=att.id)
+        corr = AttendanceCorrection(
+            employee_id=team["employee"].id,
+            attendance_id=att.id,
+            work_date=date(2026, 11, 10),
+            requested_check_in=datetime(2026, 11, 10, 8, 0),
+            reason="Quen cham cong",
+        )
+        session.add(corr)
+        session.commit()
         _approve_correction(team, corr.id)
         session.refresh(att)
         assert att.check_in_at == datetime(2026, 11, 5, 8, 0)
         assert att.work_date == date(2026, 11, 5)
+        # Và giờ giải trình phải được ghi vào đúng ngày 10/11.
+        row_10 = session.query(Attendance).filter_by(
+            employee_id=team["employee"].id,
+            work_date=date(2026, 11, 10)).one()
+        assert row_10.check_in_at == datetime(2026, 11, 10, 8, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -266,16 +286,29 @@ class TestOvertime:
                                              "approved", None)
         assert exc.value.status == 409
 
+    def _clear_cached_user(self):
+        """Xóa user đã cache trong flask.g (xem test_leave.py).
+
+        conftest giữ MỘT app context cho cả test nên mọi request HTTP
+        dùng chung `g`; guards.load_current_user cache user đầu tiên
+        vào g.current_user và request sau (dù mang token khác) sẽ bị
+        xác thực nhầm thành user đó.
+        """
+        from flask import g
+        g.pop("current_user", None)
+
     def test_overtime_reject_requires_note_via_http(
             self, app, client, session, team):
         token = login(client, "nv0002@hrm.local", "Employee@123")
         headers = auth_headers(token)
+        self._clear_cached_user()
         created = client.post("/api/v1/shifts/overtime", json={
             "work_date": "2026-11-10", "hours": 2, "reason": "Gap viec",
         }, headers=headers)
         assert created.status_code == 201, created.get_json()
         request_id = created.get_json()["data"]["id"]
         mgr_token = login(client, "nv0001@hrm.local", "Manager@123")
+        self._clear_cached_user()
         resp = client.post(
             f"/api/v1/shifts/overtime/{request_id}/manager-decision",
             json={"decision": "reject"}, headers=auth_headers(mgr_token))

@@ -157,8 +157,9 @@ def manager_decision(request_id):
 @bp.post("/requests/<int:request_id>/hr-decision")
 @require_roles("hr", "admin")
 def hr_decision(request_id):
+    _, employee = services.get_current_employee_or_none()
     data = schemas.DecisionSchema().load(request.get_json(force=True))
-    updated = services.hr_decision(request_id, data)
+    updated = services.hr_decision(request_id, data, actor_employee=employee)
     return jsonify(schemas.leave_request_to_dict(updated))
 
 

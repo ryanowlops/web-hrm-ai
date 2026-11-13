@@ -17,7 +17,7 @@ Mọi thao tác ghi nằm trong transaction; lỗi nghiệp vụ ném ApiError
 from __future__ import annotations
 
 import calendar
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.blueprints.payroll.calculator import (
     DEFAULT_INSURANCE_RATE,
@@ -203,8 +203,12 @@ def get_period(period_id: int) -> PayrollPeriod:
 # ---------------------------------------------------------------------------
 
 
-def _active_contract(employee_id: int, first: date, last: date) -> Contract | None:
-    """Hợp đồng hiệu lực trong tháng: chưa terminated, khoảng ngày giao tháng."""
+def _contracts_in_month(employee_id: int, first: date, last: date) -> list[Contract]:
+    """Mọi hợp đồng (chưa terminated) giao với tháng, xếp theo ngày hiệu lực.
+
+    Tháng có một hợp đồng thì dùng đúng nó (hành vi cũ). Tháng đổi hợp
+    đồng giữa chừng thì trả về cả hai để chia ngày công theo từng đoạn.
+    """
     contracts = (
         db.session.query(Contract)
         .filter(
@@ -212,35 +216,57 @@ def _active_contract(employee_id: int, first: date, last: date) -> Contract | No
             Contract.status != Contract.STATUS_TERMINATED,
             Contract.start_date <= last,
         )
-        .order_by(Contract.start_date.desc())
+        .order_by(Contract.start_date.asc())
         .all()
     )
-    for contract in contracts:
-        if contract.end_date is None or contract.end_date >= first:
-            return contract
-    return None
+    return [
+        c for c in contracts if c.end_date is None or c.end_date >= first
+    ]
 
 
-def _worked_days(employee_id: int, first: date, last: date) -> float:
-    """Ngày làm thực tế: số bản ghi attendance present/late trong tháng."""
-    count = (
-        db.session.query(Attendance)
+def _contract_for_date(contracts: list[Contract], day: date) -> Contract:
+    """Hợp đồng hiệu lực vào một ngày cụ thể (ngày rơi vào kẽ hở giữa hai
+    hợp đồng thì lấy hợp đồng gần nhất: đoạn trước đó, hoặc đoạn sau)."""
+    covering = [
+        c
+        for c in contracts
+        if c.start_date <= day and (c.end_date is None or c.end_date >= day)
+    ]
+    if covering:
+        return max(covering, key=lambda c: c.start_date)
+    later = [c for c in contracts if c.start_date > day]
+    if later:
+        return min(later, key=lambda c: c.start_date)
+    return max(contracts, key=lambda c: c.start_date)
+
+
+def _worked_date_set(employee_id: int, first: date, last: date) -> set[date]:
+    """Tập ngày đã chấm công present/late trong tháng."""
+    rows = (
+        db.session.query(Attendance.work_date)
         .filter(
             Attendance.employee_id == employee_id,
             Attendance.work_date >= first,
             Attendance.work_date <= last,
             Attendance.status.in_(WORKED_ATTENDANCE_STATUSES),
         )
-        .count()
+        .all()
     )
-    return float(count)
+    return {row.work_date for row in rows}
 
 
-def _leave_days(employee_id: int, first: date, last: date) -> tuple[float, float]:
-    """(ngày nghỉ có phép, ngày nghỉ không lương) đã duyệt trong tháng.
+def _worked_days(employee_id: int, first: date, last: date) -> float:
+    """Ngày làm thực tế: số bản ghi attendance present/late trong tháng."""
+    return float(len(_worked_date_set(employee_id, first, last)))
 
-    Đơn nghỉ giao tháng được phân bổ theo tỷ lệ số ngày lịch giao nhau
-    trên tổng số ngày của đơn (đơn 0,5 ngày vẫn đúng tỷ lệ).
+
+def _leave_portions_by_date(
+    employee_id: int, first: date, last: date
+) -> tuple[dict[date, float], dict[date, float]]:
+    """(nghỉ có phép, nghỉ không lương) theo từng ngày lịch, đã cắt theo tháng.
+
+    Mỗi đơn được phân bổ đều theo số ngày lịch: một ngày trong đơn chiếm
+    days_count / tổng-số-ngày-của-đơn (đơn 0,5 ngày vẫn đúng tỷ lệ).
     """
     requests = (
         db.session.query(LeaveRequest)
@@ -252,22 +278,148 @@ def _leave_days(employee_id: int, first: date, last: date) -> tuple[float, float
         )
         .all()
     )
-    paid_days = 0.0
-    unpaid_days = 0.0
+    paid: dict[date, float] = {}
+    unpaid: dict[date, float] = {}
     for req in requests:
         total_span = (req.to_date - req.from_date).days + 1
         if total_span <= 0:
             continue
-        overlap = (min(req.to_date, last) - max(req.from_date, first)).days + 1
-        if overlap <= 0:
-            continue
-        portion = float(req.days_count) * overlap / total_span
+        per_day = float(req.days_count) / total_span
         is_paid = bool(req.leave_type.paid) if req.leave_type is not None else True
-        if is_paid:
-            paid_days += portion
-        else:
-            unpaid_days += portion
-    return round(paid_days, 2), round(unpaid_days, 2)
+        target = paid if is_paid else unpaid
+        day = max(req.from_date, first)
+        end = min(req.to_date, last)
+        while day <= end:
+            target[day] = target.get(day, 0.0) + per_day
+            day += timedelta(days=1)
+    return paid, unpaid
+
+
+def _leave_days(employee_id: int, first: date, last: date) -> tuple[float, float]:
+    """(ngày nghỉ có phép, ngày nghỉ không lương) đã duyệt trong tháng.
+
+    Đơn nghỉ giao tháng được phân bổ theo tỷ lệ số ngày lịch giao nhau
+    trên tổng số ngày của đơn (đơn 0,5 ngày vẫn đúng tỷ lệ).
+    """
+    paid_by_date, unpaid_by_date = _leave_portions_by_date(
+        employee_id, first, last
+    )
+    return (
+        round(sum(paid_by_date.values()), 2),
+        round(sum(unpaid_by_date.values()), 2),
+    )
+
+
+def _paid_days_union(employee_id: int, first: date, last: date) -> float:
+    """Ngày công hưởng lương = HỢP của ngày chấm công và ngày nghỉ có phép.
+
+    Một ngày vừa chấm công vừa có đơn nghỉ đã duyệt chỉ tính 1 lần
+    (trước đây cộng dồn thành 2 ngày hưởng lương cho cùng một ngày).
+    """
+    worked = _worked_date_set(employee_id, first, last)
+    paid_by_date, _ = _leave_portions_by_date(employee_id, first, last)
+    union = float(len(worked))
+    for day, portion in paid_by_date.items():
+        if day not in worked:
+            union += portion
+    return round(union, 2)
+
+
+def _multi_contract_salary(
+    contracts: list[Contract],
+    employee_id: int,
+    first: date,
+    last: date,
+    standard: float,
+    rate: float,
+    other_deduction: int,
+) -> dict | None:
+    """Chia ngày công hưởng lương theo từng đoạn hợp đồng trong tháng.
+
+    Mỗi đoạn tính riêng bằng calculate_salary với lương/phụ cấp của đoạn
+    đó; phụ cấp chia theo tỷ lệ ngày công của đoạn trên tổng ngày công
+    (phụ cấp là khoản cố định theo tháng, không nhân đôi khi đổi hợp
+    đồng). Trả về None khi tháng không có ngày công hưởng lương nào —
+    caller dùng hợp đồng mới nhất để tính theo công thức 1 hợp đồng.
+    """
+    worked_dates = _worked_date_set(employee_id, first, last)
+    paid_by_date, _ = _leave_portions_by_date(employee_id, first, last)
+    segment_paid: dict[int, float] = {c.id: 0.0 for c in contracts}
+    for day in worked_dates:
+        segment_paid[_contract_for_date(contracts, day).id] += 1.0
+    for day, portion in paid_by_date.items():
+        if day not in worked_dates:
+            segment_paid[_contract_for_date(contracts, day).id] += portion
+
+    total_paid = round(sum(segment_paid.values()), 2)
+    if total_paid <= 0:
+        return None
+    if total_paid > standard:
+        factor = standard / total_paid
+        segment_paid = {cid: round(p * factor, 4) for cid, p in segment_paid.items()}
+        total_paid = standard
+
+    segments = []
+    total_salary = 0
+    insurance_total = 0
+    workday_salary_total = 0
+    allowance_total = 0
+    for contract in contracts:
+        paid_c = segment_paid[contract.id]
+        if paid_c <= 0:
+            continue
+        allowance_c = int(round(contract.allowance * paid_c / total_paid))
+        seg = calculate_salary(
+            base_salary=contract.base_salary,
+            allowance=allowance_c,
+            standard_workdays=standard,
+            paid_workdays=paid_c,
+            unpaid_days=0,
+            insurance_rate=rate,
+            other_deduction=0,
+        )
+        segments.append(
+            {
+                "contract_id": contract.id,
+                "base_salary": contract.base_salary,
+                "allowance": allowance_c,
+                "paid_workdays": float(paid_c),
+                "workday_salary": seg["breakdown"]["workday_salary"],
+                "insurance_deduction": seg["insurance_deduction"],
+                "total_salary": seg["total_salary"],
+            }
+        )
+        total_salary += seg["total_salary"]
+        insurance_total += seg["insurance_deduction"]
+        workday_salary_total += seg["breakdown"]["workday_salary"]
+        allowance_total += allowance_c
+
+    total_salary -= other_deduction
+    latest = max(contracts, key=lambda c: c.start_date)
+    return {
+        "workdays_paid": float(total_paid),
+        "base_salary": latest.base_salary,
+        "allowance": allowance_total,
+        "insurance_deduction": insurance_total,
+        "other_deduction": other_deduction,
+        "total_salary": total_salary,
+        "breakdown": {
+            "formula": "sum over contract segments of "
+            "(base_salary * paid_workdays / standard_workdays "
+            "+ allowance - insurance_deduction) - other_deduction",
+            "base_salary": latest.base_salary,
+            "allowance": allowance_total,
+            "standard_workdays": float(standard),
+            "paid_workdays": float(total_paid),
+            "workday_salary": workday_salary_total,
+            "insurance_rate": float(rate),
+            "insurance_deduction": insurance_total,
+            "other_deduction": other_deduction,
+            "total_salary": total_salary,
+            "currency": "VND",
+            "contract_segments": segments,
+        },
+    }
 
 
 def calculate_period(period_id: int, actor) -> dict:
@@ -305,16 +457,17 @@ def calculate_period(period_id: int, actor) -> dict:
         for employee in employees:
             if employee.start_date is not None and employee.start_date > last:
                 continue  # chưa vào làm trong tháng này
-            contract = _active_contract(employee.id, first, last)
-            if contract is None:
+            contracts = _contracts_in_month(employee.id, first, last)
+            if not contracts:
                 skipped_no_contract += 1
                 continue
 
             worked = _worked_days(employee.id, first, last)
             paid_leave, unpaid = _leave_days(employee.id, first, last)
-            paid_raw = worked + paid_leave
-            capped = paid_raw > standard
-            paid_workdays = min(paid_raw, standard)
+            paid_union = _paid_days_union(employee.id, first, last)
+            capped = paid_union > standard
+            paid_workdays = min(paid_union, standard)
+            overlap = round(worked + paid_leave - paid_union, 2)
 
             item = (
                 db.session.query(PayrollItem)
@@ -326,24 +479,74 @@ def calculate_period(period_id: int, actor) -> dict:
             )
             other_deduction = item.other_deduction if item is not None else 0
 
-            result = calculate_salary(
-                base_salary=contract.base_salary,
-                allowance=contract.allowance,
-                standard_workdays=standard,
-                paid_workdays=paid_workdays,
-                unpaid_days=unpaid,
-                insurance_rate=rate,
-                other_deduction=other_deduction,
-            )
-            breakdown = dict(result["breakdown"])
-            breakdown.update(
-                {
-                    "contract_id": contract.id,
-                    "worked_days": worked,
-                    "paid_leave_days": paid_leave,
-                    "paid_workdays_capped": capped,
-                }
-            )
+            if len(contracts) == 1:
+                contract = contracts[0]
+                result = calculate_salary(
+                    base_salary=contract.base_salary,
+                    allowance=contract.allowance,
+                    standard_workdays=standard,
+                    paid_workdays=paid_workdays,
+                    unpaid_days=unpaid,
+                    insurance_rate=rate,
+                    other_deduction=other_deduction,
+                )
+                breakdown = dict(result["breakdown"])
+                breakdown.update(
+                    {
+                        "contract_id": contract.id,
+                        "worked_days": worked,
+                        "paid_leave_days": paid_leave,
+                        "paid_workdays_capped": capped,
+                        "overlap_days": overlap,
+                    }
+                )
+            else:
+                multi = _multi_contract_salary(
+                    contracts,
+                    employee.id,
+                    first,
+                    last,
+                    standard,
+                    rate,
+                    other_deduction,
+                )
+                if multi is None:
+                    # Tháng không có ngày công hưởng lương: dùng hợp đồng
+                    # mới nhất theo công thức 1 hợp đồng (thực lĩnh = phụ cấp).
+                    contract = max(contracts, key=lambda c: c.start_date)
+                    result = calculate_salary(
+                        base_salary=contract.base_salary,
+                        allowance=contract.allowance,
+                        standard_workdays=standard,
+                        paid_workdays=0,
+                        unpaid_days=unpaid,
+                        insurance_rate=rate,
+                        other_deduction=other_deduction,
+                    )
+                    breakdown = dict(result["breakdown"])
+                    breakdown.update(
+                        {
+                            "contract_id": contract.id,
+                            "worked_days": worked,
+                            "paid_leave_days": paid_leave,
+                            "paid_workdays_capped": capped,
+                            "overlap_days": overlap,
+                        }
+                    )
+                else:
+                    contract = max(contracts, key=lambda c: c.start_date)
+                    result = multi
+                    breakdown = dict(result["breakdown"])
+                    breakdown.update(
+                        {
+                            "contract_id": contract.id,
+                            "worked_days": worked,
+                            "paid_leave_days": paid_leave,
+                            "unpaid_days": unpaid,
+                            "paid_workdays_capped": capped,
+                            "overlap_days": overlap,
+                        }
+                    )
 
             if item is None:
                 item = PayrollItem(period_id=period.id, employee_id=employee.id)

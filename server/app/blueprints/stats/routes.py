@@ -35,20 +35,23 @@ STATS_ROLES = ("admin", "hr", "manager")
 CONTRACT_EXPIRY_DAYS = 30
 
 
-def _manager_department_id(user) -> int | None:
-    """Phòng ban trong phạm vi của Manager; None nếu không xác định được.
+def _manager_department_ids(user) -> list[int]:
+    """Các phòng ban trong phạm vi của Manager (rỗng nếu không có).
 
-    Ưu tiên phòng ban mà nhân viên làm trưởng phòng (departments.manager_id),
-    lùi về phòng ban nhân viên đang thuộc về.
+    Ưu tiên mọi phòng ban mà nhân viên làm trưởng phòng
+    (departments.manager_id); nếu không làm trưởng phòng nào thì lùi về
+    phòng ban nhân viên đang thuộc về.
     """
     employee = user.employee if user is not None else None
     if employee is None:
-        return None
+        return []
     managed = (Department.query.filter_by(manager_id=employee.id)
-               .order_by(Department.id).first())
-    if managed is not None:
-        return managed.id
-    return employee.department_id
+               .order_by(Department.id).all())
+    if managed:
+        return [dept.id for dept in managed]
+    if employee.department_id is not None:
+        return [employee.department_id]
+    return []
 
 
 def _today():
@@ -59,31 +62,32 @@ def _today():
     return datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
 
 
-def _scope_department_id(user) -> int | None:
-    """Phạm vi dữ liệu: None = toàn công ty (admin/hr); số = 1 phòng ban."""
+def _scope_department_ids(user) -> list[int] | None:
+    """Phạm vi dữ liệu: None = toàn công ty (admin/hr); list = các phòng ban."""
     if user.role in ("admin", "hr"):
         return None
-    department_id = _manager_department_id(user)
-    if department_id is None:
+    department_ids = _manager_department_ids(user)
+    if not department_ids:
         raise ApiError(403, "FORBIDDEN",
                        "Tài khoản Manager chưa gắn với phòng ban nào để xem thống kê.")
-    return department_id
+    return department_ids
 
 
-def _scoped_employees(department_id: int | None):
+def _scoped_employees(department_ids: list[int] | None):
     query = Employee.query
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     return query
 
 
-def _employees_overview(department_id: int | None) -> dict:
-    active = _scoped_employees(department_id).filter(
+def _employees_overview(department_ids: list[int] | None) -> dict:
+    active = _scoped_employees(department_ids).filter(
         Employee.status != Employee.STATUS_RESIGNED)
-    by_status_query = db.session.query(Employee.status, db.func.count(Employee.id))
-    if department_id is not None:
+    by_status_query = (db.session.query(Employee.status, db.func.count(Employee.id))
+                       .filter(Employee.status != Employee.STATUS_RESIGNED))
+    if department_ids is not None:
         by_status_query = by_status_query.filter(
-            Employee.department_id == department_id)
+            Employee.department_id.in_(department_ids))
     by_status_rows = by_status_query.group_by(Employee.status).all()
     dept_rows = (
         db.session.query(Department.id, Department.name, db.func.count(Employee.id))
@@ -91,8 +95,8 @@ def _employees_overview(department_id: int | None) -> dict:
                    & (Employee.status != Employee.STATUS_RESIGNED))
         .group_by(Department.id, Department.name)
         .order_by(Department.name).all())
-    if department_id is not None:
-        dept_rows = [row for row in dept_rows if row[0] == department_id]
+    if department_ids is not None:
+        dept_rows = [row for row in dept_rows if row[0] in department_ids]
     return {
         "totalEmployees": active.count(),
         "totalDepartments": len(dept_rows),
@@ -104,7 +108,7 @@ def _employees_overview(department_id: int | None) -> dict:
     }
 
 
-def _attendance_overview(department_id: int | None) -> dict:
+def _attendance_overview(department_ids: list[int] | None) -> dict:
     today = _today()
     month_start = today.replace(day=1)
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -112,8 +116,8 @@ def _attendance_overview(department_id: int | None) -> dict:
              .join(Employee, Attendance.employee_id == Employee.id)
              .filter(Attendance.work_date >= month_start,
                      Attendance.work_date < next_month))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     counts = dict(query.group_by(Attendance.status).all())
     total_records = sum(counts.values())
     attended = counts.get(Attendance.STATUS_PRESENT, 0) + counts.get(Attendance.STATUS_LATE, 0)
@@ -128,19 +132,19 @@ def _attendance_overview(department_id: int | None) -> dict:
     }
 
 
-def _pending_leave_overview(department_id: int | None) -> dict:
+def _pending_leave_overview(department_ids: list[int] | None) -> dict:
     waiting = (LeaveRequest.STATUS_PENDING, LeaveRequest.STATUS_MANAGER_APPROVED)
     query = (db.session.query(LeaveRequest.status, db.func.count(LeaveRequest.id))
              .join(Employee, LeaveRequest.employee_id == Employee.id)
              .filter(LeaveRequest.status.in_(waiting)))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     counts = dict(query.group_by(LeaveRequest.status).all())
     items_query = (LeaveRequest.query
                    .join(Employee, LeaveRequest.employee_id == Employee.id)
                    .filter(LeaveRequest.status.in_(waiting)))
-    if department_id is not None:
-        items_query = items_query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        items_query = items_query.filter(Employee.department_id.in_(department_ids))
     items = items_query.order_by(LeaveRequest.id.desc()).limit(10).all()
     return {
         "pendingApproval": sum(counts.values()),
@@ -158,13 +162,13 @@ def _pending_leave_overview(department_id: int | None) -> dict:
     }
 
 
-def _attendance_today_overview(department_id: int | None) -> dict:
+def _attendance_today_overview(department_ids: list[int] | None) -> dict:
     today = _today()
     query = (db.session.query(Attendance.status, db.func.count(Attendance.id))
              .join(Employee, Attendance.employee_id == Employee.id)
              .filter(Attendance.work_date == today))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     counts = dict(query.group_by(Attendance.status).all())
     return {
         "present": counts.get(Attendance.STATUS_PRESENT, 0),
@@ -174,7 +178,7 @@ def _attendance_today_overview(department_id: int | None) -> dict:
     }
 
 
-def _expiring_contracts_overview(department_id: int | None) -> dict:
+def _expiring_contracts_overview(department_ids: list[int] | None) -> dict:
     today = _today()
     horizon = today + timedelta(days=CONTRACT_EXPIRY_DAYS)
     query = (Contract.query
@@ -184,8 +188,8 @@ def _expiring_contracts_overview(department_id: int | None) -> dict:
                      Contract.end_date >= today,
                      Contract.end_date <= horizon)
              .order_by(Contract.end_date.asc()))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     contracts = query.all()
     return {
         "expiringInDays": CONTRACT_EXPIRY_DAYS,
@@ -200,10 +204,10 @@ def _expiring_contracts_overview(department_id: int | None) -> dict:
     }
 
 
-def _recruitment_overview(department_id: int | None) -> dict:
+def _recruitment_overview(department_ids: list[int] | None) -> dict:
     query = JobPosting.query.filter_by(status=JobPosting.STATUS_OPEN)
-    if department_id is not None:
-        query = query.filter(JobPosting.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(JobPosting.department_id.in_(department_ids))
     return {"openJobPostings": query.count()}
 
 
@@ -211,7 +215,7 @@ def _recruitment_overview(department_id: int | None) -> dict:
 # Báo cáo tháng (Đợt mở rộng v2 — Đội F). Chỉ THÊM mới, không đổi /overview.
 #   GET /stats/reports/summary?month=&year=
 #   GET /stats/reports/export?type=attendance|payroll|leave&month=&year=
-# Phạm vi dữ liệu dùng chung _scope_department_id: admin/hr = toàn công ty,
+# Phạm vi dữ liệu dùng chung _scope_department_ids: admin/hr = toàn công ty,
 # manager = chỉ phòng ban của mình.
 # ---------------------------------------------------------------------------
 
@@ -250,15 +254,15 @@ def _month_range(month: int, year: int) -> tuple[date, date]:
     return start, end
 
 
-def _headcount_by_department(department_id: int | None) -> dict:
+def _headcount_by_department(department_ids: list[int] | None) -> dict:
     rows = (
         db.session.query(Department.id, Department.name, db.func.count(Employee.id))
         .outerjoin(Employee, (Employee.department_id == Department.id)
                    & (Employee.status != Employee.STATUS_RESIGNED))
         .group_by(Department.id, Department.name)
         .order_by(Department.name).all())
-    if department_id is not None:
-        rows = [row for row in rows if row[0] == department_id]
+    if department_ids is not None:
+        rows = [row for row in rows if row[0] in department_ids]
     by_department = [
         {"departmentId": dept_id, "departmentName": name, "employeeCount": count}
         for dept_id, name, count in rows
@@ -269,13 +273,13 @@ def _headcount_by_department(department_id: int | None) -> dict:
     }
 
 
-def _attendance_month(month: int, year: int, department_id: int | None) -> dict:
+def _attendance_month(month: int, year: int, department_ids: list[int] | None) -> dict:
     start, end = _month_range(month, year)
     query = (db.session.query(Attendance.status, db.func.count(Attendance.id))
              .join(Employee, Attendance.employee_id == Employee.id)
              .filter(Attendance.work_date >= start, Attendance.work_date < end))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     counts = dict(query.group_by(Attendance.status).all())
     total_records = sum(counts.values())
     attended = counts.get(Attendance.STATUS_PRESENT, 0) + counts.get(Attendance.STATUS_LATE, 0)
@@ -289,7 +293,7 @@ def _attendance_month(month: int, year: int, department_id: int | None) -> dict:
     }
 
 
-def _approved_leave_in_month(month: int, year: int, department_id: int | None):
+def _approved_leave_in_month(month: int, year: int, department_ids: list[int] | None):
     """Query đơn nghỉ ĐÃ DUYỆT giao với tháng (from_date < cuối tháng, to_date >= đầu tháng)."""
     start, end = _month_range(month, year)
     query = (LeaveRequest.query
@@ -297,14 +301,14 @@ def _approved_leave_in_month(month: int, year: int, department_id: int | None):
              .filter(LeaveRequest.status == LeaveRequest.STATUS_APPROVED,
                      LeaveRequest.from_date < end,
                      LeaveRequest.to_date >= start))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     return query
 
 
-def _leave_month(month: int, year: int, department_id: int | None) -> dict:
+def _leave_month(month: int, year: int, department_ids: list[int] | None) -> dict:
     grouped: dict[str, dict] = {}
-    for leave_request in _approved_leave_in_month(month, year, department_id).all():
+    for leave_request in _approved_leave_in_month(month, year, department_ids).all():
         name = leave_request.leave_type.name if leave_request.leave_type else "Không rõ loại"
         bucket = grouped.setdefault(name, {"leaveType": name, "requests": 0, "days": 0.0})
         bucket["requests"] += 1
@@ -329,7 +333,7 @@ def _payroll_period_for(month: int, year: int) -> PayrollPeriod | None:
             .first())
 
 
-def _payroll_month(month: int, year: int, department_id: int | None) -> dict:
+def _payroll_month(month: int, year: int, department_ids: list[int] | None) -> dict:
     period = _payroll_period_for(month, year)
     if period is None:
         return {"period": None, "totalCost": 0, "employeeCount": 0, "byDepartment": []}
@@ -340,8 +344,8 @@ def _payroll_month(month: int, year: int, department_id: int | None) -> dict:
              .join(Employee, PayrollItem.employee_id == Employee.id)
              .outerjoin(Department, Employee.department_id == Department.id)
              .filter(PayrollItem.period_id == period.id))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     rows = query.group_by(Employee.department_id, Department.name).all()
     by_department = [{
         "departmentId": dept_id,
@@ -362,17 +366,17 @@ def _payroll_month(month: int, year: int, department_id: int | None) -> dict:
 @require_roles(*STATS_ROLES)
 def reports_summary():
     user = load_current_user()
-    department_id = _scope_department_id(user)
+    department_ids = _scope_department_ids(user)
     month, year = _parse_month_year()
     return jsonify({
-        "scope": ("company" if department_id is None
-                  else f"department:{department_id}"),
+        "scope": ("company" if department_ids is None
+                  else f"departments:{','.join(map(str, department_ids))}"),
         "month": month,
         "year": year,
-        "headcount": _headcount_by_department(department_id),
-        "attendance": _attendance_month(month, year, department_id),
-        "leave": _leave_month(month, year, department_id),
-        "payroll": _payroll_month(month, year, department_id),
+        "headcount": _headcount_by_department(department_ids),
+        "attendance": _attendance_month(month, year, department_ids),
+        "leave": _leave_month(month, year, department_ids),
+        "payroll": _payroll_month(month, year, department_ids),
     })
 
 
@@ -382,14 +386,14 @@ def _department_name(employee) -> str:
     return "Chưa thuộc phòng ban"
 
 
-def _attendance_export_rows(month: int, year: int, department_id: int | None):
+def _attendance_export_rows(month: int, year: int, department_ids: list[int] | None):
     start, end = _month_range(month, year)
     query = (Attendance.query
              .join(Employee, Attendance.employee_id == Employee.id)
              .filter(Attendance.work_date >= start, Attendance.work_date < end)
              .order_by(Attendance.work_date.asc(), Employee.full_name.asc()))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     header = ["Mã NV", "Họ tên", "Phòng ban", "Ngày", "Giờ vào", "Giờ ra",
               "Trạng thái", "Ghi chú"]
     rows = [header]
@@ -408,7 +412,7 @@ def _attendance_export_rows(month: int, year: int, department_id: int | None):
     return rows
 
 
-def _payroll_export_rows(month: int, year: int, department_id: int | None):
+def _payroll_export_rows(month: int, year: int, department_ids: list[int] | None):
     header = ["Mã NV", "Họ tên", "Phòng ban", "Kỳ lương", "Ngày công hưởng lương",
               "Lương cơ bản (VND)", "Phụ cấp (VND)", "Khấu trừ BHXH (VND)",
               "Khấu trừ khác (VND)", "Thực nhận (VND)"]
@@ -420,8 +424,8 @@ def _payroll_export_rows(month: int, year: int, department_id: int | None):
              .join(Employee, PayrollItem.employee_id == Employee.id)
              .filter(PayrollItem.period_id == period.id)
              .order_by(Employee.full_name.asc()))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     period_label = f"{period.month:02d}/{period.year}"
     for item in query.all():
         employee = item.employee
@@ -440,14 +444,15 @@ def _payroll_export_rows(month: int, year: int, department_id: int | None):
     return rows
 
 
-def _leave_export_rows(month: int, year: int, department_id: int | None):
+def _leave_export_rows(month: int, year: int, department_ids: list[int] | None):
     start, end = _month_range(month, year)
     query = (LeaveRequest.query
              .join(Employee, LeaveRequest.employee_id == Employee.id)
-             .filter(LeaveRequest.from_date < end, LeaveRequest.to_date >= start)
+             .filter(LeaveRequest.status == LeaveRequest.STATUS_APPROVED,
+                     LeaveRequest.from_date < end, LeaveRequest.to_date >= start)
              .order_by(LeaveRequest.from_date.asc(), Employee.full_name.asc()))
-    if department_id is not None:
-        query = query.filter(Employee.department_id == department_id)
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
     header = ["Mã NV", "Họ tên", "Phòng ban", "Loại nghỉ", "Từ ngày", "Đến ngày",
               "Số ngày", "Trạng thái", "Lý do"]
     rows = [header]
@@ -471,7 +476,7 @@ def _leave_export_rows(month: int, year: int, department_id: int | None):
 @require_roles(*STATS_ROLES)
 def reports_export():
     user = load_current_user()
-    department_id = _scope_department_id(user)
+    department_ids = _scope_department_ids(user)
     month, year = _parse_month_year()
     export_type = (request.args.get("type") or "").strip().lower()
     builders = {
@@ -483,7 +488,7 @@ def reports_export():
     if builder is None:
         raise ApiError(400, "INVALID_PARAMS",
                        "Tham số type phải là attendance, payroll hoặc leave.")
-    rows = builder(month, year, department_id)
+    rows = builder(month, year, department_ids)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerows(rows)
@@ -501,15 +506,15 @@ def reports_export():
 @require_roles(*STATS_ROLES)
 def overview():
     user = load_current_user()
-    department_id = _scope_department_id(user)
+    department_ids = _scope_department_ids(user)
     result = {
-        "scope": ("company" if department_id is None
-                  else f"department:{department_id}"),
+        "scope": ("company" if department_ids is None
+                  else f"departments:{','.join(map(str, department_ids))}"),
     }
-    result.update(_employees_overview(department_id))
-    result["attendanceThisMonth"] = _attendance_overview(department_id)
-    result["attendanceToday"] = _attendance_today_overview(department_id)
-    result["leave"] = _pending_leave_overview(department_id)
-    result["contracts"] = _expiring_contracts_overview(department_id)
-    result.update(_recruitment_overview(department_id))
+    result.update(_employees_overview(department_ids))
+    result["attendanceThisMonth"] = _attendance_overview(department_ids)
+    result["attendanceToday"] = _attendance_today_overview(department_ids)
+    result["leave"] = _pending_leave_overview(department_ids)
+    result["contracts"] = _expiring_contracts_overview(department_ids)
+    result.update(_recruitment_overview(department_ids))
     return jsonify(result)

@@ -56,12 +56,25 @@ _LEVEL_KEYWORDS = (
 # --------------------------------------------------------------------------- #
 # Suy luận ngữ cảnh từ tin tuyển (xác định, không AI)
 # --------------------------------------------------------------------------- #
+def _token_text(text):
+    """Chuẩn hoá văn bản thành chuỗi token cách nhau bởi 1 khoảng trắng,
+    có khoảng trắng ở hai đầu để so khớp từ nguyên vẹn (word-boundary)."""
+    tokens = re.findall(r"\w+", text.lower())
+    return " " + " ".join(tokens) + " "
+
+
 def infer_level(job):
-    """Suy cấp bậc từ tiêu đề + yêu cầu của tin (để cá nhân hoá câu hỏi)."""
-    text = f"{job.title or ''} {job.requirements or ''}".lower()
+    """Suy cấp bậc từ tiêu đề + yêu cầu của tin (để cá nhân hoá câu hỏi).
+
+    So khớp theo TỪ nguyên vẹn, không theo chuỗi con: 'intern' trong
+    'international' không được tính là thực tập sinh.
+    """
+    padded = _token_text(f"{job.title or ''} {job.requirements or ''}")
     for level, keywords in _LEVEL_KEYWORDS:
-        if any(keyword in text for keyword in keywords):
-            return level
+        for keyword in keywords:
+            needle = _token_text(keyword)
+            if needle in padded:
+                return level
     return "middle"
 
 

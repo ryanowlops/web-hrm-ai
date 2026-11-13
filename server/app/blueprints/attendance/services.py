@@ -2,8 +2,12 @@
 
 Quy tắc trạng thái:
 - Check-in ghi giờ server, tối đa 1 lần/ngày (unique employee_id + work_date).
-- Giờ vào > giờ bắt đầu làm việc cấu hình (Setting/config WORK_START_TIME,
-  mặc định 08:30) -> status = "late", ngược lại "present".
+- Giờ vào > ngưỡng muộn -> status = "late", ngược lại "present". Ngưỡng muộn
+  = giờ bắt đầu ca được phân cho ngày đó (nếu có) + 15 phút ân hạn,
+  nếu không có ca thì = giờ bắt đầu làm việc cấu hình (Setting/config
+  WORK_START_TIME, mặc định 08:30) + 15 phút.
+- Ca đêm (is_overnight): check-out sau nửa đêm được tính vào bản ghi của
+  ngày hôm trước (ngày bắt đầu ca).
 - Bản ghi ngày nghỉ đã duyệt (status "on_leave", do module leave tạo) không
   cho check-in đè.
 - HR sửa bản ghi: bắt buộc lý do (note), ghi edited_by và AuditLog (nếu có).
@@ -51,6 +55,9 @@ except Exception:  # noqa: BLE001
 
 
 DEFAULT_WORK_START_TIME = time(8, 30)
+# Ân hạn đi muộn (phút): check-in trong khoảng [giờ bắt đầu ca, giờ bắt đầu
+# ca + ân hạn] vẫn tính "present". Áp dụng cho cả ca phân công lẫn giờ chung.
+LATE_GRACE_MINUTES = 15
 EDITABLE_STATUSES = ("present", "late", "absent", "on_leave")
 
 
@@ -127,6 +134,71 @@ def get_work_start_time():
 
     # 3) Mặc định theo đặc tả.
     return DEFAULT_WORK_START_TIME
+
+
+def get_late_threshold(employee_id, work_date):
+    """Ngưỡng giờ muộn cho (nhân viên, ngày làm việc).
+
+    Có phân ca cho ngày đó -> giờ bắt đầu của ca đó + ân hạn;
+    không có ca -> giờ bắt đầu làm việc chung + ân hạn.
+    Check-in sau ngưỡng này mới tính "late".
+    """
+    start = get_work_start_time()
+    try:
+        from app.models import ShiftAssignment
+
+        assignment = (
+            db.session.query(ShiftAssignment)
+            .filter_by(employee_id=employee_id, work_date=work_date)
+            .first()
+        )
+        if assignment is not None and assignment.shift is not None:
+            start = assignment.shift.start_time
+    except Exception:  # noqa: BLE001 - ca chưa có/chưa seed -> dùng giờ chung
+        db.session.rollback()
+    threshold = datetime.combine(date.today(), start) + timedelta(
+        minutes=LATE_GRACE_MINUTES
+    )
+    return threshold.time()
+
+
+def _get_open_overnight_record(employee_id, today):
+    """Bản ghi ca đêm còn mở của ngày hôm qua.
+
+    Ca đêm bắt đầu hôm qua (is_overnight=True), đã check-in mà chưa
+    check-out: check-out sau nửa đêm phải tính vào bản ghi này, không phải
+    bản ghi của "hôm nay". Trả None nếu không có ca đêm mở.
+    """
+    yesterday = today - timedelta(days=1)
+    try:
+        from app.models import ShiftAssignment, ShiftDefinition
+
+        assignment = (
+            db.session.query(ShiftAssignment)
+            .join(
+                ShiftDefinition,
+                ShiftDefinition.id == ShiftAssignment.shift_id,
+            )
+            .filter(
+                ShiftAssignment.employee_id == employee_id,
+                ShiftAssignment.work_date == yesterday,
+                ShiftDefinition.is_overnight.is_(True),
+            )
+            .first()
+        )
+        if assignment is None:
+            return None
+    except Exception:  # noqa: BLE001 - ca chưa có -> không có bản ghi đêm
+        db.session.rollback()
+        return None
+    record = _get_record(employee_id, yesterday)
+    if record is None:
+        return None
+    if getattr(record, "check_in_at", None) is None:
+        return None
+    if getattr(record, "check_out_at", None) is not None:
+        return None
+    return record
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +443,11 @@ def check_in():
             "Hôm nay bạn đang trong ngày nghỉ đã được duyệt, không thể check-in.",
         )
 
-    status = "late" if now.time() > get_work_start_time() else "present"
+    status = (
+        "late"
+        if now.time() > get_late_threshold(employee.id, today)
+        else "present"
+    )
     if record is None:
         record = Attendance(
             employee_id=employee.id,
@@ -390,11 +466,17 @@ def check_in():
 
 
 def check_out():
-    """Check-out hôm nay. Phải đã check-in và chưa check-out."""
+    """Check-out hôm nay. Phải đã check-in và chưa check-out.
+
+    Ca đêm: nếu hôm nay chưa check-in thì thử bản ghi ca đêm còn mở của
+    ngày hôm qua (check-in 22:00, check-out sau 0h).
+    """
     employee = get_current_employee()
     today = _now().date()
 
     record = _get_record(employee.id, today)
+    if record is None or getattr(record, "check_in_at", None) is None:
+        record = _get_open_overnight_record(employee.id, today)
     if record is None or getattr(record, "check_in_at", None) is None:
         raise ApiError(
             409, "NOT_CHECKED_IN", "Bạn chưa check-in hôm nay nên không thể check-out."
@@ -790,7 +872,8 @@ def update_attendance(attendance_id, data):
         if record.check_in_at is not None:
             record.status = (
                 "late"
-                if record.check_in_at.time() > get_work_start_time()
+                if record.check_in_at.time()
+                > get_late_threshold(record.employee_id, record.work_date)
                 else "present"
             )
 

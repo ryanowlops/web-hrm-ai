@@ -29,6 +29,24 @@ TestingConfig.SQLALCHEMY_ENGINE_OPTIONS = {}
 from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402
 from app.models import Department, Employee, User  # noqa: E402
+from flask.testing import FlaskClient  # noqa: E402
+
+
+class _ClearingClient(FlaskClient):
+    """Test client: mỗi request xóa user đã cache trong flask.g.
+
+    guards.load_current_user cache user đầu tiên vào g.current_user; conftest
+    giữ một app context cho cả test nên các request HTTP sau (dù mang token
+    khác) bị xác thực nhầm thành user đó — từng làm test HR tự duyệt pass
+    giả. Production không bị vì mỗi request có app context riêng. Xóa cache
+    trước mỗi request để test đa-user luôn đúng.
+    """
+
+    def open(self, *args, **kwargs):
+        from flask import g
+
+        g.pop("current_user", None)
+        return super().open(*args, **kwargs)
 
 
 @pytest.fixture()
@@ -43,6 +61,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
+    app.test_client_class = _ClearingClient
     return app.test_client()
 
 

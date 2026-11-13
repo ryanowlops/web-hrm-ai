@@ -109,6 +109,11 @@ def list_jobs(args, include_closed):
     query = JobPosting.query
     if not include_closed:
         query = query.filter(JobPosting.status == "open")
+        # Tin đã quá hạn nộp hồ sơ không hiện ở phía công khai (dù vẫn open).
+        query = query.filter(db.or_(
+            JobPosting.deadline.is_(None),
+            JobPosting.deadline >= date.today(),
+        ))
     elif args.get("status") in JOB_STATUSES:
         query = query.filter(JobPosting.status == args["status"])
 
@@ -143,9 +148,11 @@ def list_jobs(args, include_closed):
 
 
 def get_job(job_id, public_only):
-    """Lấy 1 tin. Phía công khai: tin đã đóng coi như không tồn tại (404)."""
+    """Lấy 1 tin. Phía công khai: tin đã đóng hoặc đã hết hạn coi như không tồn tại (404)."""
     job = db.session.get(JobPosting, job_id)
     if job is None or (public_only and job.status != "open"):
+        raise not_found("Không tìm thấy tin tuyển dụng")
+    if public_only and job.deadline is not None and job.deadline < date.today():
         raise not_found("Không tìm thấy tin tuyển dụng")
     job.candidates_count = (
         db.session.query(Candidate.id).filter(Candidate.job_id == job.id).count()

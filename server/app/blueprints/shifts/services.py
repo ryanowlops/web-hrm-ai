@@ -508,6 +508,22 @@ _OVERTIME_LABELS = {
 
 def create_overtime(user, cleaned):
     target = _resolve_target_employee(user, cleaned)
+    # Moi nhan vien chi co toi da 1 don tang ca "dang xu ly" cho 1 ngay:
+    # don thu hai cung ngay phai bi tu choi (don da bi tu choi thi duoc tao
+    # lai). Neu khong, gio tang ca cung ngay bi tinh trung 2 lan.
+    duplicate = (
+        OvertimeRequest.query.filter_by(
+            employee_id=target.id, work_date=cleaned["work_date"]
+        )
+        .filter(OvertimeRequest.status != STATUS_REJECTED)
+        .first()
+    )
+    if duplicate is not None:
+        raise ApiError(
+            409,
+            "OVERTIME_DUPLICATE",
+            "Đã có đơn tăng ca cho ngày này.",
+        )
     request = OvertimeRequest(
         employee_id=target.id,
         work_date=cleaned["work_date"],
@@ -590,6 +606,33 @@ _CORRECTION_LABELS = {
 
 def create_correction(user, cleaned):
     target = _resolve_target_employee(user, cleaned)
+    work_date = cleaned["work_date"]
+    requested_check_in = cleaned.get("requested_check_in")
+    requested_check_out = cleaned.get("requested_check_out")
+    # Gio de xuat phai nhat quan: gio ra sau gio vao, va ca hai phai thuoc
+    # dung ngay giai trinh (neu khong, duyet don se ghi gio cua ngay khac
+    # len ban ghi cua ngay nay).
+    if (
+        requested_check_in is not None
+        and requested_check_out is not None
+        and requested_check_out <= requested_check_in
+    ):
+        raise ApiError(
+            400,
+            "VALIDATION_ERROR",
+            "Giờ ra phải sau giờ vào.",
+        )
+    for label, value in (
+        ("Giờ vào đề xuất", requested_check_in),
+        ("Giờ ra đề xuất", requested_check_out),
+    ):
+        if value is not None and value.date() != work_date:
+            raise ApiError(
+                400,
+                "VALIDATION_ERROR",
+                f"{label} phải thuộc ngày giải trình "
+                f"({work_date.isoformat()}).",
+            )
     attendance = None
     if cleaned.get("attendance_id") is not None:
         attendance = db.session.get(Attendance, cleaned["attendance_id"])
@@ -602,6 +645,13 @@ def create_correction(user, cleaned):
                 400,
                 "VALIDATION_ERROR",
                 "Bản ghi chấm công không thuộc nhân viên của đơn giải trình.",
+            )
+        if attendance.work_date != work_date:
+            raise ApiError(
+                400,
+                "VALIDATION_ERROR",
+                "Bản ghi chấm công không thuộc ngày giải trình "
+                f"({work_date.isoformat()}).",
             )
     correction = AttendanceCorrection(
         employee_id=target.id,
@@ -651,10 +701,28 @@ def list_corrections(user, args):
 
 
 def _apply_correction_to_attendance(correction, actor_user):
-    """Cap nhat/tao ban ghi Attendance theo gio giai trinh da duoc HR duyet."""
+    """Cap nhat/tao ban ghi Attendance theo gio giai trinh da duoc HR duyet.
+
+    - Chi dung ban ghi duoc gan khi no thuoc dung nhan vien + dung ngay cua
+      don; neu khong, tim lai theo (employee, work_date). Nhu vay don cu
+      (tao truoc khi co validate) gan nham ngay khac cung khong ghi de
+      nham ban ghi cua ngay do.
+    - Tinh lai trang thai tu gio vao theo dung luat cua HR-edit
+      (late neu gio vao sau gio bat dau lam, neu khong thi present).
+    - Don chi co gio ra ma khong co gio vao (va chua co ban ghi) khong
+      duoc tao ngay cong present "rong": ngay do khong tinh la di lam.
+    """
+    from app.blueprints.attendance.services import get_late_threshold
+
     attendance = None
     if correction.attendance_id is not None:
-        attendance = db.session.get(Attendance, correction.attendance_id)
+        linked = db.session.get(Attendance, correction.attendance_id)
+        if (
+            linked is not None
+            and linked.employee_id == correction.employee_id
+            and linked.work_date == correction.work_date
+        ):
+            attendance = linked
     if attendance is None:
         attendance = Attendance.query.filter_by(
             employee_id=correction.employee_id, work_date=correction.work_date
@@ -670,8 +738,36 @@ def _apply_correction_to_attendance(correction, actor_user):
         attendance.check_in_at = correction.requested_check_in
     if correction.requested_check_out is not None:
         attendance.check_out_at = correction.requested_check_out
-    if attendance.status == Attendance.STATUS_ABSENT and attendance.check_in_at:
-        attendance.status = Attendance.STATUS_PRESENT
+    if (
+        attendance.check_in_at is not None
+        and attendance.check_out_at is not None
+        and attendance.check_out_at < attendance.check_in_at
+    ):
+        raise ApiError(
+            400,
+            "VALIDATION_ERROR",
+            "Giờ check-out không được sớm hơn giờ check-in.",
+        )
+    if attendance.check_in_at is not None:
+        # Cung luat voi HR-edit (attendance/services.update_attendance):
+        # present/late/absent deu tinh lai tu gio vao, theo nguong muon
+        # cua dung ca lam ngay do (get_late_threshold).
+        if attendance.status in (
+            Attendance.STATUS_PRESENT,
+            Attendance.STATUS_LATE,
+            Attendance.STATUS_ABSENT,
+        ):
+            attendance.status = (
+                Attendance.STATUS_LATE
+                if attendance.check_in_at.time() > get_late_threshold(
+                    correction.employee_id, correction.work_date
+                )
+                else Attendance.STATUS_PRESENT
+            )
+    elif attendance.status == Attendance.STATUS_PRESENT:
+        # Chi co gio ra, khong co gio vao: ngay lam chua duoc xac minh,
+        # khong de la present (luong se tinh 1 ngay cong khong co gio vao).
+        attendance.status = Attendance.STATUS_ABSENT
     marker = f"Giải trình #{correction.id} đã duyệt"
     attendance.note = (
         f"{attendance.note} | {marker}" if attendance.note else marker
