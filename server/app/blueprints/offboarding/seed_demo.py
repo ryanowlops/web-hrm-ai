@@ -1,8 +1,9 @@
 """Seed demo cho module Offboarding (docs/feature-expansion-v3.md muc 3.4).
 
 - Tao nhan vien NV0005 "Do Van Hung" (phong Ky thuat, chuc vu nhu NV0003,
-  quan ly nhu NV0003; KHONG tao tai khoan dang nhap — Employee khong bat
-  buoc co User).
+  quan ly nhu NV0003) + tai khoan dang nhap role "employee"
+  (hung.do@hrm.local / Employee@123, idempotent — giong cach feed seed
+  tao tai khoan cho NV0004).
 - 1 tai san laptop dang cap phat active cho NV0005 (chi o muc du lieu
   qua models Asset/AssetAssignment).
 - 1 process nghi viec in_progress: ngay lam viec cuoi = cuoi thang hien
@@ -16,6 +17,8 @@ parent seed.py quan ly transaction; chi flush khi can id.
 
 import calendar
 from datetime import date, datetime, time, timedelta, timezone
+
+from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models import Department, Employee, User
@@ -76,6 +79,25 @@ def seed_demo():
             manager_id=manager_id,
         )
         db.session.add(hung)
+        db.session.flush()
+
+    # --- Tai khoan dang nhap cho NV0005 (idempotent, giong feed seed tao
+    # user cho NV0004): tim theo employee_id truoc, email sau; chi tao khi
+    # chua co. Mat khau mau Employee@123 nhu cac nhan vien khac.
+    hung_user = User.query.filter_by(employee_id=hung.id).first()
+    if hung_user is None:
+        hung_user = User.query.filter_by(email=hung.email).first()
+    if hung_user is None:
+        db.session.add(
+            User(
+                email=hung.email,
+                password_hash=generate_password_hash("Employee@123"),
+                full_name=hung.full_name,
+                role=User.ROLE_EMPLOYEE,
+                is_active=True,
+                employee_id=hung.id,
+            )
+        )
         db.session.flush()
 
     # --- Tai san laptop dang gan cho NV0005 --------------------------------
