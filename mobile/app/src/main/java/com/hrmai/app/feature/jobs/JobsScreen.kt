@@ -71,6 +71,7 @@ import com.hrmai.app.core.ui.theme.CanvasGray
 import com.hrmai.app.core.ui.theme.InkMuted
 import com.hrmai.app.core.ui.theme.SuccessGreen
 import com.hrmai.app.core.util.Format
+import com.hrmai.app.core.util.stripDiacritics
 import java.time.LocalDate
 
 private val OpenBadgeBg = Color(0xFFECFDF3)
@@ -122,13 +123,15 @@ fun JobsRoute(
         }
     }
     val filteredJobs = remember(state.jobs, keyword, selectedDept) {
-        val kw = keyword.trim().lowercase()
+        // Tìm không dấu cả 2 phía, giống ⌘K bên web (77fab75): gõ "ky su"
+        // hay "kỹ sư" đều khớp "Kỹ sư".
+        val kw = keyword.trim().stripDiacritics()
         state.jobs.filter { job ->
             val deptOk = selectedDept == null || departmentNameOf(job) == selectedDept
             val kwOk = kw.isEmpty() ||
-                job.title.lowercase().contains(kw) ||
-                (job.departmentName?.lowercase()?.contains(kw) == true) ||
-                (job.description?.lowercase()?.contains(kw) == true)
+                job.title.stripDiacritics().contains(kw) ||
+                (job.departmentName?.stripDiacritics()?.contains(kw) == true) ||
+                (job.description?.stripDiacritics()?.contains(kw) == true)
             deptOk && kwOk
         }
     }
