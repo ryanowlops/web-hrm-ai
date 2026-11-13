@@ -38,6 +38,9 @@ jobs:
         working-directory: server
         run: |
           if [ -d tests ]; then
+            # pytest không có trong requirements.txt (chỉ để chạy test,
+            # không phải dependency production) nên cài riêng ở đây.
+            pip install -q pytest
             python -m pytest -q
           else
             echo "Chưa có server/tests — bỏ qua bước pytest."
