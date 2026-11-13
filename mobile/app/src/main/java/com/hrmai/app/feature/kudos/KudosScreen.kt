@@ -76,6 +76,7 @@ import com.hrmai.app.core.ui.theme.DangerRed
 import com.hrmai.app.core.ui.theme.InkMuted
 import com.hrmai.app.core.ui.theme.SuccessGreen
 import com.hrmai.app.core.ui.theme.WarningAmber
+import com.hrmai.app.core.util.stripDiacritics
 
 @Composable
 fun KudosRoute(container: AppContainer) {
@@ -718,10 +719,12 @@ private fun EmployeePickerDialog(state: KudosUiState, vm: KudosViewModel) {
         if (query.isBlank()) {
             state.employees
         } else {
+            // Tìm không dấu cả 2 phía, giống ⌘K bên web (77fab75).
+            val q = query.trim().stripDiacritics()
             state.employees.filter { emp ->
-                (emp.fullName ?: "").contains(query, ignoreCase = true) ||
-                    (emp.code ?: "").contains(query, ignoreCase = true) ||
-                    (emp.departmentName ?: "").contains(query, ignoreCase = true)
+                (emp.fullName ?: "").stripDiacritics().contains(q) ||
+                    (emp.code ?: "").stripDiacritics().contains(q) ||
+                    (emp.departmentName ?: "").stripDiacritics().contains(q)
             }
         }
     }
