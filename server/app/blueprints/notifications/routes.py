@@ -2,6 +2,7 @@
 
     GET   /notifications              Danh sách thông báo của tôi (phân trang,
                                       mới nhất trước) + số chưa đọc
+    GET   /notifications/unread-count Số thông báo chưa đọc (chuông ở topbar)
     PATCH /notifications/<id>/read    Đánh dấu 1 thông báo đã đọc
     POST  /notifications/read-all     Đánh dấu tất cả thông báo của tôi đã đọc
 
@@ -66,6 +67,20 @@ def list_notifications():
         },
         "unreadCount": _unread_count(user.id),
     })
+
+
+@bp.get("/unread-count")
+@require_roles()
+def get_unread_count():
+    """Số thông báo chưa đọc cho chấm đỏ trên chuông (topbar).
+
+    Endpoint này từng thiếu nên chuông gọi 404 mỗi lần tải trang (2 lần
+    đăng nhập) và luôn hiện 0 — đợt tối ưu 2026-11-13 thêm nó vào. Đếm
+    theo index (user_id, is_read) nên chỉ là 1 câu COUNT nhanh.
+    """
+    user = load_current_user()
+    count = _unread_count(user.id)
+    return jsonify({"unreadCount": count, "count": count})
 
 
 @bp.patch("/<int:notification_id>/read")

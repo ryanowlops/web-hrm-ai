@@ -25,6 +25,7 @@ _MAX_ENTRIES = 512
 _CACHE_PREFIXES = (
     "/api/v1/stats/overview",
     "/api/v1/departments",
+    "/api/v1/employees",
     "/api/v1/feed/activity",
     "/api/v1/announcements",
     "/api/v1/engagement/",

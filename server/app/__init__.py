@@ -212,6 +212,15 @@ def create_app(config=None) -> Flask:
     from .health import bp as health_bp
     app.register_blueprint(health_bp)
 
+    # --- Nén gzip phản hồi JSON (tối ưu tốc độ 2026-11-13) — đăng ký
+    # TRƯỚC HTTP cache để cache ghi body thô, gzip nén lúc trả ra sau
+    # (Flask chạy after_request ngược thứ tự đăng ký).
+    try:
+        from .http_gzip import init_http_gzip
+        init_http_gzip(app)
+    except Exception:  # noqa: BLE001
+        app.logger.warning("Chưa gắn được HTTP gzip", exc_info=True)
+
     # --- Cache phản hồi GET cho endpoint nóng (tối ưu tốc độ 2026-10-23) ---
     try:
         from .http_cache import init_http_cache

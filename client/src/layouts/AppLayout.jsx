@@ -23,7 +23,6 @@ import { prefetchRoute } from '../app/pages.js';
 import { notificationsApi } from '../api/index.js';
 import { fetchOverview } from '../features/dashboard/services';
 import { getAnnouncements } from '../features/announcements/services';
-import { getEmployees } from '../features/employees/services';
 import PageTransition from '../components/motion/PageTransition.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 
@@ -404,6 +403,9 @@ export default function AppLayout() {
   // Nạp trước dữ liệu của trang Tổng quan ngay khi layout hiện (tức ngay sau
   // đăng nhập) — dùng đúng queryKey/queryFn của DashboardPage nên khi người
   // dùng vào trang chủ, số liệu đã có sẵn trong cache, hiện gần như tức thì.
+  // (Tối ưu 2026-11-13: bỏ prefetch danh sách nhân viên limit=100 ở đây —
+  // trang Tổng quan không dùng tới, chỉ làm chậm lúc đăng nhập; trang Nhân
+  // viên tự tải khi mở, đã có cache HTTP + selectinload ở server.)
   const queryClient = useQueryClient();
   useEffect(() => {
     queryClient.prefetchQuery({
@@ -414,11 +416,6 @@ export default function AppLayout() {
     queryClient.prefetchQuery({
       queryKey: ['announcements', 'latest'],
       queryFn: async () => (await getAnnouncements({ limit: 3 })).items,
-      staleTime: 60_000,
-    });
-    queryClient.prefetchQuery({
-      queryKey: ['employees', 'dashboard-this-month'],
-      queryFn: async () => (await getEmployees({ limit: 100 })).items,
       staleTime: 60_000,
     });
   }, [queryClient]);
