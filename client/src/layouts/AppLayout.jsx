@@ -14,7 +14,6 @@ import {
   CommandPaletteInput,
   useCommandPaletteContext,
 } from '@astryxdesign/core/CommandPalette';
-import { createStaticSource } from '@astryxdesign/core/Typeahead';
 import { Avatar } from '@astryxdesign/core/Avatar';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
@@ -330,8 +329,8 @@ export default function AppLayout() {
   /* ---------------- Command palette ⌘K (Astryx) ----------------
      Nút tìm kiếm trên topbar mở dialog palette; gõ để lọc các trang
      trong NAV_ITEMS (theo đúng role đang đăng nhập), Enter/click để
-     nhảy tới trang. Lọc không dấu qua keywords (nhãn đã bỏ dấu + path).
-     Chọn mục -> onValueChange nhận id (= route) rồi palette tự đóng. */
+     nhảy tới trang. Lọc không dấu cả 2 phía (nhãn + từ gõ). Chọn mục
+     -> onValueChange nhận id (= route) rồi palette tự đóng. */
   const [paletteOpen, setPaletteOpen] = useState(false);
   const paletteSource = useMemo(() => {
     const items = navSections.flatMap((section) =>
@@ -341,9 +340,23 @@ export default function AppLayout() {
         auxiliaryData: { group: section.label, to: item.to, icon: item.icon },
       })),
     );
-    return createStaticSource(items, {
-      keywords: (item) => [stripDiacritics(item.label), item.auxiliaryData.to],
-    });
+    // createStaticSource của Astryx chỉ lower-case query mà không bỏ dấu,
+    // nên gõ có dấu ("nghi phép") không khớp keyword đã bỏ dấu ("nghi
+    // phep") — palette báo không có kết quả dù mục đó tồn tại. Source tự
+    // viết theo đúng interface SearchSource của Astryx (tài liệu của nó
+    // gợi ý implement trực tiếp khi cần hơn substring thuần): bỏ dấu cả
+    // từ gõ lẫn nhãn/đường dẫn rồi so substring, giữ nguyên thứ tự/nhóm.
+    const keywords = (item) => [stripDiacritics(item.label), item.auxiliaryData.to];
+    return {
+      bootstrap: () => items,
+      search: (query) => {
+        const q = stripDiacritics(query).trim();
+        if (!q) return items;
+        return items.filter((item) =>
+          keywords(item).some((kw) => kw.toLowerCase().includes(q)),
+        );
+      },
+    };
   }, [navSections]);
 
   const handlePaletteSelect = (value) => {
