@@ -1,5 +1,10 @@
 """Tool layer cho Chatbot HR — tra DỮ LIỆU THẬT theo quyền của người hỏi.
 
+Quy tắc do anh đặt (2026-11-14): AI chỉ ĐỌC dữ liệu để tra cứu — TUYỆT ĐỐI
+không xoá dữ liệu DB. Không tool nào trong module này gọi bất kỳ thao tác
+xoá bản ghi nào; guard test tests/test_chat_no_delete.py quét
+toàn bộ blueprint chat/people_ai/ai và fail nếu xuất hiện lệnh xoá.
+
 Hợp đồng feature-expansion-v3 mục 5.1 (gói 3 — People AI):
 
 - Mỗi tool là một hàm Python nhận (user, **args) và TỰ ép phạm vi dữ liệu
@@ -126,52 +131,170 @@ def tool_my_leave_balance(user, **_args) -> str:
     return "\n".join(lines)
 
 
-def _payslip_text(item: PayrollItem) -> str:
+def _payslip_text(item: PayrollItem, provisional: bool = False) -> str:
+    """Phiếu lương 1 người — gồm tiền OT + hệ số thử việc nếu có.
+
+    provisional=True: kỳ chưa chốt — số liệu tạm tính, ghi rõ trong câu trả lời.
+    """
     period = item.period
-    lines = [
-        f"Phiếu lương kỳ {period.month}/{period.year} của bạn:",
-        f"- Ngày công hưởng lương: {_fmt_days(item.workdays_paid)} ngày.",
-        f"- Lương cơ bản: {_fmt_money(item.base_salary)}.",
-        f"- Phụ cấp: {_fmt_money(item.allowance)}.",
-        f"- Khấu trừ bảo hiểm: {_fmt_money(item.insurance_deduction)}.",
-        f"- Khấu trừ khác: {_fmt_money(item.other_deduction)}.",
-        f"- THỰC LĨNH: {_fmt_money(item.total_salary)}.",
-    ]
+    employee = item.employee
+    who = (f"{employee.full_name} ({employee.code})"
+           if employee is not None else "bạn")
+    lines = [f"Phiếu lương kỳ {period.month}/{period.year} của {who}:"]
+    if provisional:
+        lines.append("Số liệu tạm tính — kỳ lương chưa chốt.")
+    lines.append(f"- Ngày công hưởng lương: {_fmt_days(item.workdays_paid)} ngày.")
+    lines.append(f"- Lương cơ bản: {_fmt_money(item.base_salary)}.")
+    lines.append(f"- Phụ cấp: {_fmt_money(item.allowance)}.")
+    bd = item.breakdown or {}
+    ot_pay = bd.get("overtime_pay") or 0
+    if ot_pay:
+        lines.append(
+            f"- Tiền tăng ca: {_fmt_money(ot_pay)} "
+            f"({_fmt_days(bd.get('overtime_hours') or 0)} giờ).")
+    prob_factor = bd.get("probation_factor")
+    if prob_factor:
+        lines.append(
+            f"- Hệ số thử việc: {prob_factor} "
+            f"(lương thử việc {prob_factor * 100:.0f}% lương chính thức, "
+            f"{_fmt_days(bd.get('probation_days') or 0)} ngày).")
+    lines.append(f"- Khấu trừ bảo hiểm: {_fmt_money(item.insurance_deduction)}.")
+    lines.append(f"- Khấu trừ khác: {_fmt_money(item.other_deduction)}.")
+    lines.append(f"- THỰC LĨNH: {_fmt_money(item.total_salary)}.")
     return "\n".join(lines)
 
 
-def tool_my_payslip(user, month=None, year=None, **_args) -> str:
-    """Phiếu lương của chính người hỏi — chỉ trả số khi kỳ đã khoá (như payroll)."""
+def _payroll_mention_pool(user, employee) -> list:
+    """Nhân viên mà người hỏi được phép xem lương: admin/hr = toàn công ty,
+    manager = nhóm mình + chính mình, employee = chỉ chính mình."""
+    role = getattr(user, "role", "employee")
+    if role in ("admin", "hr"):
+        return Employee.query.order_by(Employee.id).all()
+    if role == "manager" and employee is not None:
+        from app.blueprints.leave import services as leave_services
+
+        ids = set(leave_services._team_employee_ids(employee)) | {employee.id}
+        return (Employee.query.filter(Employee.id.in_(sorted(ids)))
+                .order_by(Employee.id).all())
+    return [employee] if employee is not None else []
+
+
+def _find_payroll_employee(user, employee, question: str):
+    """Nhân viên được nhắc tới trong câu hỏi, trong phạm vi xem lương.
+
+    Chỉ khớp theo mã NV hoặc họ tên đầy đủ — KHÔNG khớp tên riêng
+    ("Minh", "Lan", "Viên"...): tên riêng trùng từ thường ("viên" trong
+    "nhân viên", "mình" gõ không dấu thành "minh") nên đoán sai sẽ LỘ
+    lương người khác. Không khớp -> rơi về phiếu của mình / bảng lương,
+    tuyệt đối không đoán người.
+    Trả (employee|None, mentioned_out_of_scope: bool).
+    """
+    folded = _fold(question or "")
+    pool = _payroll_mention_pool(user, employee)
+    if not pool:
+        return None, False
+    matches = []
+    for cand in pool:
+        code = (getattr(cand, "code", "") or "").strip().lower()
+        if code and code in (question or "").lower():
+            matches.append(cand)
+            continue
+        full = _fold(getattr(cand, "full_name", "") or "")
+        if full and full in folded:
+            matches.append(cand)
+            continue
+    if len(matches) == 1:
+        return matches[0], False
+    if len(matches) > 1:
+        return None, False  # mơ hồ -> không đoán người
+    # Có nhắc tới một nhân viên NGOÀI phạm vi (mã hoặc họ tên đầy đủ)?
+    pool_ids = {c.id for c in pool}
+    for cand in Employee.query.order_by(Employee.id).all():
+        if cand.id in pool_ids:
+            continue
+        code = (getattr(cand, "code", "") or "").strip().lower()
+        full = _fold(getattr(cand, "full_name", "") or "")
+        if (code and code in (question or "").lower()) or (full and full in folded):
+            return None, True
+    return None, False
+
+
+def _payroll_table_text(period, items, provisional: bool = False) -> str:
+    """Bảng lương gọn 1 kỳ: tổng thực lĩnh + top 5 cao nhất."""
+    if not items:
+        return (f"Kỳ lương tháng {period.month}/{period.year} "
+                "chưa có phiếu lương nào.")
+    total = sum(int(it.total_salary or 0) for it in items)
+    lines = [f"Bảng lương tháng {period.month}/{period.year} "
+             f"({len(items)} người, tổng thực lĩnh {_fmt_money(total)}):"]
+    if provisional:
+        lines.append("Số liệu tạm tính — kỳ lương chưa chốt.")
+    for it in items[:5]:
+        emp = it.employee
+        who = (f"{emp.full_name} ({emp.code})" if emp is not None
+               else f"NV#{it.employee_id}")
+        lines.append(f"- {who}: {_fmt_money(it.total_salary)} "
+                     f"({_fmt_days(it.workdays_paid)} ngày công).")
+    if len(items) > 5:
+        lines.append(f"... và {len(items) - 5} người khác "
+                     "(xem chi tiết ở trang Bảng lương).")
+    return "\n".join(lines)
+
+
+def tool_my_payslip(user, month=None, year=None, question=None, **_args) -> str:
+    """Tra cứu lương theo quyền — CHỈ ĐỌC, không thay đổi dữ liệu.
+
+    - Nhắc tên/mã nhân viên -> phiếu của người đó (admin/hr: ai cũng được;
+      manager: trong nhóm mình; employee: chỉ chính mình; ngoài phạm vi ->
+      từ chối rõ ràng, KHÔNG lấy lương người khác, KHÔNG rơi về RAG).
+    - Không nhắc ai: admin/hr -> bảng lương toàn công ty kỳ đó;
+      manager -> bảng lương nhóm mình; employee -> phiếu của mình.
+    - Kỳ chưa chốt vẫn trả số thật, ghi rõ "tạm tính — chưa chốt".
+    """
     employee = _employee_of(user)
-    if employee is None:
-        return _NO_PROFILE_TEXT
+    role = getattr(user, "role", "employee")
     today = _today()
     month = int(month) if month else today.month
     year = int(year) if year else today.year
-
     period = PayrollPeriod.query.filter_by(month=month, year=year).first()
-    if period is not None and period.status == PayrollPeriod.STATUS_LOCKED:
+    if period is None:
+        return f"Hệ thống chưa có kỳ lương tháng {month}/{year}."
+
+    provisional = period.status != PayrollPeriod.STATUS_LOCKED
+    mentioned, out_of_scope = _find_payroll_employee(user, employee, question or "")
+    if out_of_scope:
+        if role == "manager":
+            return ("Bạn chỉ xem được phiếu lương của mình và nhóm mình quản lý.")
+        return "Bạn chỉ xem được phiếu lương của chính mình."
+    if mentioned is not None:
         item = PayrollItem.query.filter_by(
-            period_id=period.id, employee_id=employee.id).first()
-        if item is not None:
-            return _payslip_text(item)
+            period_id=period.id, employee_id=mentioned.id).first()
+        if item is None:
+            return (f"{mentioned.full_name} ({mentioned.code}) không có phiếu "
+                    f"lương trong kỳ {month}/{year}.")
+        return _payslip_text(item, provisional=provisional)
+
+    if role in ("admin", "hr"):
+        items = (PayrollItem.query.filter_by(period_id=period.id)
+                 .order_by(PayrollItem.total_salary.desc()).all())
+        return _payroll_table_text(period, items, provisional=provisional)
+    if role == "manager" and employee is not None:
+        from app.blueprints.leave import services as leave_services
+
+        ids = sorted(set(leave_services._team_employee_ids(employee)) | {employee.id})
+        items = (PayrollItem.query.filter(
+                     PayrollItem.period_id == period.id,
+                     PayrollItem.employee_id.in_(ids))
+                 .order_by(PayrollItem.total_salary.desc()).all())
+        return _payroll_table_text(period, items, provisional=provisional)
+    if employee is None:
+        return _NO_PROFILE_TEXT
+    item = PayrollItem.query.filter_by(
+        period_id=period.id, employee_id=employee.id).first()
+    if item is None:
         return (f"Bạn không có phiếu lương trong kỳ {month}/{year} "
                 "(có thể bạn chưa thuộc diện tính lương kỳ này).")
-    if period is not None:
-        note = (f"Kỳ lương tháng {month}/{year} chưa được chốt (locked) nên "
-                "chưa có số liệu chính thức.")
-    else:
-        note = f"Hệ thống chưa có kỳ lương tháng {month}/{year}."
-
-    # Gợi ý kỳ gần nhất đã chốt (nếu có) — vẫn là dữ liệu thật của chính họ.
-    from app.blueprints.payroll import services as payroll_services
-    from app.errors import ApiError
-
-    try:
-        latest = payroll_services.get_my_payslip(user, None)
-    except ApiError:
-        return note + " Bạn cũng chưa có phiếu lương nào đã chốt."
-    return note + "\n" + _payslip_text(latest)
+    return _payslip_text(item, provisional=provisional)
 
 
 def tool_my_attendance(user, month=None, year=None, **_args) -> str:
@@ -457,7 +580,7 @@ def detect_intent(question: str) -> tuple[str, dict] | None:
     tokens = set(folded.split())
 
     if ("phieu luong" in folded or "thuc linh" in folded
-            or "bang luong cua toi" in folded
+            or "bang luong" in folded or "ai luong cao" in folded
             or ("luong" in folded and ("cua toi" in folded or month is not None))):
         return "payslip", {"month": month, "year": year}
 
@@ -493,7 +616,7 @@ _CLASSIFY_SYSTEM_PROMPT = (
     "viên và trả về DUY NHẤT một JSON {\"intent\": ..., \"month\": ..., "
     "\"year\": ...} — không giải thích. intent là một trong: "
     "\"leave_balance\" (hỏi số phép còn lại của bản thân), \"payslip\" (hỏi "
-    "phiếu lương/lương của bản thân), \"attendance\" (hỏi tổng hợp chấm công "
+    "phiếu lương/bảng lương — của bản thân, của nhân viên khác, hoặc toàn công ty), \"attendance\" (hỏi tổng hợp chấm công "
     "của bản thân), \"who_on_leave\" (hỏi ai đang nghỉ phép), "
     "\"pending_approvals\" (hỏi đơn đang chờ duyệt), \"team_overview\" (hỏi "
     "sĩ số/tổng quan nhân sự), \"none\" (mọi câu hỏi khác, đặc biệt là hỏi "
@@ -562,7 +685,7 @@ def try_answer(user, question: str) -> str | None:
     if handler is None:
         return None
     try:
-        text = handler(user, **kwargs)
+        text = handler(user, question=question, **kwargs)
     except Exception:
         current_app.logger.warning(
             "Chatbot: tool %s lỗi, chuyển sang luồng RAG.", name, exc_info=True)
