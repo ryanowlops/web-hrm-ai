@@ -37,6 +37,7 @@ import {
   OrgChartPage,
   PayrollPage,
   PerformancePage,
+  ProbationPage,
   PublicJobsPage,
   ReportsPage,
   RewardsPage,
@@ -241,6 +242,10 @@ const router = createBrowserRouter([
       {
         path: 'briefing',
         element: guardedPage(BriefingPage, ['admin', 'hr']),
+      },
+      {
+        path: 'probation',
+        element: guardedPage(ProbationPage, ['admin', 'hr', 'manager']),
       },
     ],
   },

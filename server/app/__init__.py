@@ -56,6 +56,7 @@ _MODULE_BLUEPRINTS = [
     "notifications",
     "admin",
     "holidays",
+    "probation",
 ]
 
 # Các vị trí có thể chứa routes.py của một module.

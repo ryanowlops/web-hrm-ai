@@ -52,6 +52,8 @@ const importDisplayPage = () => import('../features/display/pages/DisplayPage.js
 const importCheckinPage = () => import('../features/checkin/CheckinPage.jsx');
 const importCheckinQrPage = () => import('../features/checkin/CheckinQrPage.jsx');
 const importBriefingPage = () => import('../features/briefing/BriefingPage.jsx');
+const importProbationPage = () =>
+  import('../features/probation/pages/ProbationPage.jsx');
 
 export const LoginPage = lazy(importLoginPage);
 export const PublicJobsPage = lazy(importPublicJobsPage);
@@ -91,6 +93,7 @@ export const DisplayPage = lazy(importDisplayPage);
 export const CheckinPage = lazy(importCheckinPage);
 export const CheckinQrPage = lazy(importCheckinQrPage);
 export const BriefingPage = lazy(importBriefingPage);
+export const ProbationPage = lazy(importProbationPage);
 
 // Map đường dẫn menu → các chunk cần tải trước khi điều hướng tới.
 const ROUTE_PREFETCHERS = {
@@ -126,6 +129,7 @@ const ROUTE_PREFETCHERS = {
   '/display': [importDisplayPage],
   '/checkin-qr': [importCheckinQrPage],
   '/briefing': [importBriefingPage],
+  '/probation': [importProbationPage],
   '/admin': [importAdminPage],
   '/jobs': [importPublicJobsPage],
   '/login': [importLoginPage],

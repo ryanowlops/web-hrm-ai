@@ -140,6 +140,12 @@ const NAV_ITEMS = [
   // /onboarding giữ cho mọi role: trang có màn "Hội nhập của tôi" — employee
   // tự xem và cập nhật checklist hội nhập của chính mình (tự phục vụ).
   { to: '/onboarding', label: 'Hội nhập', icon: 'hrm:onboarding' },
+  {
+    to: '/probation',
+    label: 'Thử việc',
+    icon: 'hrm:performance',
+    roles: ['admin', 'hr', 'manager'],
+  },
   { to: '/shifts', label: 'Ca làm', icon: 'hrm:shifts' },
   { to: '/documents', label: 'Hồ sơ & giấy tờ', icon: 'hrm:documents' },
   { to: '/org-chart', label: 'Sơ đồ tổ chức', icon: 'hrm:orgchart', roles: ['admin', 'hr', 'manager'] },
@@ -208,7 +214,7 @@ const NAV_GROUPS = [
   {
     id: 'quan-ly',
     label: 'Quản lý',
-    paths: ['/employees', '/departments', '/attendance', '/checkin-qr', '/leave', '/holidays', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
+    paths: ['/employees', '/departments', '/attendance', '/checkin-qr', '/leave', '/holidays', '/payroll', '/performance', '/onboarding', '/probation', '/shifts', '/documents'],
   },
   { id: 'to-chuc', label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding', '/skills'] },
   { id: 'van-hanh', label: 'Vận hành', paths: ['/assets', '/training'] },

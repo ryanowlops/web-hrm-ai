@@ -50,6 +50,7 @@ from app.models.checkin_log import CheckinLog
 from app.models.interview_kit import InterviewKit
 from app.models.briefing import Briefing
 from app.models.holiday import Holiday
+from app.models.probation import ProbationEvaluation
 
 __all__ = [
     # users / org
@@ -132,6 +133,8 @@ __all__ = [
     "Briefing",
     # lịch nghỉ lễ (bảng mới — chỉ CRUD, chưa nối vào nghỉ phép/lương)
     "Holiday",
+    # quản lý thử việc (bảng mới — đánh giá thử việc)
+    "ProbationEvaluation",
     # misc
     "Notification",
     "Setting",

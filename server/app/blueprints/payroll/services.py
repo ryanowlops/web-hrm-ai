@@ -7,6 +7,9 @@ Nghiệp vụ theo docs/architecture.md A5.3 + B5.4:
   đếm ngày công thực tế từ `attendance` (present/late), cộng ngày nghỉ
   CÓ phép và trừ ngày nghỉ KHÔNG lương từ `leave_requests` đã duyệt,
   rồi dùng hàm thuần ở calculator.py để tính (lưu breakdown JSON).
+- Hợp đồng thử việc: lương ngày công + lương giờ OT tính trên 85% lương
+  chính thức (Điều 27 BLLĐ 2019); item vẫn lưu lương chính thức,
+  breakdown ghi rõ probation_factor / probation_base_salary.
 - Chốt kỳ (lock): kỳ đã locked thì không tính lại được nữa -> 409 khi
   calculate; phiếu lương của nhân viên chỉ xem được sau khi kỳ đã locked.
 
@@ -26,6 +29,9 @@ from app.blueprints.payroll.calculator import (
     calculate_salary,
     standard_workdays_of_month,
 )
+# Nhận diện hợp đồng thử việc: chuẩn hóa contract_type (bỏ dấu,
+# lowercase) rồi so với "thu viec" — logic duy nhất ở probation/services.
+from app.blueprints.probation.services import is_probation_contract
 from app.extensions import db
 from app.models import (
     Attendance,
@@ -251,6 +257,19 @@ OT_MULTIPLIER_WEEKDAY = 1.5
 OT_MULTIPLIER_WEEKEND = 2.0
 OT_MULTIPLIER_HOLIDAY = 3.0
 
+# Lương thử việc tối thiểu 85% lương chính thức (Điều 27 BLLĐ 2019).
+# base_salary trong hợp đồng thử việc là lương CHÍNH THỨC; 85% chỉ là
+# cách tính lúc trả lương (lương ngày công + lương giờ OT). Item lương
+# vẫn lưu base_salary chính thức, breakdown giải thích phần 85%.
+PROBATION_PAY_RATE = 0.85
+
+
+def _probation_base(base_salary: int) -> int:
+    """Lương thử việc hiệu dụng = 85% lương chính thức (làm tròn HALF_UP)."""
+    return _money(
+        Decimal(str(base_salary)) * Decimal(str(PROBATION_PAY_RATE))
+    )
+
 
 def _holiday_date_set(first: date, last: date) -> set[date]:
     """Tập ngày lễ trong tháng (bảng holidays; trống thì không ngày nào là lễ)."""
@@ -341,25 +360,32 @@ def _overtime_pay(
             multiplier = OT_MULTIPLIER_WEEKEND
         else:
             multiplier = OT_MULTIPLIER_WEEKDAY
+        # Lương giờ OT tính trên lương THỰC NHẬN: hợp đồng thử việc thì
+        # lương giờ cũng x 85% (xem PROBATION_PAY_RATE).
+        probation_factor = (
+            PROBATION_PAY_RATE if is_probation_contract(contract) else 1.0
+        )
         hourly = (
             Decimal(str(contract.base_salary))
             / Decimal(str(standard))
             / Decimal(8)
+            * Decimal(str(probation_factor))
         )
         pay = _money(
             Decimal(str(row.hours)) * hourly * Decimal(str(multiplier))
         )
         total_pay += pay
         total_hours += row.hours
-        result["details"].append(
-            {
-                "date": row.work_date.isoformat(),
-                "hours": row.hours,
-                "multiplier": multiplier,
-                "pay": pay,
-                "base_salary": contract.base_salary,
-            }
-        )
+        detail = {
+            "date": row.work_date.isoformat(),
+            "hours": row.hours,
+            "multiplier": multiplier,
+            "pay": pay,
+            "base_salary": contract.base_salary,
+        }
+        if probation_factor != 1.0:
+            detail["probation_factor"] = probation_factor
+        result["details"].append(detail)
     result["overtime_pay"] = total_pay
     result["overtime_hours"] = round(total_hours, 2)
     return result
@@ -466,8 +492,10 @@ def _multi_contract_salary(
     Mỗi đoạn tính riêng bằng calculate_salary với lương/phụ cấp của đoạn
     đó; phụ cấp chia theo tỷ lệ ngày công của đoạn trên tổng ngày công
     (phụ cấp là khoản cố định theo tháng, không nhân đôi khi đổi hợp
-    đồng). Trả về None khi tháng không có ngày công hưởng lương nào —
-    caller dùng hợp đồng mới nhất để tính theo công thức 1 hợp đồng.
+    đồng). Đoạn thử việc tính bằng 85% lương chính thức của đoạn đó
+    (ghi rõ probation_factor trong segment). Trả về None khi tháng không
+    có ngày công hưởng lương nào — caller dùng hợp đồng mới nhất để tính
+    theo công thức 1 hợp đồng.
     """
     worked_dates = _worked_date_set(employee_id, first, last)
     paid_by_date, _ = _leave_portions_by_date(employee_id, first, last)
@@ -496,8 +524,21 @@ def _multi_contract_salary(
         if paid_c <= 0:
             continue
         allowance_c = int(round(contract.allowance * paid_c / total_paid))
+        # Đoạn thử việc: lương ngày công tính trên 85% lương chính thức
+        # (Điều 27 BLLĐ 2019); base_salary trong segment vẫn là lương
+        # chính thức, factor ghi rõ để phiếu lương giải thích được.
+        if is_probation_contract(contract):
+            effective_base = _probation_base(contract.base_salary)
+            segment_probation = {
+                "probation_factor": PROBATION_PAY_RATE,
+                "probation_base_salary": effective_base,
+                "probation_days": float(paid_c),
+            }
+        else:
+            effective_base = contract.base_salary
+            segment_probation = {}
         seg = calculate_salary(
-            base_salary=contract.base_salary,
+            base_salary=effective_base,
             allowance=allowance_c,
             standard_workdays=standard,
             paid_workdays=paid_c,
@@ -514,6 +555,7 @@ def _multi_contract_salary(
                 "workday_salary": seg["breakdown"]["workday_salary"],
                 "insurance_deduction": seg["insurance_deduction"],
                 "total_salary": seg["total_salary"],
+                **segment_probation,
             }
         )
         total_salary += seg["total_salary"]
@@ -616,10 +658,26 @@ def calculate_period(period_id: int, actor) -> dict:
             # Tiền tăng ca tháng này (chỉ đơn đã duyệt; hệ số theo ngày).
             ot = _overtime_pay(employee.id, first, last, standard)
 
+            # Lương thử việc = 85% lương chính thức (Điều 27 BLLĐ 2019).
+            # base_salary trong item vẫn là lương chính thức; lương hiệu
+            # dụng chỉ dùng để tính, giải thích trong breakdown.
+            def _probation_info(contract, paid_days):
+                if not is_probation_contract(contract):
+                    return contract.base_salary, {}
+                effective = _probation_base(contract.base_salary)
+                return effective, {
+                    "probation_factor": PROBATION_PAY_RATE,
+                    "probation_base_salary": effective,
+                    "probation_days": float(paid_days),
+                }
+
             if len(contracts) == 1:
                 contract = contracts[0]
+                effective_base, probation_info = _probation_info(
+                    contract, paid_workdays
+                )
                 result = calculate_salary(
-                    base_salary=contract.base_salary,
+                    base_salary=effective_base,
                     allowance=contract.allowance,
                     standard_workdays=standard,
                     paid_workdays=paid_workdays,
@@ -629,7 +687,11 @@ def calculate_period(period_id: int, actor) -> dict:
                     overtime_pay=ot["overtime_pay"],
                     overtime_hours=ot["overtime_hours"],
                 )
+                # Item lương lưu lương chính thức, không phải lương 85%.
+                result = dict(result)
+                result["base_salary"] = contract.base_salary
                 breakdown = dict(result["breakdown"])
+                breakdown["base_salary"] = contract.base_salary
                 breakdown.update(
                     {
                         "contract_id": contract.id,
@@ -639,6 +701,7 @@ def calculate_period(period_id: int, actor) -> dict:
                         "overlap_days": overlap,
                         "overtime_details": ot["details"],
                         "overtime_skipped": ot["skipped"],
+                        **probation_info,
                     }
                 )
             else:
@@ -657,8 +720,11 @@ def calculate_period(period_id: int, actor) -> dict:
                     # Tháng không có ngày công hưởng lương: dùng hợp đồng
                     # mới nhất theo công thức 1 hợp đồng (thực lĩnh = phụ cấp).
                     contract = max(contracts, key=lambda c: c.start_date)
+                    effective_base, probation_info = _probation_info(
+                        contract, 0
+                    )
                     result = calculate_salary(
-                        base_salary=contract.base_salary,
+                        base_salary=effective_base,
                         allowance=contract.allowance,
                         standard_workdays=standard,
                         paid_workdays=0,
@@ -668,7 +734,11 @@ def calculate_period(period_id: int, actor) -> dict:
                         overtime_pay=ot["overtime_pay"],
                         overtime_hours=ot["overtime_hours"],
                     )
+                    # Item lương lưu lương chính thức, không phải lương 85%.
+                    result = dict(result)
+                    result["base_salary"] = contract.base_salary
                     breakdown = dict(result["breakdown"])
+                    breakdown["base_salary"] = contract.base_salary
                     breakdown.update(
                         {
                             "contract_id": contract.id,
@@ -678,6 +748,7 @@ def calculate_period(period_id: int, actor) -> dict:
                             "overlap_days": overlap,
                             "overtime_details": ot["details"],
                             "overtime_skipped": ot["skipped"],
+                            **probation_info,
                         }
                     )
                 else:

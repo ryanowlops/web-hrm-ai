@@ -671,6 +671,12 @@ function MyPayslipView() {
   const salaryByWorkdays = pick(breakdown, 'salary_by_workdays', 'salaryByWorkdays');
   const allowance = pick(slip, 'allowance');
   const ot = overtimeOf(slip);
+  // Thử việc hưởng 85% lương: backend ghi probation_factor/probation_days
+  // (+ probation_salary nếu có) vào breakdown của phiếu lương.
+  const probFactor = pick(breakdown, 'probation_factor', 'probationFactor');
+  const probDays = pick(breakdown, 'probation_days', 'probationDays');
+  const probSalary = pick(breakdown, 'probation_base_salary', 'probationBaseSalary', 'probation_salary', 'probationSalary');
+  const probPct = probFactor !== undefined ? Math.round(Number(probFactor) * 100) : null;
   const insuranceDeduction = pick(slip, 'insurance_deduction', 'insuranceDeduction');
   const insuranceRate = pick(breakdown, 'insurance_rate', 'insuranceRate');
   const otherDeduction = pick(slip, 'other_deduction', 'otherDeduction');
@@ -783,6 +789,18 @@ function MyPayslipView() {
               <span className={slipLabel}>Phụ cấp</span>
               <strong className={slipValue}>+ {formatVND(allowance)}</strong>
             </div>
+            {(probFactor !== undefined || probDays !== undefined) && Number(probDays || 0) > 0 && (
+              <div className={slipRow}>
+                <span className={slipLabel}>
+                  Thử việc ({Number(probDays)} ngày{probPct !== null ? `, ${probPct}%` : ''})
+                </span>
+                <strong className={slipValue}>
+                  {probSalary !== undefined
+                    ? formatVND(probSalary)
+                    : `lương tính theo ${probPct !== null ? `${probPct}%` : '85%'}`}
+                </strong>
+              </div>
+            )}
             {ot.pay > 0 && (
               <div className={slipRow}>
                 <span className={slipLabel}>
