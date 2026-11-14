@@ -34,22 +34,39 @@ from app.models import (
     Asset,
     AssetAssignment,
     Attendance,
+    Candidate,
+    CertificateRequest,
     Contract,
     Course,
     CourseEnrollment,
     Department,
+    DisciplinaryRecord,
     Employee,
+    EmployeeDocument,
+    EmployeeSkill,
+    FeedPost,
     GoalCheckin,
+    Holiday,
+    JobPosting,
     KeyResult,
+    Kudo,
     LeaveBalance,
+    LeaveRequest,
     LeaveType,
     Objective,
+    OfferLetter,
     OnboardingPlan,
     OnboardingTask,
     OnboardingTemplate,
     OnboardingTemplateTask,
     PerformanceCycle,
     Position,
+    Redemption,
+    Reward,
+    ShiftAssignment,
+    ShiftDefinition,
+    ShiftSwapRequest,
+    Skill,
     User,
 )
 
@@ -147,6 +164,904 @@ def _is_seed_checkin(rec) -> bool:
     return (7 * 60 + 45 <= minute <= 8 * 60 + 30) or (
         8 * 60 + 45 <= minute <= 9 * 60 + 30
     )
+
+
+
+def seed_demo_data_round2() -> dict:
+    """Seed bổ sung dữ liệu demo cho buổi demo 15/11/2026 (round 2).
+
+    Lấp các phân hệ còn trống/mỏng sau round 1 (chấm công + lương):
+    ngày lễ, sinh nhật (milestones), ứng viên + thư mời nhận việc,
+    ca làm tuần sau + đơn đổi ca, kỷ luật, kỹ năng (mở rộng cho toàn
+    bộ nhân viên), mục tiêu hiệu suất, đào tạo, tài sản, kudos, bài
+    đăng bảng tin, onboarding, giấy xác nhận/tài liệu, đổi quà chờ
+    duyệt và 3 đơn nghỉ tháng 10 đã duyệt.
+    IDEMPOTENT: mọi bản ghi đều kiểm tra tồn tại trước khi tạo (theo
+    khóa tự nhiên của từng bảng); chạy lại không nhân đôi. Không động
+    vào tài khoản, NV0002, cấu hình GPS, kỳ lương hay chấm công
+    11/2026 đã seed. Không tự commit — transaction do main() quản lý.
+    """
+    import hashlib
+    import os
+    import uuid
+
+    from flask import current_app
+
+    from app.blueprints.documents.services import build_issued_content
+    from app.blueprints.offer_letters.services import build_letter_body
+    from app.models.users import utcnow
+
+    counts = {
+        "holidays": 0,
+        "birthdays": 0,
+        "candidates": 0,
+        "offers": 0,
+        "assignments": 0,
+        "swaps": 0,
+        "disciplinary": 0,
+        "skills": 0,
+        "skill_levels": 0,
+        "objectives": 0,
+        "key_results": 0,
+        "courses": 0,
+        "enrollments": 0,
+        "assets": 0,
+        "kudos": 0,
+        "feed_posts": 0,
+        "onboarding_plans": 0,
+        "certificates": 0,
+        "documents": 0,
+        "redemptions": 0,
+        "oct_leaves": 0,
+    }
+    today = date.today()
+
+    def _emp(code):
+        return Employee.query.filter_by(code=code).first()
+
+    def _user(email):
+        return User.query.filter_by(email=email).first()
+
+    def _skill_level(code, skill_name):
+        h = hashlib.md5(f"{code}:{skill_name}".encode()).hexdigest()
+        return 2 + (int(h[:8], 16) % 4)
+
+    def _as_dt(d):
+        return datetime.combine(d, time(9, 0))
+
+    def _write_demo_file(title):
+        upload_root = current_app.config.get("UPLOAD_FOLDER") or os.path.join(
+            current_app.instance_path, "uploads"
+        )
+        docs_dir = os.path.join(upload_root, "documents")
+        os.makedirs(docs_dir, exist_ok=True)
+        filename = f"{uuid.uuid4().hex}.txt"
+        with open(os.path.join(docs_dir, filename), "w", encoding="utf-8") as fh:
+            fh.write(f"Tài liệu demo — {title}\n")
+        return f"documents/{filename}"
+
+    # --- 1. Ngày lễ VN 2026 (đã đối chiếu lịch chính thức) + 2027 (ngày cố định) ---
+    for d, name in [
+        (date(2026, 1, 1), "Tết Dương lịch"),
+        (date(2026, 2, 16), "Tết Nguyên đán"),
+        (date(2026, 2, 17), "Tết Nguyên đán"),
+        (date(2026, 2, 18), "Tết Nguyên đán"),
+        (date(2026, 2, 19), "Tết Nguyên đán"),
+        (date(2026, 2, 20), "Tết Nguyên đán"),
+        (date(2026, 4, 26), "Giỗ Tổ Hùng Vương"),
+        (date(2026, 4, 27), "Nghỉ bù Giỗ Tổ Hùng Vương"),
+        (date(2026, 4, 30), "Ngày Chiến thắng"),
+        (date(2026, 5, 1), "Ngày Quốc tế Lao động"),
+        (date(2026, 9, 1), "Nghỉ lễ Quốc khánh"),
+        (date(2026, 9, 2), "Quốc khánh"),
+        (date(2026, 11, 24), "Ngày Văn hóa Việt Nam"),
+        (date(2027, 1, 1), "Tết Dương lịch"),
+        (date(2027, 4, 30), "Ngày Chiến thắng"),
+        (date(2027, 5, 1), "Ngày Quốc tế Lao động"),
+        (date(2027, 9, 2), "Quốc khánh"),
+    ]:
+        if Holiday.query.filter_by(date=d).first() is None:
+            db.session.add(Holiday(date=d, name=name, is_national=True))
+            counts["holidays"] += 1
+    db.session.flush()
+
+    # --- 2. Sinh nhật (để trang Cột mốc có mục sinh nhật, hiện đang 0) ---
+    for code, dob in [
+        ("NV0001", date(1995, 11, 8)),
+        ("NV0003", date(1998, 11, 20)),
+        ("NV0011", date(1999, 11, 25)),
+        ("NV0017", date(2000, 12, 10)),
+        ("NV0025", date(1997, 12, 18)),
+    ]:
+        emp = _emp(code)
+        if emp is not None and emp.date_of_birth is None:
+            emp.date_of_birth = dob
+            counts["birthdays"] += 1
+    db.session.flush()
+
+    # --- 3. Ứng viên cho tin đang mở (Lập trình viên Python) ---
+    job = JobPosting.query.filter_by(
+        title="Lập trình viên Python (Flask + React)"
+    ).first()
+    candidates = {}
+    for full_name, email, phone, status, cv_text in [
+        (
+            "Nguyễn Văn An",
+            "an.nv@example.com",
+            "0912345001",
+            Candidate.STATUS_NEW,
+            "3 năm kinh nghiệm Python/Flask, từng xây hệ thống quản lý kho cho công ty thương mại.",
+        ),
+        (
+            "Trần Thị Bích",
+            "bich.tt@example.com",
+            "0912345002",
+            Candidate.STATUS_INTERVIEW,
+            "2 năm React + Python, có kinh nghiệm làm dashboard báo cáo và viết test tự động.",
+        ),
+        (
+            "Lê Quốc Cường",
+            "cuong.lq@example.com",
+            "0912345003",
+            Candidate.STATUS_PASSED,
+            "4 năm backend Python/PostgreSQL, Docker, CI/CD, từng dẫn dắt nhóm 3 người.",
+        ),
+    ]:
+        cand = Candidate.query.filter_by(email=email).first()
+        if cand is None and job is not None:
+            cand = Candidate(
+                job_id=job.id,
+                full_name=full_name,
+                email=email,
+                phone=phone,
+                cv_text=cv_text,
+                status=status,
+            )
+            db.session.add(cand)
+            counts["candidates"] += 1
+        if cand is not None:
+            candidates[email] = cand
+    db.session.flush()
+
+    # --- 4. Thư mời nhận việc: 1 nháp, 1 đã gửi, 1 đã chấp nhận ---
+    admin_user = _user("admin@hrm.local")
+    for email, salary, start, deadline, status in [
+        ("cuong.lq@example.com", 16_000_000, date(2026, 12, 1), date(2026, 11, 30), OfferLetter.STATUS_SENT),
+        ("bich.tt@example.com", 15_000_000, date(2026, 12, 1), date(2026, 11, 30), OfferLetter.STATUS_ACCEPTED),
+        ("an.nv@example.com", 14_000_000, date(2026, 12, 7), date(2026, 11, 30), OfferLetter.STATUS_DRAFT),
+    ]:
+        cand = candidates.get(email)
+        if cand is None or cand.id is None:
+            continue
+        if OfferLetter.query.filter_by(candidate_id=cand.id).first() is not None:
+            continue
+        db.session.add(
+            OfferLetter(
+                candidate_id=cand.id,
+                job_id=job.id if job is not None else None,
+                salary=salary,
+                start_date=start,
+                deadline=deadline,
+                status=status,
+                letter_body=build_letter_body(cand, job, salary, start, deadline),
+                created_by=admin_user.id if admin_user else None,
+            )
+        )
+        counts["offers"] += 1
+    db.session.flush()
+
+    # --- 5. Ca làm tuần sau (16–20/11) cho NV0001–NV0004 + 3 đơn đổi ca ---
+    shifts = {s.name: s for s in ShiftDefinition.query.all()}
+    week = [date(2026, 11, 16) + timedelta(days=i) for i in range(5)]
+    overrides = {
+        ("NV0003", date(2026, 11, 17)): "Ca sáng",
+        # 18/11 là trạng thái SAU khi đơn đổi ca đã duyệt: Lan sang Ca chiều, Đức sang Ca sáng.
+        ("NV0003", date(2026, 11, 18)): "Ca chiều",
+        ("NV0004", date(2026, 11, 18)): "Ca sáng",
+    }
+    for code in ("NV0001", "NV0002", "NV0003", "NV0004"):
+        emp = _emp(code)
+        if emp is None:
+            continue
+        for d in week:
+            if (
+                ShiftAssignment.query.filter_by(employee_id=emp.id, work_date=d).first()
+                is not None
+            ):
+                continue
+            shift_name = overrides.get((code, d), "Ca hành chính")
+            shift = shifts.get(shift_name)
+            if shift is None:
+                continue
+            db.session.add(
+                ShiftAssignment(employee_id=emp.id, shift_id=shift.id, work_date=d)
+            )
+            counts["assignments"] += 1
+    db.session.flush()
+    manager_user = _user("manager@hrm.local")
+    for req_code, tgt_code, d, status, decider, note in [
+        (
+            "NV0003",
+            "NV0001",
+            date(2026, 11, 17),
+            ShiftSwapRequest.STATUS_PENDING,
+            None,
+            "Xin đổi ca sáng sang ca hành chính để tham gia buổi đào tạo chiều thứ 2.",
+        ),
+        (
+            "NV0003",
+            "NV0004",
+            date(2026, 11, 18),
+            ShiftSwapRequest.STATUS_APPROVED,
+            manager_user,
+            "Đổi ca để đi khám sức khỏe buổi sáng.",
+        ),
+        (
+            "NV0004",
+            "NV0003",
+            date(2026, 11, 16),
+            ShiftSwapRequest.STATUS_REJECTED,
+            manager_user,
+            "Xin đổi ca hành chính ngày thứ 2 sang ca sáng.",
+        ),
+    ]:
+        req_emp, tgt_emp = _emp(req_code), _emp(tgt_code)
+        if req_emp is None or tgt_emp is None:
+            continue
+        if (
+            ShiftSwapRequest.query.filter_by(
+                requester_id=req_emp.id, target_id=tgt_emp.id, work_date=d
+            ).first()
+            is not None
+        ):
+            continue
+        db.session.add(
+            ShiftSwapRequest(
+                requester_id=req_emp.id,
+                target_id=tgt_emp.id,
+                work_date=d,
+                status=status,
+                note=note,
+                decided_by=decider.id if decider else None,
+            )
+        )
+        counts["swaps"] += 1
+    db.session.flush()
+
+    # --- 6. Kỷ luật: 1 đang hiệu lực, 1 đã giải quyết ---
+    hr_user = _user("hr@hrm.local")
+    for code, rtype, severity, title, desc, action, issued, status, resolved_note in [
+        (
+            "NV0011",
+            DisciplinaryRecord.TYPE_WRITTEN,
+            DisciplinaryRecord.SEVERITY_MEDIUM,
+            "Vi phạm quy định an toàn thông tin",
+            "Chia sẻ tài khoản hệ thống dùng chung với đồng nghiệp, vi phạm quy định bảo mật.",
+            "Khiển trách bằng văn bản, yêu cầu đổi mật khẩu và học lại quy định bảo mật.",
+            date(2026, 11, 10),
+            DisciplinaryRecord.STATUS_ACTIVE,
+            None,
+        ),
+        (
+            "NV0029",
+            DisciplinaryRecord.TYPE_VERBAL,
+            DisciplinaryRecord.SEVERITY_LOW,
+            "Đi làm muộn 3 lần trong tháng 10",
+            "Đi làm muộn các ngày 5/10, 12/10 và 20/10 không có lý do chính đáng.",
+            "Nhắc nhở trực tiếp, yêu cầu cam kết đi làm đúng giờ.",
+            date(2026, 10, 22),
+            DisciplinaryRecord.STATUS_RESOLVED,
+            "Nhân viên đã cam kết và đi làm đúng giờ trong 2 tuần gần nhất.",
+        ),
+    ]:
+        emp = _emp(code)
+        if emp is None:
+            continue
+        if (
+            DisciplinaryRecord.query.filter_by(employee_id=emp.id, title=title).first()
+            is not None
+        ):
+            continue
+        db.session.add(
+            DisciplinaryRecord(
+                employee_id=emp.id,
+                type=rtype,
+                severity=severity,
+                title=title,
+                description=desc,
+                action_taken=action,
+                issued_by=hr_user.id if hr_user else None,
+                issued_date=issued,
+                status=status,
+                resolved_note=resolved_note,
+            )
+        )
+        counts["disciplinary"] += 1
+    db.session.flush()
+
+    # --- 7. Kỹ năng: 2 kỹ năng mới + mức năng lực cho toàn bộ nhân viên đang làm ---
+    for name, cat, desc in [
+        (
+            "DevOps & CI/CD",
+            "Kỹ thuật",
+            "Vận hành CI/CD, Docker, triển khai và giám sát hệ thống.",
+        ),
+        (
+            "Chăm sóc khách hàng",
+            "Chuyên môn",
+            "Tiếp nhận, xử lý yêu cầu và giữ chân khách hàng.",
+        ),
+    ]:
+        if Skill.query.filter_by(name=name).first() is None:
+            db.session.add(Skill(name=name, category=cat, description=desc))
+            counts["skills"] += 1
+    db.session.flush()
+    dept_skills = {
+        "Kỹ thuật": ["Python", "React/JavaScript", "SQL & dữ liệu", "Kiểm thử phần mềm", "DevOps & CI/CD"],
+        "Kinh doanh": ["Giao tiếp & thuyết trình", "Excel", "Quản lý dự án", "Phân tích dữ liệu", "Chăm sóc khách hàng"],
+        "Nhân sự": ["Excel", "Giao tiếp & thuyết trình", "Quản lý dự án", "Lãnh đạo nhóm", "Tiếng Anh giao tiếp"],
+        "Marketing": ["Giao tiếp & thuyết trình", "Phân tích dữ liệu", "Excel", "Tiếng Anh giao tiếp", "Chăm sóc khách hàng"],
+        "Kế toán": ["Excel", "Phân tích dữ liệu", "SQL & dữ liệu", "Quản lý dự án", "Tiếng Anh giao tiếp"],
+    }
+    skill_by_name = {s.name: s for s in Skill.query.all()}
+    for emp in Employee.query.filter(
+        Employee.status != Employee.STATUS_RESIGNED
+    ).all():
+        dept_name = emp.department.name if emp.department else None
+        names = dept_skills.get(dept_name)
+        if not names:
+            continue
+        for skill_name in names:
+            skill = skill_by_name.get(skill_name)
+            if skill is None:
+                continue
+            if (
+                EmployeeSkill.query.filter_by(
+                    employee_id=emp.id, skill_id=skill.id
+                ).first()
+                is not None
+            ):
+                continue
+            db.session.add(
+                EmployeeSkill(
+                    employee_id=emp.id,
+                    skill_id=skill.id,
+                    level=_skill_level(emp.code, skill_name),
+                )
+            )
+            counts["skill_levels"] += 1
+    db.session.flush()
+
+    # --- 8. Mục tiêu hiệu suất Q4/2026 cho 6 nhân viên khác (mỗi mục tiêu 2-3 KR + check-in) ---
+    cycle = PerformanceCycle.query.filter_by(status="active").first()
+    if cycle is not None:
+        objectives = [
+            (
+                "NV0001",
+                "Mở rộng thị trường miền Bắc",
+                "Mở rộng khách hàng doanh nghiệp tại thị trường miền Bắc trong quý.",
+                [
+                    ("Doanh thu mới miền Bắc (triệu VND)", "triệu VND", 800, 520, 50, "increase"),
+                    ("Số khách hàng mới miền Bắc", "khách hàng", 15, 9, 30, "increase"),
+                    ("Số buổi gặp đối tác", "buổi", 20, 14, 20, "increase"),
+                ],
+                "NV0001",
+            ),
+            (
+                "NV0004",
+                "Hoàn thành module chấm công QR+GPS",
+                "Hoàn thiện tính năng chấm công QR kết hợp GPS cho ứng dụng.",
+                [
+                    ("Số màn hình hoàn thành", "màn hình", 8, 6, 60, "increase"),
+                    ("Tỉ lệ test pass (%)", "%", 95, 88, 40, "increase"),
+                ],
+                "NV0011",
+            ),
+            (
+                "NV0006",
+                "Rút ngắn thời gian tuyển dụng trung bình",
+                "Cải tiến quy trình tuyển dụng để lấp vị trí nhanh hơn.",
+                [
+                    ("Thời gian tuyển trung bình (ngày)", "ngày", 20, 25, 50, "decrease"),
+                    ("Tỉ lệ ứng viên nhận việc (%)", "%", 80, 65, 50, "increase"),
+                ],
+                "NV0006",
+            ),
+            (
+                "NV0011",
+                "Nâng cấp hạ tầng CI/CD",
+                "Chuẩn hoá pipeline CI/CD cho toàn bộ dự án của phòng Kỹ thuật.",
+                [
+                    ("Tỉ lệ deploy thành công (%)", "%", 98, 92, 60, "increase"),
+                    ("Số dự án áp dụng CI/CD", "dự án", 6, 4, 40, "increase"),
+                ],
+                "NV0011",
+            ),
+            (
+                "NV0017",
+                "Tăng độ bao phủ kiểm thử tự động",
+                "Mở rộng test tự động cho các luồng nghiệp vụ chính.",
+                [
+                    ("Độ bao phủ kiểm thử (%)", "%", 70, 52, 60, "increase"),
+                    ("Số test case tự động mới", "test case", 120, 74, 40, "increase"),
+                ],
+                "NV0011",
+            ),
+            (
+                "NV0025",
+                "Tăng doanh số nhóm Kinh doanh",
+                "Dẫn dắt nhóm Kinh doanh vượt chỉ tiêu quý 4.",
+                [
+                    ("Doanh thu nhóm (triệu VND)", "triệu VND", 2000, 1450, 60, "increase"),
+                    ("Số khách hàng mới của nhóm", "khách hàng", 30, 21, 40, "increase"),
+                ],
+                "NV0001",
+            ),
+        ]
+        for code, title, desc, krs, creator_code in objectives:
+            emp = _emp(code)
+            creator = _emp(creator_code)
+            if emp is None:
+                continue
+            obj = Objective.query.filter_by(
+                cycle_id=cycle.id, employee_id=emp.id, title=title
+            ).first()
+            if obj is None:
+                obj = Objective(
+                    cycle_id=cycle.id,
+                    employee_id=emp.id,
+                    department_id=emp.department_id,
+                    title=title,
+                    description=desc,
+                    weight=1,
+                    status="active",
+                    created_by=creator.id if creator else None,
+                )
+                db.session.add(obj)
+                db.session.flush()
+                counts["objectives"] += 1
+            for kr_title, unit, target, current, weight, direction in krs:
+                kr = KeyResult.query.filter_by(
+                    objective_id=obj.id, title=kr_title
+                ).first()
+                if kr is None:
+                    kr = KeyResult(
+                        objective_id=obj.id,
+                        title=kr_title,
+                        unit=unit,
+                        target_value=target,
+                        current_value=current,
+                        weight=weight,
+                        direction=direction,
+                    )
+                    db.session.add(kr)
+                    db.session.flush()
+                    counts["key_results"] += 1
+                if GoalCheckin.query.filter_by(key_result_id=kr.id).count() == 0:
+                    step1 = round(current * 0.4)
+                    step2 = round(current * 0.75)
+                    for old, new in [(0, step1), (step1, step2), (step2, current)]:
+                        db.session.add(
+                            GoalCheckin(
+                                key_result_id=kr.id,
+                                author_id=emp.id,
+                                old_value=old,
+                                new_value=new,
+                                note="Cập nhật tiến độ mẫu (seed).",
+                            )
+                        )
+        db.session.flush()
+
+    # --- 9. Đào tạo: 1 khoá mới + ghi danh thêm cho các khoá hiện có ---
+    course_samples = [
+        (
+            "Lập trình Python nâng cao",
+            "Kỹ thuật lập trình Python nâng cao: decorator, async, tối ưu hiệu năng, pytest.",
+            "Kỹ thuật",
+            8,
+            False,
+        ),
+    ]
+    courses = {c.title: c for c in Course.query.all()}
+    for title, desc, category, hours, mandatory in course_samples:
+        if title not in courses:
+            course = Course(
+                title=title,
+                description=desc,
+                category=category,
+                duration_hours=hours,
+                is_mandatory=mandatory,
+                is_active=True,
+            )
+            db.session.add(course)
+            db.session.flush()
+            courses[title] = course
+            counts["courses"] += 1
+    trainer = _emp("NV0010")
+    enrollment_samples = [
+        ("An toàn thông tin cơ bản", "NV0011", "completed", 100),
+        ("An toàn thông tin cơ bản", "NV0017", "completed", 100),
+        ("An toàn thông tin cơ bản", "NV0006", "in_progress", 60),
+        ("An toàn thông tin cơ bản", "NV0025", "in_progress", 30),
+        ("An toàn thông tin cơ bản", "NV0037", "assigned", 0),
+        ("An toàn thông tin cơ bản", "NV0043", "assigned", 0),
+        ("An toàn thông tin cơ bản", "NV0012", "in_progress", 80),
+        ("An toàn thông tin cơ bản", "NV0026", "completed", 100),
+        ("Kỹ năng giao tiếp & làm việc nhóm", "NV0012", "in_progress", 50),
+        ("Kỹ năng giao tiếp & làm việc nhóm", "NV0026", "in_progress", 25),
+        ("Kỹ năng giao tiếp & làm việc nhóm", "NV0038", "completed", 100),
+        ("Kỹ năng giao tiếp & làm việc nhóm", "NV0047", "assigned", 0),
+        ("Quy trình bán hàng B2B", "NV0026", "in_progress", 70),
+        ("Quy trình bán hàng B2B", "NV0035", "completed", 100),
+        ("Quy trình bán hàng B2B", "NV0029", "in_progress", 45),
+        ("Lập trình Python nâng cao", "NV0012", "in_progress", 40),
+        ("Lập trình Python nâng cao", "NV0013", "in_progress", 30),
+        ("Lập trình Python nâng cao", "NV0020", "assigned", 0),
+        ("Lập trình Python nâng cao", "NV0021", "in_progress", 55),
+        ("Lập trình Python nâng cao", "NV0023", "completed", 100),
+    ]
+    for course_title, code, status, progress in enrollment_samples:
+        course = courses.get(course_title)
+        emp = _emp(code)
+        if course is None or emp is None:
+            continue
+        if (
+            CourseEnrollment.query.filter_by(
+                course_id=course.id, employee_id=emp.id
+            ).first()
+            is not None
+        ):
+            continue
+        db.session.add(
+            CourseEnrollment(
+                course_id=course.id,
+                employee_id=emp.id,
+                status=status,
+                progress=progress,
+                enrolled_by=trainer.id if trainer else None,
+                completed_at=_as_dt(today - timedelta(days=2)) if status == "completed" else None,
+            )
+        )
+        counts["enrollments"] += 1
+    db.session.flush()
+
+    # --- 10. Tài sản: +6, trong đó 3 cấp phát ---
+    for code, name, category, serial, status, holder_code in [
+        ("TS0007", "Laptop Dell Latitude 5450", "laptop", "DL5450-0007", "assigned", "NV0011"),
+        ("TS0008", "Laptop Lenovo ThinkPad T14", "laptop", "TP-T14-0008", "assigned", "NV0017"),
+        ("TS0009", "Màn hình LG 27UL500 27 inch", "monitor", "LG27-0009", "assigned", "NV0006"),
+        ("TS0010", "Điện thoại Samsung Galaxy A55", "phone", "SS-A55-0010", "available", None),
+        ("TS0011", "Máy chiếu Epson EB-X51", "other", "EP-X51-0011", "available", None),
+        ("TS0012", "Laptop HP EliteBook 840 G10", "laptop", "HP840-0012", "maintenance", None),
+    ]:
+        asset = Asset.query.filter_by(code=code).first()
+        if asset is None:
+            asset = Asset(
+                code=code,
+                name=name,
+                category=category,
+                serial=serial,
+                status=status,
+                purchase_date=date(2025, 1, 15),
+                notes=None,
+            )
+            db.session.add(asset)
+            db.session.flush()
+            counts["assets"] += 1
+        if holder_code is not None:
+            holder = _emp(holder_code)
+            if holder is not None and (
+                AssetAssignment.query.filter_by(
+                    asset_id=asset.id, employee_id=holder.id, status="active"
+                ).first()
+                is None
+            ):
+                db.session.add(
+                    AssetAssignment(
+                        asset_id=asset.id,
+                        employee_id=holder.id,
+                        assigned_at=_as_dt(today - timedelta(days=30)),
+                        returned_at=None,
+                        status="active",
+                        note="Cấp phát mẫu (seed).",
+                    )
+                )
+    db.session.flush()
+
+    # --- 11. Kudos: +8 lời cảm ơn/ghi nhận giữa các phòng ---
+    for from_email, to_code, badge, message in [
+        ("hang.pt@hrm.local", "NV0011", "leadership", "Bảo dẫn dắt team kỹ thuật hoàn thành sprint đúng hạn, rất chuyên nghiệp."),
+        ("employee@hrm.local", "NV0004", "thanks", "Cảm ơn anh Đức đã hỗ trợ em xử lý lỗi chấm công rất nhanh."),
+        ("manager@hrm.local", "NV0006", "dedication", "Chị Hằng chuẩn bị hồ sơ cho buổi demo rất chu đáo, cảm ơn chị!"),
+        ("tuan.vm@hrm.local", "NV0003", "teamwork", "Lan phối hợp cùng team tuyển dụng sàng lọc hồ sơ rất nhiệt tình."),
+        ("linh.dn@hrm.local", "NV0009", "innovation", "Bảo đề xuất cách trình bày bảng lương mới rõ ràng hơn hẳn."),
+        ("tam.ht@hrm.local", "NV0008", "thanks", "Cảm ơn Linh đã hỗ trợ tổ chức buổi đào tạo hội nhập cho nhân viên mới."),
+        ("linh.dn@hrm.local", "NV0007", "teamwork", "Tuấn và mình phối hợp xử lý xong 20 hồ sơ ứng viên trong tuần."),
+        ("manager@hrm.local", "NV0017", "dedication", "Linh phát hiện lỗi nghiêm trọng trước giờ phát hành, cứu cả team một bàn thua."),
+    ]:
+        from_user = _user(from_email)
+        to_emp = _emp(to_code)
+        if from_user is None or to_emp is None:
+            continue
+        if (
+            Kudo.query.filter_by(
+                from_user_id=from_user.id, to_employee_id=to_emp.id, message=message
+            ).first()
+            is not None
+        ):
+            continue
+        db.session.add(
+            Kudo(
+                from_user_id=from_user.id,
+                to_employee_id=to_emp.id,
+                badge=badge,
+                message=message,
+            )
+        )
+        counts["kudos"] += 1
+    db.session.flush()
+
+    # --- 12. Bảng tin: +3 bài đăng ---
+    for author_email, content, days_ago in [
+        (
+            "hang.pt@hrm.local",
+            "Nhắc nhở: ngày Văn hóa Việt Nam 24/11 là ngày nghỉ lễ — anh chị đăng ký nghỉ phép bù trước ngày 20/11 giúp em nhé.",
+            1,
+        ),
+        (
+            "manager@hrm.local",
+            "Đội Kinh doanh đã đạt 80% chỉ tiêu quý 4 — cảm ơn cả đội đã nỗ lực. 20% còn lại, cùng nhau về đích nhé!",
+            2,
+        ),
+        (
+            "employee@hrm.local",
+            "Ai muốn tham gia câu lạc bộ chạy bộ sáng thứ 7 thì nhắn mình nhé — tập trung 6h30 ở công viên gần công ty.",
+            3,
+        ),
+    ]:
+        author = _user(author_email)
+        if author is None:
+            continue
+        if (
+            FeedPost.query.filter_by(author_id=author.id, content=content).first()
+            is not None
+        ):
+            continue
+        created = _as_dt(today - timedelta(days=days_ago))
+        db.session.add(
+            FeedPost(
+                author_id=author.id,
+                content=content,
+                is_pinned=False,
+                created_at=created,
+                updated_at=created,
+            )
+        )
+        counts["feed_posts"] += 1
+    db.session.flush()
+
+    # --- 13. Onboarding: thêm 1 plan cho NV0005 ---
+    tpl_general = OnboardingTemplate.query.filter_by(name="Hội nhập tiêu chuẩn").first()
+    emp5 = _emp("NV0005")
+    if (
+        tpl_general is not None
+        and emp5 is not None
+        and OnboardingPlan.query.filter_by(employee_id=emp5.id).first() is None
+    ):
+        plan = OnboardingPlan(
+            employee_id=emp5.id,
+            template_id=tpl_general.id,
+            start_date=emp5.start_date or (today - timedelta(days=5)),
+            status="in_progress",
+        )
+        db.session.add(plan)
+        db.session.flush()
+        role_owner = {
+            "hr": _emp("NV0006"),
+            "manager": _emp("NV0011"),
+            "it": _emp("NV0006"),
+            "buddy": _emp("NV0004"),
+            "employee": emp5,
+        }
+        plan_task_status = {
+            "Tạo tài khoản hệ thống + email công ty": "done",
+            "Chuẩn bị máy tính & chỗ ngồi": "done",
+            "Nộp CCCD, bằng cấp, ảnh thẻ": "verified",
+            "Ký hợp đồng thử việc": "in_progress",
+        }
+        for tpl_task in (
+            OnboardingTemplateTask.query.filter_by(template_id=tpl_general.id)
+            .order_by(OnboardingTemplateTask.sort_order)
+            .all()
+        ):
+            status = plan_task_status.get(tpl_task.title, "pending")
+            owner = role_owner.get(tpl_task.assignee_role)
+            due = plan.start_date + timedelta(days=tpl_task.due_offset_days)
+            db.session.add(
+                OnboardingTask(
+                    plan_id=plan.id,
+                    title=tpl_task.title,
+                    description=None,
+                    assignee_id=owner.id if owner else None,
+                    assignee_role=tpl_task.assignee_role,
+                    due_date=due,
+                    task_type=tpl_task.task_type,
+                    status=status,
+                    completed_at=(
+                        _as_dt(plan.start_date + timedelta(days=max(tpl_task.due_offset_days, 0)))
+                        if status in ("done", "verified")
+                        else None
+                    ),
+                    completed_by=owner.id if owner and status in ("done", "verified") else None,
+                    note=None,
+                )
+            )
+        counts["onboarding_plans"] += 1
+    db.session.flush()
+
+    # --- 14. Giấy xác nhận + tài liệu ---
+    for code, cert_type, purpose, status, decider in [
+        (
+            "NV0011",
+            CertificateRequest.TYPE_SALARY,
+            "Vay mua nhà — ngân hàng yêu cầu xác nhận thu nhập.",
+            CertificateRequest.STATUS_PENDING,
+            None,
+        ),
+        (
+            "NV0025",
+            CertificateRequest.TYPE_EMPLOYMENT,
+            "Làm visa công tác nước ngoài.",
+            CertificateRequest.STATUS_APPROVED,
+            hr_user,
+        ),
+    ]:
+        emp = _emp(code)
+        if emp is None:
+            continue
+        if (
+            CertificateRequest.query.filter_by(
+                employee_id=emp.id, cert_type=cert_type, purpose=purpose
+            ).first()
+            is not None
+        ):
+            continue
+        req = CertificateRequest(
+            employee_id=emp.id,
+            cert_type=cert_type,
+            purpose=purpose,
+            status=CertificateRequest.STATUS_PENDING,
+        )
+        db.session.add(req)
+        db.session.flush()
+        if status == CertificateRequest.STATUS_APPROVED:
+            req.status = CertificateRequest.STATUS_APPROVED
+            req.decided_by = decider.id if decider else None
+            req.decided_at = utcnow()
+            req.issued_content = build_issued_content(req, emp)
+        counts["certificates"] += 1
+    for code, doc_type, title in [
+        ("NV0006", "CCCD", "Căn cước công dân"),
+        ("NV0011", "Bằng cấp", "Bằng đại học"),
+    ]:
+        emp = _emp(code)
+        if emp is None or hr_user is None:
+            continue
+        if (
+            EmployeeDocument.query.filter_by(employee_id=emp.id, title=title).first()
+            is not None
+        ):
+            continue
+        db.session.add(
+            EmployeeDocument(
+                employee_id=emp.id,
+                doc_type=doc_type,
+                title=title,
+                original_filename=f"{title}.txt",
+                stored_path=_write_demo_file(title),
+                expiry_date=None,
+                uploaded_by=hr_user.id,
+            )
+        )
+        counts["documents"] += 1
+    db.session.flush()
+
+    # --- 15. Đổi quà: 1 đơn chờ duyệt (demo duyệt live, chưa trừ điểm) ---
+    voucher = Reward.query.filter_by(name="Voucher cà phê 50.000đ").first()
+    minh = _emp("NV0001")
+    if voucher is not None and minh is not None:
+        if (
+            Redemption.query.filter_by(
+                employee_id=minh.id,
+                reward_id=voucher.id,
+                status=Redemption.STATUS_PENDING,
+            ).first()
+            is None
+        ):
+            db.session.add(
+                Redemption(
+                    employee_id=minh.id,
+                    reward_id=voucher.id,
+                    points_cost=voucher.points_cost,
+                    status=Redemption.STATUS_PENDING,
+                    note="Đổi quà demo (seed) — chờ HR duyệt.",
+                )
+            )
+            counts["redemptions"] += 1
+    db.session.flush()
+
+    # --- 16. Lịch sử nghỉ phép: 3 đơn tháng 10 đã duyệt 2 cấp ---
+    annual = LeaveType.query.filter_by(name="Phép năm").first()
+    holiday_dates = {h.date for h in Holiday.query.all()}
+    for code, d_from, d_to, reason in [
+        ("NV0017", date(2026, 10, 19), date(2026, 10, 19), "Nghỉ phép năm đi khám sức khỏe định kỳ."),
+        ("NV0025", date(2026, 10, 26), date(2026, 10, 27), "Nghỉ phép năm về quê."),
+        ("NV0038", date(2026, 10, 5), date(2026, 10, 6), "Nghỉ phép năm."),
+    ]:
+        emp = _emp(code)
+        if emp is None or annual is None:
+            continue
+        if (
+            LeaveRequest.query.filter_by(
+                employee_id=emp.id,
+                leave_type_id=annual.id,
+                from_date=d_from,
+                to_date=d_to,
+            ).first()
+            is not None
+        ):
+            continue
+        workdays = [
+            d_from + timedelta(days=i)
+            for i in range((d_to - d_from).days + 1)
+            if (d_from + timedelta(days=i)).weekday() < 5
+            and (d_from + timedelta(days=i)) not in holiday_dates
+        ]
+        days = float(len(workdays))
+        db.session.add(
+            LeaveRequest(
+                employee_id=emp.id,
+                leave_type_id=annual.id,
+                from_date=d_from,
+                to_date=d_to,
+                days_count=days,
+                reason=reason,
+                status=LeaveRequest.STATUS_APPROVED,
+                manager_decision="approved",
+                hr_decision="approved",
+                decided_at=datetime.combine(d_to, time(17, 0)),
+            )
+        )
+        balance = LeaveBalance.query.filter_by(
+            employee_id=emp.id, year=2026, leave_type_id=annual.id
+        ).first()
+        if balance is None:
+            balance = LeaveBalance(
+                employee_id=emp.id,
+                year=2026,
+                leave_type_id=annual.id,
+                total_days=12.0,
+                used_days=0.0,
+            )
+            db.session.add(balance)
+        balance.used_days = (balance.used_days or 0) + days
+        for day in workdays:
+            if (
+                Attendance.query.filter_by(employee_id=emp.id, work_date=day).first()
+                is None
+            ):
+                db.session.add(
+                    Attendance(
+                        employee_id=emp.id,
+                        work_date=day,
+                        status=Attendance.STATUS_ON_LEAVE,
+                    )
+                )
+        counts["oct_leaves"] += 1
+    db.session.flush()
+
+    print(f"Seed demo round 2: {counts}")
+    return counts
 
 
 def main() -> None:
@@ -945,6 +1860,11 @@ def main() -> None:
         # Chấm công mẫu tháng 11/2026 cho buổi demo 15/11: chỉ chuyển
         # absent 02–13/11 thành present/late (idempotent, xem hàm trên).
         seed_demo_attendance_november()
+
+        # Dữ liệu demo round 2: lấp các phân hệ còn trống/mỏng (ngày lễ,
+        # ứng viên + thư mời, đổi ca, kỷ luật, kỹ năng, hiệu suất, đào
+        # tạo, tài sản, kudos, bảng tin, onboarding, giấy xác nhận...).
+        seed_demo_data_round2()
 
         db.session.commit()
         print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2 + v3.")
