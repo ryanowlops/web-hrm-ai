@@ -69,9 +69,12 @@ def seed_demo_attendance_november() -> dict:
     Chuyển các bản ghi còn "absent" của ngày làm việc 02–13/11/2026 thành
     present (~85%, check-in 07:45–08:30, check-out 17:30–18:15) hoặc late
     (~8%, check-in 08:45–09:30, check-out 17:30–18:00); còn lại giữ
-    absent. RNG seed cố định (20261114) và duyệt theo (employee_id,
-    work_date) nên phân bổ ổn định. Idempotent: chạy lại không đổi gì vì
-    không còn bản ghi absent trong khoảng đó.
+    absent. Quyết định của mỗi bản ghi dùng RNG gieo theo CHÍNH
+    (employee_id, work_date) của nó — không dùng một RNG chạy tuần tự
+    (bản chạy tuần tự sẽ đổi dữ liệu mỗi lần chạy lại vì tập absent còn
+    lại thay đổi). Nhờ đó chạy lại là idempotent thật: bản ghi đã giữ
+    absent thì lần sau vẫn giữ absent, bản ghi đã chuyển thì không còn
+    absent để xét.
 
     Cố tình CHỈ chạm tới 02–13/11/2026: các ngày sau đó (nếu materialize
     tạo absent mới) KHÔNG được seed — đó là dữ liệu thật. Không động vào
@@ -79,7 +82,6 @@ def seed_demo_attendance_november() -> dict:
     """
     first = date(2026, 11, 2)
     cutoff = date(2026, 11, 13)
-    rng = random.Random(20261114)
     records = (
         Attendance.query.join(Employee, Attendance.employee_id == Employee.id)
         .filter(
@@ -93,6 +95,10 @@ def seed_demo_attendance_november() -> dict:
     )
     counts = {"present": 0, "late": 0, "kept_absent": 0}
     for rec in records:
+        # RNG riêng cho từng bản ghi -> quyết định ổn định qua các lần chạy.
+        rng = random.Random(
+            f"demo-attendance-2026-11-{rec.employee_id}-{rec.work_date.isoformat()}"
+        )
         draw = rng.random()
         if draw < 0.85:
             status = Attendance.STATUS_PRESENT
