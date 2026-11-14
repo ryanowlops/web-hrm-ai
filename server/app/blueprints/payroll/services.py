@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import calendar
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 from app.blueprints.payroll.calculator import (
     DEFAULT_INSURANCE_RATE,
+    _money,
     calculate_salary,
     standard_workdays_of_month,
 )
@@ -30,7 +32,9 @@ from app.models import (
     AuditLog,
     Contract,
     Employee,
+    Holiday,
     LeaveRequest,
+    OvertimeRequest,
     PayrollItem,
     PayrollPeriod,
     Setting,
@@ -240,6 +244,127 @@ def _contract_for_date(contracts: list[Contract], day: date) -> Contract:
     return max(contracts, key=lambda c: c.start_date)
 
 
+# Hệ số tăng ca theo luật lao động VN (Điều 98 BLLĐ 2019): ngày thường
+# 150%, ngày nghỉ hằng tuần (T7/CN) 200%, ngày nghỉ lễ/Tết 300%. Ngày lễ
+# trùng cuối tuần vẫn tính 300% (lễ được xét trước).
+OT_MULTIPLIER_WEEKDAY = 1.5
+OT_MULTIPLIER_WEEKEND = 2.0
+OT_MULTIPLIER_HOLIDAY = 3.0
+
+
+def _holiday_date_set(first: date, last: date) -> set[date]:
+    """Tập ngày lễ trong tháng (bảng holidays; trống thì không ngày nào là lễ)."""
+    rows = (
+        db.session.query(Holiday.date)
+        .filter(Holiday.date >= first, Holiday.date <= last)
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def _contract_covering(contracts: list[Contract], day: date) -> Contract | None:
+    """Hợp đồng BAO PHỦ đúng ngày `day` (khác _contract_for_date: không lấy
+    hợp đồng gần nhất khi ngày rơi vào kẽ hở — trả None để caller bỏ qua)."""
+    covering = [
+        c
+        for c in contracts
+        if c.start_date <= day and (c.end_date is None or c.end_date >= day)
+    ]
+    if not covering:
+        return None
+    return max(covering, key=lambda c: c.start_date)
+
+
+def _overtime_pay(
+    employee_id: int, first: date, last: date, standard_workdays: float
+) -> dict:
+    """Tiền tăng ca của một nhân viên trong tháng, từ các đơn đã duyệt.
+
+    Lương giờ = lương cơ bản của hợp đồng hiệu lực đúng ngày tăng ca /
+    ngày công chuẩn / 8; tiền = giờ x lương giờ x hệ số (1.5/2.0/3.0),
+    làm tròn HALF_UP từng đơn. Đơn trùng ngày (dữ liệu lạ — tầng tạo đã
+    chặn 409) chỉ tính đơn đầu tiên; đơn rơi vào ngày không có hợp đồng
+    bao phủ thì bỏ qua. Cả hai trường hợp lạ đều ghi vào "skipped" để HR
+    đối chiếu trong breakdown.
+    """
+    result = {
+        "overtime_pay": 0,
+        "overtime_hours": 0.0,
+        "details": [],
+        "skipped": [],
+    }
+    standard = float(standard_workdays or 0)
+    if standard <= 0:
+        return result
+    contracts = _contracts_in_month(employee_id, first, last)
+    rows = (
+        db.session.query(OvertimeRequest)
+        .filter(
+            OvertimeRequest.employee_id == employee_id,
+            OvertimeRequest.status == OvertimeRequest.STATUS_APPROVED,
+            OvertimeRequest.work_date >= first,
+            OvertimeRequest.work_date <= last,
+        )
+        .order_by(OvertimeRequest.work_date.asc(), OvertimeRequest.id.asc())
+        .all()
+    )
+    if not rows:
+        return result
+    holidays = _holiday_date_set(first, last)
+    seen_dates: set[date] = set()
+    total_pay = 0
+    total_hours = 0.0
+    for row in rows:
+        if row.work_date in seen_dates:
+            result["skipped"].append(
+                {
+                    "date": row.work_date.isoformat(),
+                    "hours": row.hours,
+                    "reason": "Trùng ngày: chỉ tính đơn tăng ca đầu tiên của ngày.",
+                }
+            )
+            continue
+        seen_dates.add(row.work_date)
+        contract = _contract_covering(contracts, row.work_date)
+        if contract is None:
+            result["skipped"].append(
+                {
+                    "date": row.work_date.isoformat(),
+                    "hours": row.hours,
+                    "reason": "Không có hợp đồng hiệu lực vào ngày tăng ca.",
+                }
+            )
+            continue
+        if row.work_date in holidays:
+            multiplier = OT_MULTIPLIER_HOLIDAY
+        elif row.work_date.weekday() >= 5:
+            multiplier = OT_MULTIPLIER_WEEKEND
+        else:
+            multiplier = OT_MULTIPLIER_WEEKDAY
+        hourly = (
+            Decimal(str(contract.base_salary))
+            / Decimal(str(standard))
+            / Decimal(8)
+        )
+        pay = _money(
+            Decimal(str(row.hours)) * hourly * Decimal(str(multiplier))
+        )
+        total_pay += pay
+        total_hours += row.hours
+        result["details"].append(
+            {
+                "date": row.work_date.isoformat(),
+                "hours": row.hours,
+                "multiplier": multiplier,
+                "pay": pay,
+                "base_salary": contract.base_salary,
+            }
+        )
+    result["overtime_pay"] = total_pay
+    result["overtime_hours"] = round(total_hours, 2)
+    return result
+
+
 def _worked_date_set(employee_id: int, first: date, last: date) -> set[date]:
     """Tập ngày đã chấm công present/late trong tháng."""
     rows = (
@@ -333,6 +458,8 @@ def _multi_contract_salary(
     standard: float,
     rate: float,
     other_deduction: int,
+    overtime_pay: int = 0,
+    overtime_hours: float = 0,
 ) -> dict | None:
     """Chia ngày công hưởng lương theo từng đoạn hợp đồng trong tháng.
 
@@ -395,6 +522,10 @@ def _multi_contract_salary(
         allowance_total += allowance_c
 
     total_salary -= other_deduction
+    # Tiền tăng ca cộng thẳng vào thực lĩnh (không đóng bảo hiểm — xem
+    # calculator); tính theo từng đơn với hợp đồng của đúng ngày đó nên
+    # không chia theo đoạn hợp đồng như lương ngày công.
+    total_salary += int(overtime_pay)
     latest = max(contracts, key=lambda c: c.start_date)
     return {
         "workdays_paid": float(total_paid),
@@ -406,7 +537,8 @@ def _multi_contract_salary(
         "breakdown": {
             "formula": "sum over contract segments of "
             "(base_salary * paid_workdays / standard_workdays "
-            "+ allowance - insurance_deduction) - other_deduction",
+            "+ allowance - insurance_deduction) - other_deduction "
+            "+ overtime_pay",
             "base_salary": latest.base_salary,
             "allowance": allowance_total,
             "standard_workdays": float(standard),
@@ -415,6 +547,8 @@ def _multi_contract_salary(
             "insurance_rate": float(rate),
             "insurance_deduction": insurance_total,
             "other_deduction": other_deduction,
+            "overtime_pay": int(overtime_pay),
+            "overtime_hours": float(overtime_hours),
             "total_salary": total_salary,
             "currency": "VND",
             "contract_segments": segments,
@@ -479,6 +613,9 @@ def calculate_period(period_id: int, actor) -> dict:
             )
             other_deduction = item.other_deduction if item is not None else 0
 
+            # Tiền tăng ca tháng này (chỉ đơn đã duyệt; hệ số theo ngày).
+            ot = _overtime_pay(employee.id, first, last, standard)
+
             if len(contracts) == 1:
                 contract = contracts[0]
                 result = calculate_salary(
@@ -489,6 +626,8 @@ def calculate_period(period_id: int, actor) -> dict:
                     unpaid_days=unpaid,
                     insurance_rate=rate,
                     other_deduction=other_deduction,
+                    overtime_pay=ot["overtime_pay"],
+                    overtime_hours=ot["overtime_hours"],
                 )
                 breakdown = dict(result["breakdown"])
                 breakdown.update(
@@ -498,6 +637,8 @@ def calculate_period(period_id: int, actor) -> dict:
                         "paid_leave_days": paid_leave,
                         "paid_workdays_capped": capped,
                         "overlap_days": overlap,
+                        "overtime_details": ot["details"],
+                        "overtime_skipped": ot["skipped"],
                     }
                 )
             else:
@@ -509,6 +650,8 @@ def calculate_period(period_id: int, actor) -> dict:
                     standard,
                     rate,
                     other_deduction,
+                    overtime_pay=ot["overtime_pay"],
+                    overtime_hours=ot["overtime_hours"],
                 )
                 if multi is None:
                     # Tháng không có ngày công hưởng lương: dùng hợp đồng
@@ -522,6 +665,8 @@ def calculate_period(period_id: int, actor) -> dict:
                         unpaid_days=unpaid,
                         insurance_rate=rate,
                         other_deduction=other_deduction,
+                        overtime_pay=ot["overtime_pay"],
+                        overtime_hours=ot["overtime_hours"],
                     )
                     breakdown = dict(result["breakdown"])
                     breakdown.update(
@@ -531,6 +676,8 @@ def calculate_period(period_id: int, actor) -> dict:
                             "paid_leave_days": paid_leave,
                             "paid_workdays_capped": capped,
                             "overlap_days": overlap,
+                            "overtime_details": ot["details"],
+                            "overtime_skipped": ot["skipped"],
                         }
                     )
                 else:
@@ -545,6 +692,8 @@ def calculate_period(period_id: int, actor) -> dict:
                             "unpaid_days": unpaid,
                             "paid_workdays_capped": capped,
                             "overlap_days": overlap,
+                            "overtime_details": ot["details"],
+                            "overtime_skipped": ot["skipped"],
                         }
                     )
 

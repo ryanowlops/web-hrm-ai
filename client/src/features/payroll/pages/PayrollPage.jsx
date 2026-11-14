@@ -71,6 +71,36 @@ const pick = (obj, ...keys) => {
   return undefined;
 };
 
+// Tiền tăng ca của một dòng lương: ưu tiên field top-level `overtime_pay`
+// (backend mới thêm), lùi về `breakdown` khi chưa có. Trả { pay, hours, details }
+// để cả bảng lương (chỉ cần tiền) và phiếu lương (cần chi tiết từng ngày) dùng chung.
+const overtimeOf = (item) => {
+  const bd = item?.breakdown || {};
+  const pay =
+    Number(pick(item, 'overtime_pay', 'overtimePay') ?? pick(bd, 'overtime_pay', 'overtimePay') ?? 0) || 0;
+  const hours = pick(bd, 'overtime_hours', 'overtimeHours');
+  const rawDetails = pick(bd, 'overtime_details', 'overtimeDetails', 'details');
+  const details = (Array.isArray(rawDetails) ? rawDetails : []).map((d) => ({
+    date: pick(d, 'date'),
+    hours: pick(d, 'hours'),
+    multiplier: pick(d, 'multiplier'),
+    pay: pick(d, 'pay'),
+  }));
+  return { pay, hours, details };
+};
+
+// Ngày dd/mm/yyyy cho chi tiết tăng ca từng ngày
+const dateOnlyFmt = new Intl.DateTimeFormat('vi-VN', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+const formatDateOnly = (v) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? String(v) : dateOnlyFmt.format(d);
+};
+
 // axiosClient có thể trả axios response hoặc body trực tiếp (tuỳ interceptor)
 const unwrap = (res) => {
   if (res && typeof res === 'object' && 'data' in res && ('status' in res || 'headers' in res)) {
@@ -403,7 +433,7 @@ function HrPayrollView() {
         {!selectedPeriod ? (
           <EmptyState title="Chọn một kỳ lương để xem chi tiết." description="Chọn một kỳ ở bảng phía trên, hoặc bấm “Tạo kỳ lương” nếu chưa có kỳ nào." />
         ) : loadingItems ? (
-          <TableSkeleton rows={5} cols={6} />
+          <TableSkeleton rows={5} cols={10} />
         ) : items.length === 0 ? (
           <EmptyState
             title="Kỳ này chưa có dữ liệu lương."
@@ -421,6 +451,7 @@ function HrPayrollView() {
                     <th className={`${TH} text-right`}>Ngày công hưởng lương</th>
                     <th className={`${TH} text-right`}>Lương cơ bản</th>
                     <th className={`${TH} text-right`}>Phụ cấp</th>
+                    <th className={`${TH} text-right`}>Tiền OT</th>
                     <th className={`${TH} text-right`}>Khấu trừ bảo hiểm</th>
                     <th className={`${TH} text-right`}>Khấu trừ khác</th>
                     <th className={`${TH} text-right`}>Tổng nhận</th>
@@ -430,6 +461,7 @@ function HrPayrollView() {
                   {items.map((it) => {
                     const emp = it.employee || {};
                     const empName = pick(it, 'employee_name', 'employeeName') || pick(emp, 'full_name', 'fullName') || '—';
+                    const ot = overtimeOf(it);
                     return (
                       <tr key={it.id} className={TR}>
                         <td className={`${TD} font-medium text-gray-900`}>{pick(it, 'employee_code', 'employeeCode') || pick(emp, 'code') || '—'}</td>
@@ -447,6 +479,12 @@ function HrPayrollView() {
                         <td className={`${TD} text-right tabular-nums`}>{pick(it, 'workdays_paid', 'workdaysPaid') ?? '—'}</td>
                         <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'base_salary', 'baseSalary'))}</td>
                         <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'allowance'))}</td>
+                        <td
+                          className={`${TD} text-right tabular-nums`}
+                          title={ot.hours ? `${Number(ot.hours)} giờ tăng ca` : undefined}
+                        >
+                          {ot.pay > 0 ? formatVND(ot.pay) : '—'}
+                        </td>
                         <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'insurance_deduction', 'insuranceDeduction'))}</td>
                         <td className={`${TD} text-right tabular-nums`}>{formatVND(pick(it, 'other_deduction', 'otherDeduction'))}</td>
                         <td className={`${TD} text-right font-semibold tabular-nums text-gray-900`}>{formatVND(pick(it, 'total_salary', 'totalSalary'))}</td>
@@ -632,6 +670,7 @@ function MyPayslipView() {
     pick(slip, 'standard_workdays', 'standardWorkdays');
   const salaryByWorkdays = pick(breakdown, 'salary_by_workdays', 'salaryByWorkdays');
   const allowance = pick(slip, 'allowance');
+  const ot = overtimeOf(slip);
   const insuranceDeduction = pick(slip, 'insurance_deduction', 'insuranceDeduction');
   const insuranceRate = pick(breakdown, 'insurance_rate', 'insuranceRate');
   const otherDeduction = pick(slip, 'other_deduction', 'otherDeduction');
@@ -744,6 +783,29 @@ function MyPayslipView() {
               <span className={slipLabel}>Phụ cấp</span>
               <strong className={slipValue}>+ {formatVND(allowance)}</strong>
             </div>
+            {ot.pay > 0 && (
+              <div className={slipRow}>
+                <span className={slipLabel}>
+                  Tăng ca
+                  {ot.hours ? ` (${Number(ot.hours)} giờ)` : ''}
+                </span>
+                <strong className={slipValue}>+ {formatVND(ot.pay)}</strong>
+              </div>
+            )}
+            {ot.pay > 0 && ot.details.length > 0 && (
+              <div className="border-b border-gray-100 py-2 pl-1 text-[13px] leading-relaxed text-gray-500">
+                {ot.details.map((d, i) => (
+                  <div key={i} className="flex items-baseline justify-between gap-4 tabular-nums">
+                    <span>
+                      {formatDateOnly(d.date)}
+                      {d.hours ? ` · ${Number(d.hours)} giờ` : ''}
+                      {d.multiplier ? ` × ${Number(d.multiplier)}` : ''}
+                    </span>
+                    <span className="font-medium text-gray-700">{formatVND(d.pay)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className={slipRow}>
               <span className={slipLabel}>
                 Khấu trừ bảo hiểm (BHXH/BHYT/BHTN)
@@ -770,8 +832,8 @@ function MyPayslipView() {
 
             <p className="mt-4 text-xs leading-relaxed text-gray-400">
               Ghi chú: lương được tính từ bảng công và các đơn nghỉ đã duyệt trong kỳ theo công thức:
-              lương cơ bản × (ngày công hưởng lương / ngày công chuẩn) + phụ cấp − khấu trừ bảo hiểm −
-              khấu trừ khác. Đây là mô hình tính lương đơn giản hoá; nếu thấy sai lệch, vui lòng liên
+              lương cơ bản × (ngày công hưởng lương / ngày công chuẩn) + phụ cấp + tiền tăng ca −
+              khấu trừ bảo hiểm − khấu trừ khác. Đây là mô hình tính lương đơn giản hoá; nếu thấy sai lệch, vui lòng liên
               hệ phòng nhân sự để đối chiếu.
             </p>
           </CardBody>

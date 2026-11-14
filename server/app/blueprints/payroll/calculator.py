@@ -7,7 +7,7 @@ Công thức (A5.3):
 
     Lương theo ngày công = Lương cơ bản x (Ngày công hưởng lương / Ngày công chuẩn)
     Khấu trừ bảo hiểm    = Lương theo ngày công x Tỷ lệ BHXH/BHYT/BHTN (từ cấu hình)
-    Thực lĩnh            = Lương theo ngày công + Phụ cấp
+    Thực lĩnh            = Lương theo ngày công + Phụ cấp + Tiền tăng ca
                            - Khấu trừ bảo hiểm - Khấu trừ khác
 
 Bảo hiểm tính trên lương theo ngày công (không phải lương cơ bản đủ tháng):
@@ -17,6 +17,11 @@ không bao giờ âm chỉ vì bảo hiểm khi nhân viên chưa có ngày côn
 giữa tháng, chưa chấm công): ngày công = 0 thì bảo hiểm = 0, thực lĩnh
 = phụ cấp. Tháng làm đủ thì công thức này trùng với cách tính trên lương
 cơ bản (ngày công = ngày chuẩn).
+
+Tiền tăng ca KHÔNG đóng BHXH: phần trội của OT (50%/100%/200% theo luật
+lao động) không tính vào lương đóng bảo hiểm, nên bảo hiểm vẫn chỉ tính
+trên lương theo ngày công — tiền OT cộng thẳng vào thực lĩnh sau khi đã
+trừ bảo hiểm. Lương giờ OT = lương cơ bản / ngày công chuẩn / 8.
 
 Trong đó "ngày công hưởng lương" (``paid_workdays``) = ngày làm thực tế
 + ngày nghỉ CÓ phép; ngày nghỉ KHÔNG lương (``unpaid_days``) không nằm trong
@@ -50,6 +55,8 @@ def calculate_salary(
     unpaid_days: float = 0,
     insurance_rate: float | str | Decimal = DEFAULT_INSURANCE_RATE,
     other_deduction: int = 0,
+    overtime_pay: int = 0,
+    overtime_hours: float = 0,
 ) -> dict:
     """Tính một dòng lương và trả về breakdown đầy đủ để lưu vào payroll_items.
 
@@ -63,6 +70,9 @@ def calculate_salary(
             trong breakdown, không trừ thêm vào lương.
         insurance_rate: tỷ lệ khấu trừ bảo hiểm, ví dụ 0.105 = 10,5%.
         other_deduction: khấu trừ khác do HR nhập (VND, >= 0).
+        overtime_pay: tiền tăng ca đã tính ở services (VND, >= 0) — cộng
+            thẳng vào thực lĩnh, KHÔNG đóng bảo hiểm (xem ghi chú đầu module).
+        overtime_hours: tổng giờ tăng ca — chỉ để hiển thị trong breakdown.
 
     Trả về dict gồm các trường của payroll_items (workdays_paid, base_salary,
     allowance, insurance_deduction, other_deduction, total_salary) kèm
@@ -92,12 +102,32 @@ def calculate_salary(
         ...                      unpaid_days=0, insurance_rate=0.105)
         >>> r["breakdown"]["workday_salary"], r["insurance_deduction"], r["total_salary"]
         (0, 0, 1000000)
+
+    Ví dụ kiểm chứng 4 — đủ công + tăng ca 4 giờ ngày thường:
+    Lương giờ = 12.000.000 / 22 / 8 = 68.181,818đ; tiền OT
+    = 4 x 68.181,818 x 1,5 = 409.090,909đ -> làm tròn 409.091đ.
+        >>> r = calculate_salary(base_salary=12_000_000, allowance=0,
+        ...                      standard_workdays=22, paid_workdays=22,
+        ...                      insurance_rate=0.105,
+        ...                      overtime_pay=409091, overtime_hours=4)
+        >>> r["breakdown"]["overtime_pay"], r["breakdown"]["overtime_hours"]
+        (409091, 4.0)
+        >>> r["insurance_deduction"]           # 12.000.000 x 10,5% — OT không đóng BHXH
+        1260000
+        >>> r["total_salary"]                  # 12.000.000 + 409.091 - 1.260.000
+        11149091
     """
     base = int(base_salary)
     allow = int(allowance)
     other = int(other_deduction)
-    if base < 0 or allow < 0 or other < 0:
-        raise ValueError("Lương cơ bản, phụ cấp và khấu trừ khác không được âm")
+    ot_pay = int(overtime_pay)
+    ot_hours = float(overtime_hours)
+    if base < 0 or allow < 0 or other < 0 or ot_pay < 0:
+        raise ValueError(
+            "Lương cơ bản, phụ cấp, khấu trừ khác và tiền tăng ca không được âm"
+        )
+    if ot_hours < 0:
+        raise ValueError("Giờ tăng ca không được âm")
     standard = Decimal(str(standard_workdays))
     if standard <= 0:
         raise ValueError("Ngày công chuẩn phải lớn hơn 0")
@@ -111,8 +141,9 @@ def calculate_salary(
     workday_salary = _money(Decimal(base) * paid / standard)
     # Bảo hiểm tính trên lương theo ngày công (xem ghi chú ở đầu module):
     # ngày công = 0 thì khấu trừ = 0, thực lĩnh không âm vì bảo hiểm.
+    # Tiền tăng ca KHÔNG đóng bảo hiểm nên không cộng vào đây.
     insurance_deduction = _money(Decimal(workday_salary) * rate)
-    total_salary = workday_salary + allow - insurance_deduction - other
+    total_salary = workday_salary + allow + ot_pay - insurance_deduction - other
 
     return {
         "workdays_paid": float(paid_workdays),
@@ -123,7 +154,7 @@ def calculate_salary(
         "total_salary": total_salary,
         "breakdown": {
             "formula": "base_salary * paid_workdays / standard_workdays "
-            "+ allowance - insurance_deduction - other_deduction",
+            "+ allowance + overtime_pay - insurance_deduction - other_deduction",
             "base_salary": base,
             "allowance": allow,
             "standard_workdays": float(standard_workdays),
@@ -133,6 +164,8 @@ def calculate_salary(
             "insurance_rate": float(rate),
             "insurance_deduction": insurance_deduction,
             "other_deduction": other,
+            "overtime_pay": ot_pay,
+            "overtime_hours": ot_hours,
             "total_salary": total_salary,
             "currency": "VND",
         },

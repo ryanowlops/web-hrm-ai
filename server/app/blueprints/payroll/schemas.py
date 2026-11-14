@@ -56,6 +56,7 @@ def item_to_dict(item):
         "allowance": item.allowance,
         "insurance_deduction": item.insurance_deduction,
         "other_deduction": item.other_deduction,
+        "overtime_pay": (item.breakdown or {}).get("overtime_pay", 0),
         "total_salary": item.total_salary,
         "breakdown": item.breakdown,
         "currency": "VND",
