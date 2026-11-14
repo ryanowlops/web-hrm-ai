@@ -53,11 +53,21 @@ api.interceptors.request.use((config) => {
 // tránh gọi /auth/refresh nhiều lần song song.
 let refreshPromise = null;
 
+// LƯU Ý (bug 2026-11-14): KHÔNG dùng đường dẫn tương đối '/api/v1/...' ở đây.
+// Production: web chạy trên Vercel, API chạy trên Render — URL tương đối sẽ
+// trỏ về Vercel (trả về index.html) thay vì Render, refresh luôn thất bại
+// nên cứ hết hạn access token (30 phút) là app tự đá về /login. Dùng cùng
+// base với instance `api` (VITE_API_BASE_URL ở prod, '/api/v1' qua Vite
+// proxy ở local). Vẫn dùng axios thô (không qua `api`) vì interceptor của
+// `api` sẽ ghi đè header Authorization bằng access token đã hết hạn trong
+// khi endpoint này yêu cầu refresh token.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
 function requestNewAccessToken() {
   if (!refreshPromise) {
     const refreshToken = getRefreshToken();
     refreshPromise = axios
-      .post('/api/v1/auth/refresh', null, {
+      .post(`${API_BASE_URL}/auth/refresh`, null, {
         headers: refreshToken ? { Authorization: `Bearer ${refreshToken}` } : {},
         timeout: 15000,
       })
