@@ -24,6 +24,7 @@ import { notificationsApi } from '../api/index.js';
 import { fetchOverview } from '../features/dashboard/services';
 import { getAnnouncements } from '../features/announcements/services';
 import PageTransition from '../components/motion/PageTransition.jsx';
+import { ConfirmDialog } from '../components/ui';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 
 // Layout chính cho khu vực đã đăng nhập — khung Astryx (AppShell +
@@ -325,6 +326,8 @@ export default function AppLayout() {
   // Sidebar thu gọn — state dùng chung cho SideNav (collapsible) và
   // SideNavCollapseButton trên topbar qua cùng một config object.
   const [collapsed, setCollapsed] = useState(false);
+  // Chỉ còn 1 nút đăng xuất (ở topbar) — bấm thì hỏi xác nhận trước.
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const collapsibleConfig = useMemo(
     () => ({ isCollapsed: collapsed, onCollapsedChange: setCollapsed, hasButton: false }),
     [collapsed],
@@ -469,7 +472,8 @@ export default function AppLayout() {
      0 (mỗi trang tự giữ padding qua .page-shell). mobileNav breakpoint
      lg giữ đúng điểm chuyển mobile như bản cũ (1024px). */
   return (
-    <AppShell
+    <>
+      <AppShell
       variant="section"
       height="auto"
       contentPadding={0}
@@ -565,12 +569,12 @@ export default function AppLayout() {
                 </span>
               </span>
 
-              {/* Đăng xuất */}
+              {/* Đăng xuất — chỉ còn nút này; bấm thì hỏi xác nhận trước */}
               <Button
                 label="Đăng xuất"
                 variant="secondary"
                 icon={logoutIcon}
-                onClick={logout}
+                onClick={() => setLogoutConfirmOpen(true)}
               />
             </span>
           }
@@ -609,15 +613,6 @@ export default function AppLayout() {
                 )}
               </div>
             </>
-          }
-          footerIcons={
-            <IconButton
-              label="Đăng xuất"
-              icon={logoutIcon}
-              variant="ghost"
-              tooltip="Đăng xuất"
-              onClick={logout}
-            />
           }
         >
           {navSections.map((section) => (
@@ -658,6 +653,19 @@ export default function AppLayout() {
         maxHeight={480}
         onValueChange={handlePaletteSelect}
       />
-    </AppShell>
+      </AppShell>
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="Đăng xuất?"
+        description="Bạn có chắc chắn muốn đăng xuất khỏi hệ thống? Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng."
+        confirmLabel="Đăng xuất"
+        cancelLabel="Huỷ"
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          logout();
+        }}
+        onCancel={() => setLogoutConfirmOpen(false)}
+      />
+    </>
   );
 }
