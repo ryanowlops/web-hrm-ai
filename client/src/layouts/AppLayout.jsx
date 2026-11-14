@@ -482,7 +482,12 @@ export default function AppLayout() {
         <TopNav
           label="Thanh điều hướng trên"
           heading={
-            <span className="flex min-w-0 items-center gap-3">
+            <NavLink
+              to="/"
+              aria-label="Về trang chính"
+              title="Về trang chính"
+              className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20"
+            >
               <img
                 src="/logo.svg"
                 alt=""
@@ -497,7 +502,7 @@ export default function AppLayout() {
                   Quản lý nhân sự
                 </span>
               </span>
-            </span>
+            </NavLink>
           }
           startContent={
             isDesktop ? (
