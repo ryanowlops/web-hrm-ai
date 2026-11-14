@@ -34,6 +34,7 @@ from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
 from flask import current_app
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models import (
@@ -131,12 +132,13 @@ def tool_my_leave_balance(user, **_args) -> str:
     return "\n".join(lines)
 
 
-def _payslip_text(item: PayrollItem, provisional: bool = False) -> str:
+def _payslip_text(item: PayrollItem, period=None, provisional: bool = False) -> str:
     """Phiếu lương 1 người — gồm tiền OT + hệ số thử việc nếu có.
 
     provisional=True: kỳ chưa chốt — số liệu tạm tính, ghi rõ trong câu trả lời.
+    period: kỳ lương đã nạp sẵn (caller đã có) — tránh lazy load item.period.
     """
-    period = item.period
+    period = period if period is not None else item.period
     employee = item.employee
     who = (f"{employee.full_name} ({employee.code})"
            if employee is not None else "bạn")
@@ -208,13 +210,21 @@ def _find_payroll_employee(user, employee, question: str):
     if len(matches) > 1:
         return None, False  # mơ hồ -> không đoán người
     # Có nhắc tới một nhân viên NGOÀI phạm vi (mã hoặc họ tên đầy đủ)?
+    # Tối ưu truy vấn: admin/hr xem được toàn công ty nên ngoài phạm vi là
+    # không thể xảy ra — bỏ qua lần quét này. Các role còn lại chỉ quét
+    # 3 cột cần thiết của nhân viên NGOÀI pool (không nạp full ORM object).
+    if getattr(user, "role", "employee") in ("admin", "hr"):
+        return None, False
     pool_ids = {c.id for c in pool}
-    for cand in Employee.query.order_by(Employee.id).all():
-        if cand.id in pool_ids:
-            continue
-        code = (getattr(cand, "code", "") or "").strip().lower()
-        full = _fold(getattr(cand, "full_name", "") or "")
-        if (code and code in (question or "").lower()) or (full and full in folded):
+    q = (question or "").lower()
+    rows = (Employee.query
+            .with_entities(Employee.id, Employee.code, Employee.full_name)
+            .filter(~Employee.id.in_(pool_ids or [-1]))
+            .order_by(Employee.id).all())
+    for _id, code, full_name in rows:
+        code = (code or "").strip().lower()
+        full = _fold(full_name or "")
+        if (code and code in q) or (full and full in folded):
             return None, True
     return None, False
 
@@ -267,34 +277,44 @@ def tool_my_payslip(user, month=None, year=None, question=None, **_args) -> str:
             return ("Bạn chỉ xem được phiếu lương của mình và nhóm mình quản lý.")
         return "Bạn chỉ xem được phiếu lương của chính mình."
     if mentioned is not None:
-        item = PayrollItem.query.filter_by(
-            period_id=period.id, employee_id=mentioned.id).first()
+        # joinedload: 1 câu SQL lấy cả phiếu + nhân viên (tránh lazy load).
+        item = (PayrollItem.query
+                .options(joinedload(PayrollItem.employee))
+                .filter_by(period_id=period.id, employee_id=mentioned.id)
+                .first())
         if item is None:
             return (f"{mentioned.full_name} ({mentioned.code}) không có phiếu "
                     f"lương trong kỳ {month}/{year}.")
-        return _payslip_text(item, provisional=provisional)
+        return _payslip_text(item, period=period, provisional=provisional)
 
     if role in ("admin", "hr"):
-        items = (PayrollItem.query.filter_by(period_id=period.id)
+        # selectinload: 2 câu SQL cho cả bảng (items + nhân viên) thay vì
+        # 1 câu/nhân viên khi _payroll_table_text đọc it.employee.
+        items = (PayrollItem.query
+                 .options(selectinload(PayrollItem.employee))
+                 .filter_by(period_id=period.id)
                  .order_by(PayrollItem.total_salary.desc()).all())
         return _payroll_table_text(period, items, provisional=provisional)
     if role == "manager" and employee is not None:
         from app.blueprints.leave import services as leave_services
 
         ids = sorted(set(leave_services._team_employee_ids(employee)) | {employee.id})
-        items = (PayrollItem.query.filter(
-                     PayrollItem.period_id == period.id,
-                     PayrollItem.employee_id.in_(ids))
+        items = (PayrollItem.query
+                 .options(selectinload(PayrollItem.employee))
+                 .filter(PayrollItem.period_id == period.id,
+                         PayrollItem.employee_id.in_(ids))
                  .order_by(PayrollItem.total_salary.desc()).all())
         return _payroll_table_text(period, items, provisional=provisional)
     if employee is None:
         return _NO_PROFILE_TEXT
-    item = PayrollItem.query.filter_by(
-        period_id=period.id, employee_id=employee.id).first()
+    item = (PayrollItem.query
+            .options(joinedload(PayrollItem.employee))
+            .filter_by(period_id=period.id, employee_id=employee.id)
+            .first())
     if item is None:
         return (f"Bạn không có phiếu lương trong kỳ {month}/{year} "
                 "(có thể bạn chưa thuộc diện tính lương kỳ này).")
-    return _payslip_text(item, provisional=provisional)
+    return _payslip_text(item, period=period, provisional=provisional)
 
 
 def tool_my_attendance(user, month=None, year=None, **_args) -> str:
@@ -350,7 +370,13 @@ def tool_who_on_leave(user, on_date=None, **_args) -> str:
     )
     if scope_ids is not None:
         query = query.filter(LeaveRequest.employee_id.in_(scope_ids or [-1]))
-    requests = query.order_by(LeaveRequest.from_date).all()
+    # Eager load 1 lượt: đơn + nhân viên + phòng + loại phép (4 câu SQL
+    # cho mọi số lượng đơn) thay vì 3 câu lazy load cho MỖI đơn.
+    requests = (query.options(
+                    selectinload(LeaveRequest.employee)
+                    .selectinload(Employee.department),
+                    selectinload(LeaveRequest.leave_type))
+                .order_by(LeaveRequest.from_date).all())
 
     if role == "employee":
         if requests:
@@ -398,6 +424,8 @@ def tool_my_pending_approvals(user, **_args) -> str:
 
         team_ids = sorted(leave_services._team_employee_ids(employee))
         requests = (LeaveRequest.query
+                    .options(selectinload(LeaveRequest.employee),
+                             selectinload(LeaveRequest.leave_type))
                     .filter(LeaveRequest.employee_id.in_(team_ids or [-1]),
                             LeaveRequest.status == LeaveRequest.STATUS_PENDING)
                     .order_by(LeaveRequest.created_at)
@@ -433,6 +461,7 @@ def tool_my_pending_approvals(user, **_args) -> str:
     if employee is None:
         return _NO_PROFILE_TEXT
     requests = (LeaveRequest.query
+                .options(selectinload(LeaveRequest.leave_type))
                 .filter(LeaveRequest.employee_id == employee.id,
                         LeaveRequest.status.in_(waiting))
                 .order_by(LeaveRequest.created_at)
@@ -483,7 +512,8 @@ def tool_team_overview(user, **_args) -> str:
         emp_query = emp_query.filter(Employee.department_id == department_id)
     total = emp_query.count()
 
-    leave_query = LeaveRequest.query.filter(
+    leave_query = LeaveRequest.query.with_entities(
+        LeaveRequest.employee_id).filter(
         LeaveRequest.status == LeaveRequest.STATUS_APPROVED,
         LeaveRequest.from_date <= today,
         LeaveRequest.to_date >= today,
@@ -492,7 +522,8 @@ def tool_team_overview(user, **_args) -> str:
         leave_query = leave_query.join(
             Employee, LeaveRequest.employee_id == Employee.id
         ).filter(Employee.department_id == department_id)
-    on_leave_today = len({req.employee_id for req in leave_query.all()})
+    # Chỉ lấy id (distinct) — không nạp full bản ghi đơn nghỉ.
+    on_leave_today = len({row[0] for row in leave_query.distinct().all()})
 
     if department_id is not None:
         return (
