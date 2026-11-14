@@ -384,6 +384,65 @@ def list_documents(page: int = 1, limit: int = 20):
 
 
 # ---------------------------------------------------------------------------
+# Đọc toàn văn tài liệu (modal "Xem" cho HR/Admin)
+# ---------------------------------------------------------------------------
+
+# Trần an toàn cho modal "Xem": quy chế nội bộ thực tế chỉ vài chục KB;
+# giới hạn này chỉ để 1 file 10MB không biến thành JSON khổng lồ.
+MAX_VIEW_CHARS = 200_000
+
+
+def get_document_content(document_id: int) -> dict:
+    """Toàn văn 1 tài liệu quy chế để HR/Admin đọc trực tiếp (không cần hỏi chatbot).
+
+    Ưu tiên file gốc trên đĩa (đúng từng ký tự, kể cả định dạng đoạn);
+    file gốc mất (Render restart/dọn tay) thì lùi về nối các chunk trong DB
+    theo chunk_index — nội dung vẫn đủ đọc, chỉ có thể lặp nhẹ ở chỗ nối
+    (chunk lưu overlap 100 ký tự, xem split_chunks). Chỉ HR/Admin được
+    gọi — route gắn require_roles.
+    """
+    document = db.session.get(KbDocument, document_id)
+    if document is None:
+        raise ApiError(404, "DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu.")
+
+    content = None
+    source = "chunks"
+    if document.file_url:
+        upload_root = current_app.config.get("UPLOAD_FOLDER") or "uploads"
+        try:
+            with open(os.path.join(upload_root, document.file_url), "rb") as fh:
+                data = fh.read()
+        except OSError:
+            data = None  # file gốc đã mất -> dùng chunk trong DB
+        if data:
+            try:
+                pages = extract_pages(data, os.path.basename(document.file_url or ""))
+                texts = [text for _, text in pages if (text or "").strip()]
+                if texts:
+                    content = "\n\n".join(texts)
+                    source = "file"
+            except Exception:
+                content = None  # trích xuất lỗi -> lùi về chunk
+
+    if content is None:
+        chunks = (KbChunk.query.filter_by(document_id=document.id)
+                  .order_by(KbChunk.chunk_index, KbChunk.id).all())
+        content = "\n\n".join(c.chunk_text for c in chunks)
+
+    truncated = len(content) > MAX_VIEW_CHARS
+    if truncated:
+        content = content[:MAX_VIEW_CHARS]
+
+    result = serialize_document(document)
+    result.update({
+        "content": content,
+        "truncated": truncated,
+        "source": source,
+    })
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Lập chỉ mục lại & bổ sung embedding
 # ---------------------------------------------------------------------------
 

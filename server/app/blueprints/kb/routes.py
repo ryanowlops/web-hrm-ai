@@ -2,6 +2,7 @@
 
     POST   /kb/documents            HR/Admin tải tài liệu quy chế (PDF/TXT)
     GET    /kb/documents            HR/Admin xem danh sách tài liệu đã nạp
+    GET    /kb/documents/<id>/content  HR/Admin đọc toàn văn 1 tài liệu
     POST   /kb/documents/<id>/reindex  HR/Admin lập chỉ mục lại 1 tài liệu
                                        (đọc file gốc -> chunk + embed lại;
                                        mất file gốc -> bổ sung embedding thiếu)
@@ -40,6 +41,13 @@ def get_documents():
     page = request.args.get("page", 1, type=int)
     limit = request.args.get("limit", 20, type=int)
     return jsonify(services.list_documents(page=page, limit=limit))
+
+
+@bp.get("/documents/<int:document_id>/content")
+@require_roles(*HR_ROLES)
+def get_document_content(document_id: int):
+    """Toàn văn 1 tài liệu để HR/Admin đọc trực tiếp (modal Xem)."""
+    return jsonify(services.get_document_content(document_id))
 
 
 @bp.post("/documents/<int:document_id>/reindex")

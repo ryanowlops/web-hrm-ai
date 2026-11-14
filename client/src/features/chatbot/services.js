@@ -123,6 +123,16 @@ export async function deleteKbDocument(documentId) {
 }
 
 /**
+ * Toàn văn 1 tài liệu quy chế để HR/Admin đọc trực tiếp (modal Xem).
+ * GET /kb/documents/:id/content
+ * -> { id, title, status, chunksCount, content, truncated, source: 'file'|'chunks', createdAt }
+ */
+export async function getKbDocumentContent(documentId) {
+  const body = bodyOf(await api.get(`/kb/documents/${documentId}/content`));
+  return body?.data ?? body;
+}
+
+/**
  * Lập chỉ mục lại 1 tài liệu (HR/Admin).
  * POST /kb/documents/:id/reindex — backend đọc lại file gốc, chia chunk và
  * tạo embedding lại từ đầu (mất file gốc thì chỉ bổ sung embedding thiếu).

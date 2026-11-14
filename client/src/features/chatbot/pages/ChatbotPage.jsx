@@ -8,6 +8,7 @@ import {
   deleteKbDocument,
   reindexKbDocument,
   embedMissingKbChunks,
+  getKbDocumentContent,
   friendlyError,
 } from '../services';
 import {
@@ -20,6 +21,7 @@ import {
   ConfirmDialog,
   EmptyState,
   Input,
+  Modal,
   PageHeader,
   Skeleton,
   Textarea,
@@ -38,7 +40,8 @@ import {
  *   thị kèm nguồn trích dẫn (tên tài liệu + trang) ở ngay dưới nội dung.
  * - Lịch sử chat của chính người dùng được tải lại khi mở trang.
  * - HR/Admin thấy thêm panel "Tài liệu quy chế (KB)": upload PDF/TXT,
- *   theo dõi trạng thái xử lý (processing -> ready/failed), xoá tài liệu.
+ *   theo dõi trạng thái xử lý (processing -> ready/failed), xem toàn văn
+ *   tài liệu, xoá tài liệu.
  *   Phân quyền thật nằm ở backend — nếu API trả 403, panel tự ẩn.
  */
 
@@ -148,6 +151,8 @@ export default function ChatbotPage() {
   const [kbError, setKbError] = useState('');
   const [kbNotice, setKbNotice] = useState('');
   const [kbDeleteTarget, setKbDeleteTarget] = useState(null);
+  // Modal "Xem": { doc, loading, content?, truncated?, chunksCount?, error? }
+  const [kbView, setKbView] = useState(null);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -297,6 +302,24 @@ export default function ChatbotPage() {
       setKbError(friendlyError(err, 'Tạo embedding bổ sung thất bại, vui lòng thử lại.'));
     } finally {
       setKbBusyId(null);
+    }
+  }
+
+  // Xem toàn văn 1 tài liệu quy chế (HR/Admin): mở modal, tải nội dung
+  // từ backend (ưu tiên file gốc, lùi về nối chunk khi file đã mất).
+  async function handleKbView(doc) {
+    setKbView({ doc, loading: true });
+    try {
+      const result = await getKbDocumentContent(doc.id);
+      setKbView({
+        doc,
+        loading: false,
+        content: result?.content ?? '',
+        truncated: !!result?.truncated,
+        chunksCount: result?.chunksCount ?? doc.chunksCount ?? null,
+      });
+    } catch (err) {
+      setKbView({ doc, loading: false, error: friendlyError(err, 'Không tải được nội dung tài liệu, vui lòng thử lại.') });
     }
   }
 
@@ -817,6 +840,14 @@ export default function ChatbotPage() {
                             Không trích xuất được nội dung — kiểm tra lại file hoặc xoá và tải bản khác.
                           </div>
                         )}
+                        <button
+                          type="button"
+                          className="mt-1.5 text-xs font-medium text-brand-700 transition-colors duration-150 hover:text-brand-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/20 disabled:cursor-not-allowed disabled:text-gray-400"
+                          onClick={() => handleKbView(doc)}
+                          disabled={kbView?.loading}
+                        >
+                          Xem nội dung
+                        </button>
                         {doc.status === 'ready' && (
                           <button
                             type="button"
@@ -861,6 +892,45 @@ export default function ChatbotPage() {
         onConfirm={confirmKbDelete}
         onCancel={() => setKbDeleteTarget(null)}
       />
+
+      <Modal
+        open={kbView !== null}
+        title={kbView?.doc?.title || 'Xem tài liệu'}
+        subtitle={
+          kbView?.doc
+            ? `Tải lên ${formatDateTime(kbView.doc.created_at)}${kbView?.chunksCount != null ? ` · ${kbView.chunksCount} đoạn trích` : ''}`
+            : undefined
+        }
+        onClose={() => setKbView(null)}
+        width="max-w-2xl"
+      >
+        {kbView?.loading && (
+          <div className="space-y-2.5" aria-hidden="true">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+        )}
+        {kbView?.error && <Alert tone="error">{kbView.error}</Alert>}
+        {!kbView?.loading && !kbView?.error && (
+          <>
+            {kbView?.content ? (
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-gray-800">
+                {kbView.content}
+              </pre>
+            ) : (
+              <p className="text-sm leading-relaxed text-gray-500">
+                Tài liệu này chưa có nội dung để hiển thị.
+              </p>
+            )}
+            {kbView?.truncated && (
+              <p className="mt-4 text-xs leading-relaxed text-amber-700">
+                Tài liệu quá dài nên chỉ hiển thị 200.000 ký tự đầu.
+              </p>
+            )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }
