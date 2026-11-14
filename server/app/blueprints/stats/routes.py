@@ -12,10 +12,11 @@ hạn trong 30 ngày, tin tuyển dụng đang mở.
 """
 import csv
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import Response, jsonify, request
 
+from app.blueprints.attendance.services import get_late_threshold
 from app.blueprints.auth.guards import load_current_user, require_roles
 from app.blueprints.stats import bp
 from app.errors import ApiError
@@ -29,6 +30,7 @@ from app.models import (
     LeaveRequest,
     PayrollItem,
     PayrollPeriod,
+    ShiftAssignment,
 )
 
 STATS_ROLES = ("admin", "hr", "manager")
@@ -518,3 +520,184 @@ def overview():
     result["contracts"] = _expiring_contracts_overview(department_ids)
     result.update(_recruitment_overview(department_ids))
     return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
+# Thống kê realtime HÔM NAY — mọi role đã đăng nhập đều xem được (kể cả
+# nhân viên), để ai cũng biết hôm nay ai muộn / ai chưa chấm / ai nghỉ.
+#   GET /stats/today
+# Phạm vi: admin/hr/employee = toàn công ty; manager = chỉ phòng ban của mình.
+# Không thêm cột/bảng DB: earlyLeave tính lúc đọc từ giờ check-out so với
+# giờ kết thúc ca; notCheckedIn suy ra từ "đang làm việc mà chưa có bản ghi
+# hôm nay và không có đơn nghỉ đã duyệt bao hôm nay" (materialize chỉ lấp
+# ngày vắng tới hôm qua nên hôm nay chưa có bản ghi absent).
+# ---------------------------------------------------------------------------
+
+_TODAY_LIST_LIMIT = 200
+
+
+def _now_ict():
+    """Thời điểm hiện tại theo múi giờ nghiệp vụ Asia/Ho_Chi_Minh."""
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+
+
+def _iso(value):
+    return value.isoformat() if value is not None else None
+
+
+def _employee_card(employee) -> dict:
+    return {
+        "employeeId": employee.id,
+        "employeeCode": employee.code,
+        "name": employee.full_name,
+        "department": _department_name(employee),
+    }
+
+
+def _approved_leave_employee_ids_today(department_ids: list[int] | None) -> set[int]:
+    """Id nhân viên có đơn nghỉ ĐÃ DUYỆT bao phủ hôm nay."""
+    today = _today()
+    query = (db.session.query(LeaveRequest.employee_id)
+             .join(Employee, LeaveRequest.employee_id == Employee.id)
+             .filter(LeaveRequest.status == LeaveRequest.STATUS_APPROVED,
+                     LeaveRequest.from_date <= today,
+                     LeaveRequest.to_date >= today))
+    if department_ids is not None:
+        query = query.filter(Employee.department_id.in_(department_ids))
+    return {row[0] for row in query.all()}
+
+
+def _shift_end_time(employee_id: int, work_date: date):
+    """Giờ kết thúc ca được phân cho (nhân viên, ngày); None nếu không có ca."""
+    assignment = (db.session.query(ShiftAssignment)
+                  .filter_by(employee_id=employee_id, work_date=work_date)
+                  .first())
+    if assignment is None or assignment.shift is None:
+        return None
+    return assignment.shift.end_time
+
+
+@bp.get("/today")
+@require_roles()
+def today_stats():
+    user = load_current_user()
+    today = _today()
+
+    # Phạm vi: admin/hr/employee = toàn công ty; manager = phòng của mình.
+    if user.role == "manager":
+        department_ids = _manager_department_ids(user)
+        scope = [dept.name for dept in
+                 Department.query.filter(Department.id.in_(department_ids))
+                 .order_by(Department.name).all()] if department_ids else []
+    else:
+        department_ids = None
+        scope = "company"
+
+    # Bản ghi chấm công hôm nay trong phạm vi.
+    records_query = (Attendance.query
+                     .join(Employee, Attendance.employee_id == Employee.id)
+                     .filter(Attendance.work_date == today))
+    if department_ids is not None:
+        records_query = records_query.filter(
+            Employee.department_id.in_(department_ids))
+    records = records_query.all()
+    record_by_employee = {record.employee_id: record for record in records}
+
+    approved_leave_ids = _approved_leave_employee_ids_today(department_ids)
+
+    # Nhân viên đang làm việc trong phạm vi (loại người đã nghỉ việc).
+    employees = (_scoped_employees(department_ids)
+                 .filter(Employee.status.in_(
+                     (Employee.STATUS_WORKING, Employee.STATUS_ON_LEAVE)))
+                 .all())
+    employee_by_id = {employee.id: employee for employee in employees}
+
+    # Đi muộn: bản ghi status=late, kèm số phút vượt ngưỡng muộn
+    # (ngưỡng = giờ bắt đầu ca + 15 phút ân hạn, xem attendance.services).
+    late_list = []
+    for record in sorted(
+            (r for r in records if r.status == Attendance.STATUS_LATE),
+            key=lambda r: r.check_in_at or datetime.min):
+        card = _employee_card(record.employee)
+        minutes_late = 0
+        if record.check_in_at is not None:
+            threshold = get_late_threshold(record.employee_id, today)
+            threshold_dt = datetime.combine(today, threshold)
+            minutes_late = max(
+                0, int((record.check_in_at - threshold_dt).total_seconds() // 60))
+        card["checkInAt"] = _iso(record.check_in_at)
+        card["minutesLate"] = minutes_late
+        late_list.append(card)
+
+    # Nghỉ phép hôm nay: hợp nhất bản ghi on_leave + đơn nghỉ đã duyệt
+    # bao hôm nay (người nghỉ phép có thể chưa có bản ghi chấm công).
+    on_leave_ids = ({r.employee_id for r in records
+                     if r.status == Attendance.STATUS_ON_LEAVE}
+                    | (approved_leave_ids & set(employee_by_id)))
+    on_leave_list = sorted(
+        (_employee_card(employee_by_id[eid]) for eid in on_leave_ids
+         if eid in employee_by_id),
+        key=lambda item: item["name"])
+
+    # Chưa chấm: đang làm việc, không có bản ghi hôm nay, không nghỉ phép.
+    not_checked_in_list = sorted(
+        (_employee_card(employee) for employee in employees
+         if employee.id not in record_by_employee
+         and employee.id not in approved_leave_ids),
+        key=lambda item: item["name"])
+
+    # Về sớm (tính lúc đọc): present/late đã check-out trước giờ kết thúc
+    # ca; không có ca thì bỏ qua, không gắn cờ.
+    early_leave_list = []
+    for record in records:
+        if record.status not in (Attendance.STATUS_PRESENT,
+                                 Attendance.STATUS_LATE):
+            continue
+        if record.check_out_at is None:
+            continue
+        end_time = _shift_end_time(record.employee_id, today)
+        if end_time is None:
+            continue
+        if record.check_out_at.time() < end_time:
+            card = _employee_card(record.employee)
+            card["checkOutAt"] = _iso(record.check_out_at)
+            early_leave_list.append(card)
+    early_leave_list.sort(key=lambda item: item["checkOutAt"])
+
+    # Trạng thái của chính người đang hỏi.
+    my_status = None
+    employee = user.employee if user is not None else None
+    if employee is not None:
+        my_record = (Attendance.query
+                     .filter_by(employee_id=employee.id, work_date=today)
+                     .first())
+        if my_record is not None:
+            my_status = {
+                "status": my_record.status,
+                "checkInAt": _iso(my_record.check_in_at),
+                "checkOutAt": _iso(my_record.check_out_at),
+            }
+        elif employee.id in approved_leave_ids:
+            my_status = {"status": Attendance.STATUS_ON_LEAVE,
+                         "checkInAt": None, "checkOutAt": None}
+
+    return jsonify({
+        "date": today.isoformat(),
+        "generated_at": _now_ict().isoformat(),
+        "scope": scope,
+        "counts": {
+            "present": sum(1 for r in records
+                           if r.status == Attendance.STATUS_PRESENT),
+            "late": len(late_list),
+            "onLeave": len(on_leave_list),
+            "notCheckedIn": len(not_checked_in_list),
+            "earlyLeave": len(early_leave_list),
+        },
+        "late": late_list[:_TODAY_LIST_LIMIT],
+        "notCheckedIn": not_checked_in_list[:_TODAY_LIST_LIMIT],
+        "onLeave": on_leave_list[:_TODAY_LIST_LIMIT],
+        "earlyLeave": early_leave_list[:_TODAY_LIST_LIMIT],
+        "myStatus": my_status,
+    })

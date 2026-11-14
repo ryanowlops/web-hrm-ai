@@ -15,8 +15,10 @@ from sqlalchemy import func
 from app.errors import ApiError
 from app.extensions import db
 from app.models import (
+    Attendance,
     Department,
     Employee,
+    Holiday,
     LeaveBalance,
     LeaveRequest,
     LeaveType,
@@ -135,15 +137,72 @@ def _notify_employee(employee_id, title, content, related_id):
 # Helpers nghiệp vụ
 # ---------------------------------------------------------------------------
 
+def _holiday_dates(from_date, to_date):
+    """Tập ngày lễ trong khoảng (để trừ khỏi ngày làm việc).
+
+    Bảng holidays có thể chưa có dữ liệu — khi đó trả tập rỗng và mọi
+    tính toán giữ nguyên như trước khi có lịch lễ. Khi gọi ngoài
+    application context (VD test thuần của count_workdays) thì không
+    có DB để tra — trả tập rỗng để hàm giữ tính thuần túy.
+    """
+    from flask import has_app_context
+
+    if not has_app_context():
+        return set()
+    rows = (db.session.query(Holiday.date)
+            .filter(Holiday.date >= from_date, Holiday.date <= to_date)
+            .all())
+    return {row[0] for row in rows}
+
+
 def count_workdays(from_date, to_date):
-    """Số ngày làm việc (Thứ 2 - Thứ 6) trong khoảng, gồm cả 2 đầu."""
+    """Số ngày làm việc (Thứ 2 - Thứ 6, trừ ngày lễ) trong khoảng, gồm cả 2 đầu."""
+    holidays = _holiday_dates(from_date, to_date)
     days = 0
     current = from_date
     while current <= to_date:
-        if current.weekday() < 5:
+        if current.weekday() < 5 and current not in holidays:
             days += 1
         current += timedelta(days=1)
     return days
+
+
+def _workdays(from_date, to_date):
+    """Liệt kê từng ngày làm việc (Thứ 2 - Thứ 6, trừ ngày lễ) trong khoảng, gồm cả 2 đầu.
+
+    Dùng khi cần đối soát từng ngày với bảng chấm công (không chỉ đếm số
+    lượng như count_workdays).
+    """
+    holidays = _holiday_dates(from_date, to_date)
+    current = from_date
+    while current <= to_date:
+        if current.weekday() < 5 and current not in holidays:
+            yield current
+        current += timedelta(days=1)
+
+
+def _sync_attendance_for_approved_leave(request):
+    """Đồng bộ bảng chấm công khi đơn nghỉ được HR duyệt.
+
+    Với mỗi ngày làm việc trong khoảng nghỉ: chưa có bản ghi -> tạo
+    on_leave; đã có bản ghi absent -> đổi thành on_leave; present/late
+    giữ nguyên (nhân viên đã chấm công thật ngày đó). Chạy trong cùng
+    transaction với việc duyệt đơn (commit ở hr_decision).
+    """
+    for day in _workdays(request.from_date, request.to_date):
+        record = Attendance.query.filter_by(
+            employee_id=request.employee_id, work_date=day
+        ).first()
+        if record is None:
+            db.session.add(
+                Attendance(
+                    employee_id=request.employee_id,
+                    work_date=day,
+                    status=Attendance.STATUS_ON_LEAVE,
+                )
+            )
+        elif record.status == Attendance.STATUS_ABSENT:
+            record.status = Attendance.STATUS_ON_LEAVE
 
 
 def get_or_create_balance(employee_id, leave_type, year):
@@ -442,6 +501,7 @@ def hr_decision(request_id, data, actor_employee=None):
             )
             balance.used_days = (balance.used_days or 0) + (request.days_count or 0)
         request.status = STATUS_APPROVED
+        _sync_attendance_for_approved_leave(request)
         _notify_employee(
             request.employee_id,
             "Đơn xin nghỉ đã được duyệt",
@@ -481,6 +541,61 @@ def cancel_request(employee, request_id):
             f"({request.from_date} - {request.to_date}).",
             request.id,
         )
+    db.session.commit()
+    return request
+
+
+def cancel_approved_leave(request_id, actor_user=None):
+    """HR/Admin hủy đơn nghỉ ĐÃ ĐƯỢC DUYỆT.
+
+    Chỉ hoàn số dư + xóa bản ghi chấm công on_leave cho các ngày làm việc
+    trong TƯƠNG LAI (work_date >= hôm nay); các ngày đã qua giữ nguyên
+    (vẫn trừ phép, vẫn on_leave). Ngày tương lai chưa có bản ghi thì không
+    có gì để xóa — materialize sẽ tạo lại absent khi cần. Đơn chuyển
+    thành CANCELLED. actor_user (nếu truyền) phải có role hr/admin —
+    route đã chặn bằng require_roles, đây là lớp phòng thủ thứ hai.
+    """
+    if actor_user is not None and actor_user.role not in ("hr", "admin"):
+        raise ApiError(
+            403, "FORBIDDEN", "Chỉ HR hoặc Admin mới được hủy đơn đã duyệt."
+        )
+    request = _get_request_or_404(request_id)
+    if request.status != STATUS_APPROVED:
+        raise ApiError(
+            409,
+            "INVALID_STATE",
+            "Chỉ hủy được đơn nghỉ đã được duyệt.",
+        )
+
+    today = date.today()
+    future_days = 0
+    for day in _workdays(request.from_date, request.to_date):
+        if day < today:
+            continue
+        future_days += 1
+        record = Attendance.query.filter_by(
+            employee_id=request.employee_id, work_date=day
+        ).first()
+        if record is not None and record.status == Attendance.STATUS_ON_LEAVE:
+            db.session.delete(record)
+
+    if future_days:
+        leave_type = db.session.get(LeaveType, request.leave_type_id)
+        if leave_type is not None and _has_quota(leave_type):
+            balance = get_or_create_balance(
+                request.employee_id, leave_type, request.from_date.year
+            )
+            balance.used_days = max(0, (balance.used_days or 0) - future_days)
+
+    request.status = STATUS_CANCELLED
+    _notify_employee(
+        request.employee_id,
+        "Đơn xin nghỉ đã duyệt đã bị hủy",
+        f"Đơn nghỉ {request.days_count} ngày ({request.from_date} - "
+        f"{request.to_date}) đã bị HR hủy. Số phép của các ngày chưa tới "
+        f"được hoàn lại.",
+        request.id,
+    )
     db.session.commit()
     return request
 

@@ -49,6 +49,7 @@ from app.models.interview import InterviewQA, InterviewSession
 from app.models.checkin_log import CheckinLog
 from app.models.interview_kit import InterviewKit
 from app.models.briefing import Briefing
+from app.models.holiday import Holiday
 
 __all__ = [
     # users / org
@@ -128,6 +129,8 @@ __all__ = [
     "CheckinLog",
     "InterviewKit",
     "Briefing",
+    # lịch nghỉ lễ (bảng mới — chỉ CRUD, chưa nối vào nghỉ phép/lương)
+    "Holiday",
     # misc
     "Notification",
     "Setting",

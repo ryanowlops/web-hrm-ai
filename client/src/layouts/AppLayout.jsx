@@ -129,6 +129,12 @@ const NAV_ITEMS = [
     roles: ['admin', 'hr'],
   },
   { to: '/leave', label: 'Nghỉ phép', icon: 'calendar' },
+  {
+    to: '/holidays',
+    label: 'Ngày lễ',
+    icon: 'calendar',
+    roles: ['admin', 'hr'],
+  },
   { to: '/payroll', label: 'Bảng lương', icon: 'hrm:payroll' },
   { to: '/performance', label: 'Hiệu suất', icon: 'hrm:performance' },
   // /onboarding giữ cho mọi role: trang có màn "Hội nhập của tôi" — employee
@@ -202,7 +208,7 @@ const NAV_GROUPS = [
   {
     id: 'quan-ly',
     label: 'Quản lý',
-    paths: ['/employees', '/departments', '/attendance', '/checkin-qr', '/leave', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
+    paths: ['/employees', '/departments', '/attendance', '/checkin-qr', '/leave', '/holidays', '/payroll', '/performance', '/onboarding', '/shifts', '/documents'],
   },
   { id: 'to-chuc', label: 'Tổ chức', paths: ['/org-chart', '/team-calendar', '/offboarding', '/skills'] },
   { id: 'van-hanh', label: 'Vận hành', paths: ['/assets', '/training'] },

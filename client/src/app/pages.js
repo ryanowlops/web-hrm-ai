@@ -30,6 +30,8 @@ const importAssetsPage = () => import('../features/assets/pages/AssetsPage.jsx')
 const importTrainingPage = () => import('../features/training/pages/TrainingPage.jsx');
 const importAnnouncementsPage = () =>
   import('../features/announcements/pages/AnnouncementsPage.jsx');
+const importHolidaysPage = () =>
+  import('../features/holidays/pages/HolidaysPage.jsx');
 const importNotificationsPage = () =>
   import('../features/notifications/pages/NotificationsPage.jsx');
 const importReportsPage = () => import('../features/reports/pages/ReportsPage.jsx');
@@ -71,6 +73,7 @@ export const TeamCalendarPage = lazy(importTeamCalendarPage);
 export const AssetsPage = lazy(importAssetsPage);
 export const TrainingPage = lazy(importTrainingPage);
 export const AnnouncementsPage = lazy(importAnnouncementsPage);
+export const HolidaysPage = lazy(importHolidaysPage);
 export const NotificationsPage = lazy(importNotificationsPage);
 export const ReportsPage = lazy(importReportsPage);
 export const ShiftsPage = lazy(importShiftsPage);
@@ -106,6 +109,7 @@ const ROUTE_PREFETCHERS = {
   '/recruitment': [importJobListPage, importJobDetailPage],
   '/chatbot': [importChatbotPage],
   '/announcements': [importAnnouncementsPage],
+  '/holidays': [importHolidaysPage],
   '/notifications': [importNotificationsPage],
   '/reports': [importReportsPage],
   '/shifts': [importShiftsPage],

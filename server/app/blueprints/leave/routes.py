@@ -171,6 +171,17 @@ def cancel_request(request_id):
     return jsonify(schemas.leave_request_to_dict(updated))
 
 
+@bp.post("/requests/<int:request_id>/cancel-approved")
+@require_roles("hr", "admin")
+def cancel_approved_request(request_id):
+    """HR/Admin hủy đơn nghỉ ĐÃ DUYỆT: chỉ hoàn phép + xóa on_leave cho
+    các ngày làm việc trong tương lai, ngày đã qua giữ nguyên.
+    Nhân viên vẫn chỉ hủy được đơn PENDING qua route /cancel."""
+    user = services.get_current_user()
+    updated = services.cancel_approved_leave(request_id, actor_user=user)
+    return jsonify(schemas.leave_request_to_dict(updated))
+
+
 # ---------------------------------------------------------------------------
 # Lịch nghỉ đã duyệt
 # ---------------------------------------------------------------------------

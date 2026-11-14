@@ -137,3 +137,82 @@ export async function fetchOverview() {
   const payload = await api.get('/stats/overview');
   return normalizeOverview(payload);
 }
+
+// ---------- Thống kê hôm nay (realtime) ----------
+// GET /stats/today — mọi role đều xem được (kể cả employee, khác với
+// /stats/overview bị chặn ở role employee). Server trả:
+//   { date, generated_at, scope,
+//     counts: { present, late, onLeave, notCheckedIn, earlyLeave },
+//     late: [{ employeeId, employeeCode, name, department, checkInAt, minutesLate }],
+//     notCheckedIn: [...], onLeave: [...], earlyLeave: [...],
+//     myStatus: { status, checkInAt, checkOutAt } | null }
+// Chuẩn hoá mọi biến thể tên trường (camelCase / snake_case) về một cấu
+// trúc thống nhất, giống normalizeOverview.
+function normalizeTodayPerson(item) {
+  if (!item || typeof item !== 'object') return null;
+  return {
+    employeeId: pick(item, ['employeeId', 'employee_id', 'id']),
+    employeeCode: pick(item, ['employeeCode', 'employee_code', 'code'], ''),
+    name: pick(
+      item,
+      ['name', 'fullName', 'full_name', 'employeeName', 'employee_name'],
+      'Nhân viên',
+    ),
+    department: pick(item, ['department', 'departmentName', 'department_name'], ''),
+    checkInAt: pick(item, ['checkInAt', 'check_in_at', 'checkIn']),
+    checkOutAt: pick(item, ['checkOutAt', 'check_out_at', 'checkOut']),
+    minutesLate: pick(item, ['minutesLate', 'minutes_late', 'lateMinutes', 'late_minutes'], null),
+  };
+}
+
+function normalizeTodayStats(payload) {
+  const body = payload?.data ?? payload ?? {};
+
+  const countsRaw = pick(body, ['counts', 'count'], {}) || {};
+  const counts = {
+    present: toNumber(pick(countsRaw, ['present', 'onTime', 'on_time'])),
+    late: toNumber(pick(countsRaw, ['late'])),
+    onLeave: toNumber(pick(countsRaw, ['onLeave', 'on_leave', 'leave'])),
+    notCheckedIn: toNumber(
+      pick(countsRaw, ['notCheckedIn', 'not_checked_in', 'notChecked', 'absent']),
+    ),
+    earlyLeave: toNumber(pick(countsRaw, ['earlyLeave', 'early_leave', 'early'])),
+  };
+
+  const peopleList = (keys) => {
+    const raw = pick(body, keys, []);
+    return (Array.isArray(raw) ? raw : []).map(normalizeTodayPerson).filter(Boolean);
+  };
+
+  const myRaw = pick(body, ['myStatus', 'my_status'], null);
+  const myStatus =
+    myRaw && typeof myRaw === 'object'
+      ? {
+          status: pick(myRaw, ['status']),
+          checkInAt: pick(myRaw, ['checkInAt', 'check_in_at']),
+          checkOutAt: pick(myRaw, ['checkOutAt', 'check_out_at']),
+        }
+      : null;
+
+  return {
+    date: pick(body, ['date']),
+    generatedAt: pick(body, ['generatedAt', 'generated_at']),
+    scope: pick(body, ['scope'], ''),
+    counts,
+    late: peopleList(['late']),
+    notCheckedIn: peopleList(['notCheckedIn', 'not_checked_in', 'notChecked', 'absentList']),
+    onLeave: peopleList(['onLeave', 'on_leave']),
+    earlyLeave: peopleList(['earlyLeave', 'early_leave']),
+    myStatus,
+  };
+}
+
+/**
+ * Lấy thống kê chấm công hôm nay (realtime) cho thẻ "Hôm nay — Trực tiếp".
+ * Ném lỗi ra ngoài để TanStack Query xử lý trạng thái error (thẻ hiện
+ * trạng thái lỗi nhẹ nhàng, không làm vỡ dashboard).
+ */
+export async function fetchTodayStats() {
+  const payload = await api.get('/stats/today');
+  return normalizeTodayStats(payload);
+}

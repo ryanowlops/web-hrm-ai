@@ -42,7 +42,7 @@ import { getMyBalances } from '../../leave/services';
 import { getMyPayslip } from '../../payroll/services';
 import { getMyPoints, getMyBadges } from '../../rewards/services';
 import { getToday } from '../../attendance/services';
-import { fetchOverview } from '../services';
+import { fetchOverview, fetchTodayStats } from '../services';
 
 // Biểu đồ (recharts, chunk ~109KB gzip) nạp lazy + gắn sau khi trang đã vẽ
 // xong khung (DeferredMount) — trang hiện số liệu trước, biểu đồ theo sau.
@@ -195,6 +195,18 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Giờ:phút:giây — dùng cho mốc "Cập nhật lúc" của thẻ realtime.
+function formatClock(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 // Hàng 4 thẻ số liệu cá nhân THẬT của chính nhân viên, đặt trên
@@ -350,6 +362,7 @@ function EmployeeHome({ user }) {
         subtitle={`${formatToday()} · Chấm công, gửi đơn nghỉ phép, xem phiếu lương và hỏi chatbot HR ngay trong hệ thống.`}
       />
       {employeeId ? <EmployeePersonalStats /> : null}
+      <TodayRealtimeCard user={user} />
       <StaggerList className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {EMPLOYEE_FEATURES.map((feature, i) => {
           const FeatureIcon = feature.icon;
@@ -381,7 +394,8 @@ function EmployeeHome({ user }) {
         <DashboardExtras />
       </DeferredMount>
       <p className="mt-5 text-[13px] text-gray-500">
-        Số liệu thống kê toàn công ty chỉ hiển thị cho Quản trị viên, phòng HR và Trưởng
+        Thẻ “Hôm nay — Trực tiếp” hiển thị cho mọi vai trò. Các số liệu thống kê
+        khác của công ty chỉ hiển thị cho Quản trị viên, phòng HR và Trưởng
         phòng theo đúng phạm vi phân quyền.
       </p>
     </div>
@@ -659,6 +673,233 @@ const ROLE_SHORTCUTS = {
   ],
 };
 
+// ---------- Thẻ "Hôm nay — Trực tiếp" (realtime) ----------
+// Thống kê chấm công hôm nay — hiển thị cho MỌI role (kể cả employee).
+// Dùng query RIÊNG tới GET /stats/today, không dùng lại query overview
+// (overview bị tắt với role employee). Tự làm mới mỗi 60 giây + nút
+// "Làm mới" + giờ cập nhật (generated_at). Endpoint lỗi (VD backend chưa
+// deploy) thì thẻ chỉ hiện trạng thái lỗi nhẹ nhàng, không làm vỡ dashboard.
+// 4 số lớn dùng StatCard phẳng như hàng số liệu sẵn có; danh sách dài thì
+// cuộn trong khung (tối đa ~5 dòng).
+
+function TodayPersonList({ title, items, emptyText, meta }) {
+  return (
+    <div>
+      <p className="mb-1 text-[13px] font-medium text-gray-500">
+        {title} ({items.length})
+      </p>
+      {items.length === 0 ? (
+        <p className="py-2 text-sm text-gray-500">{emptyText}</p>
+      ) : (
+        <ul className="nice-scroll max-h-[240px] space-y-1 overflow-y-auto pr-1">
+          {items.map((person, i) => (
+            <li
+              key={person.employeeId ?? person.employeeCode ?? i}
+              className="flex items-center gap-3 py-2"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">
+                {initialsOf(person.name)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-gray-900">
+                  {person.name}
+                </span>
+                {person.department ? (
+                  <span className="block truncate text-[13px] text-gray-500">
+                    {person.department}
+                  </span>
+                ) : null}
+              </span>
+              {meta ? (
+                <span className="shrink-0 text-[13px] tabular-nums text-gray-500">
+                  {meta(person)}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TodayRealtimeCard({ user }) {
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['stats', 'today'],
+    queryFn: fetchTodayStats,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    retry: 1,
+  });
+
+  // Khung chung cho trạng thái đang tải / lỗi — lỗi ở endpoint mới không
+  // được làm vỡ dashboard.
+  if (isLoading) {
+    return (
+      <section className="mb-5">
+        <Card>
+          <CardHeader
+            title="Hôm nay — Trực tiếp"
+            subtitle="Đang tải số liệu chấm công hôm nay…"
+          />
+          <div className="space-y-3 px-5 py-4" aria-hidden="true">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        </Card>
+      </section>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <section className="mb-5">
+        <Card>
+          <CardHeader
+            title="Hôm nay — Trực tiếp"
+            subtitle="Số liệu chấm công cập nhật theo thời gian thực"
+          />
+          <CardBody>
+            <Alert tone="error">
+              <span className="font-bold">Không tải được số liệu hôm nay</span>
+              <br />
+              {error?.response?.data?.error?.message ||
+                'Đã xảy ra lỗi khi gọi máy chủ. Số liệu sẽ tự thử lại sau 60 giây.'}
+            </Alert>
+            <Button variant="secondary" size="sm" className="mt-4" onClick={() => refetch()}>
+              Thử lại
+            </Button>
+          </CardBody>
+        </Card>
+      </section>
+    );
+  }
+
+  const counts = data.counts || {};
+  const lateList = data.late || [];
+  const notCheckedInList = data.notCheckedIn || [];
+  const onLeaveList = data.onLeave || [];
+  const myStatus = data.myStatus || null;
+
+  // Banner trạng thái của chính mình.
+  const employeeId = user?.employeeId ?? user?.employee_id ?? null;
+  let myTone = 'warning';
+  let myText = 'Bạn chưa chấm công hôm nay.';
+  if (myStatus) {
+    if (myStatus.status === 'on_leave') {
+      myTone = 'info';
+      myText = 'Hôm nay bạn nghỉ phép.';
+    } else if (myStatus.status === 'present' || myStatus.status === 'late') {
+      myTone = 'success';
+      myText = `Bạn đã chấm công lúc ${formatTime(myStatus.checkInAt) || '—'}`;
+      if (myStatus.status === 'late') {
+        const mine = lateList.find(
+          (p) => employeeId != null && String(p.employeeId) === String(employeeId),
+        );
+        myText +=
+          mine?.minutesLate != null ? ` · Đi muộn ${mine.minutesLate} phút` : ' · Đi muộn';
+      }
+      if (myStatus.checkOutAt) myText += ` · Ra lúc ${formatTime(myStatus.checkOutAt)}`;
+    }
+  }
+
+  const scopeSuffix =
+    data.scope && data.scope !== 'company' ? ' · Phạm vi phòng ban của bạn' : '';
+
+  return (
+    <section className="mb-5">
+      {/* 4 số lớn (+ số về sớm khi > 0) — StatCard phẳng như hàng số liệu sẵn có */}
+      <div
+        className={`mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+          counts.earlyLeave > 0 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+        }`}
+      >
+        <StatCard
+          icon={<IconClock size={20} />}
+          label="Đúng giờ"
+          value={counts.present ?? 0}
+          sub="Đã chấm công đúng giờ hôm nay"
+          tone="teal"
+        />
+        <StatCard
+          icon={<IconAlertTriangle size={20} />}
+          label="Đi muộn"
+          value={counts.late ?? 0}
+          sub="Chấm công sau giờ quy định"
+          tone="amber"
+        />
+        <StatCard
+          icon={<IconUsers size={20} />}
+          label="Chưa chấm công"
+          value={counts.notCheckedIn ?? 0}
+          sub="Chưa ghi nhận chấm công hôm nay"
+          tone="slate"
+        />
+        <StatCard
+          icon={<IconCalendar size={20} />}
+          label="Nghỉ phép"
+          value={counts.onLeave ?? 0}
+          sub="Nghỉ phép đã duyệt hôm nay"
+          tone="blue"
+        />
+        {counts.earlyLeave > 0 ? (
+          <StatCard
+            icon={<IconClock size={20} />}
+            label="Về sớm"
+            value={counts.earlyLeave}
+            sub="Check-out trước giờ quy định"
+            tone="amber"
+          />
+        ) : null}
+      </div>
+
+      <Card>
+        <CardHeader
+          title="Hôm nay — Trực tiếp"
+          subtitle={`Ngày ${formatDate(data.date)} · Cập nhật lúc ${formatClock(data.generatedAt) || '—'}${scopeSuffix}`}
+          actions={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              {isFetching ? 'Đang cập nhật…' : 'Làm mới'}
+            </Button>
+          }
+        />
+        <CardBody>
+          <Alert tone={myTone} className="mb-4">
+            {myText}
+          </Alert>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <TodayPersonList
+              title="Đi muộn"
+              items={lateList}
+              emptyText="Không có ai đi muộn hôm nay."
+              meta={(p) =>
+                `${formatTime(p.checkInAt) || '—'} · Muộn ${p.minutesLate ?? '—'} phút`
+              }
+            />
+            <TodayPersonList
+              title="Chưa chấm công"
+              items={notCheckedInList}
+              emptyText="Mọi người đã chấm công."
+            />
+            <TodayPersonList
+              title="Nghỉ phép"
+              items={onLeaveList}
+              emptyText="Không có ai nghỉ phép hôm nay."
+            />
+          </div>
+        </CardBody>
+      </Card>
+    </section>
+  );
+}
+
 // ---------- Trang chính ----------
 
 export default function DashboardPage() {
@@ -827,6 +1068,9 @@ export default function DashboardPage() {
               tone="slate"
             />
           </section>
+
+          {/* Hôm nay — Trực tiếp: thống kê chấm công realtime, mọi role đều xem được */}
+          <TodayRealtimeCard user={user} />
 
           {/* Lối tắt theo vai trò — thẻ phẳng kiểu EMPLOYEE_FEATURES */}
           {ROLE_SHORTCUTS[role] ? (

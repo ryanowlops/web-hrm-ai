@@ -5,7 +5,37 @@
   lat [-90, 90], lon [-180, 180], radius_m [10, 2000].
 - CheckinLogSchema: serialize nhật ký cho trang HR.
 """
-from marshmallow import EXCLUDE, Schema, fields, validate
+import math
+
+from marshmallow import EXCLUDE, Schema, ValidationError, fields, validate
+
+
+def _finite_in_range(min_value, max_value, label):
+    """Validator cho tọa độ: từ chối NaN/Infinity rồi kiểm tra khoảng.
+
+    Không dùng validate.Range trần: mọi so sánh với NaN đều False nên
+    Range để NaN lọt qua, và tọa độ vô nghĩa (vd lat=999) chui tới
+    haversine sẽ tính ra khoảng cách rác, thậm chí crash 500 khi
+    asin/sqrt nhận giá trị ngoài miền. Marshmallow Float mặc định cũng
+    chặn NaN/Infinity nhưng chỉ ngầm (message tiếng Anh chung); kiểm tra
+    tường minh ở đây để lỗi luôn là 400 VALIDATION_ERROR với message
+    tiếng Việt rõ ràng.
+    """
+
+    def _validate(value):
+        if value is None:
+            return
+        if not math.isfinite(value):
+            raise ValidationError(
+                f"{label} phải là một số hữu hạn "
+                "(không chấp nhận NaN/Infinity)."
+            )
+        if value < min_value or value > max_value:
+            raise ValidationError(
+                f"{label} phải trong khoảng {min_value}..{max_value}."
+            )
+
+    return _validate
 
 
 class ScanSchema(Schema):
@@ -18,8 +48,18 @@ class ScanSchema(Schema):
         validate=validate.Length(min=1, max=32),
         error_messages={"required": "Thiếu mã chấm công (token)."},
     )
-    lat = fields.Float(required=False, allow_none=True, load_default=None)
-    lon = fields.Float(required=False, allow_none=True, load_default=None)
+    lat = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=_finite_in_range(-90, 90, "Vĩ độ (lat)"),
+    )
+    lon = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=_finite_in_range(-180, 180, "Kinh độ (lon)"),
+    )
 
 
 class CheckinConfigSchema(Schema):
@@ -28,15 +68,11 @@ class CheckinConfigSchema(Schema):
 
     lat = fields.Float(
         required=True,
-        validate=validate.Range(
-            min=-90, max=90, error="Vĩ độ (lat) phải trong khoảng -90..90."
-        ),
+        validate=_finite_in_range(-90, 90, "Vĩ độ (lat)"),
     )
     lon = fields.Float(
         required=True,
-        validate=validate.Range(
-            min=-180, max=180, error="Kinh độ (lon) phải trong khoảng -180..180."
-        ),
+        validate=_finite_in_range(-180, 180, "Kinh độ (lon)"),
     )
     radius_m = fields.Int(
         required=False,

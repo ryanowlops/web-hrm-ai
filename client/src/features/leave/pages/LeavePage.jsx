@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../app/AuthContext.jsx';
+import api from '../../../api/axiosClient';
 import {
   getLeaveTypes, getMyBalances, createRequest, getMyRequests, cancelRequest,
   getPendingForMe, approveRequest, rejectRequest, getCalendar,
@@ -97,6 +98,9 @@ export default function LeavePage() {
   const user = useMemo(getCurrentUser, []);
   const toast = useToast();
   const isApprover = ['admin', 'hr', 'manager'].includes(user?.role);
+  // Chỉ HR/Admin mới được hủy đơn ĐÃ DUYỆT (endpoint cancel-approved) —
+  // manager chỉ duyệt cấp 1 nên không có quyền này.
+  const isHrAdmin = ['admin', 'hr'].includes(user?.role);
   // Tín hiệu có hồ sơ nhân viên (AuthContext là nguồn chuẩn; chấp thêm
   // employee_id thô từ user localStorage như Dashboard). Không có hồ sơ thì
   // mọi khối tự phục vụ (form tạo đơn, số dư phép, đơn của tôi) bị ẨN HẲN và
@@ -250,6 +254,44 @@ export default function LeavePage() {
       setRejectingId(null); setRejectReason('');
       loadPending(); loadMine(); loadCalendar(); loadBalances();
     } catch (err) { setError(errMsg(err)); } finally { setDecidingId(null); }
+  };
+
+  /* --- Đơn đã duyệt (chỉ HR/Admin) — có thể hủy, hoàn phép ngày chưa tới --- */
+  const [approved, setApproved] = useState([]);
+  const [approvedLoading, setApprovedLoading] = useState(false);
+  const [approvedError, setApprovedError] = useState('');
+  const [cancelApprovedTarget, setCancelApprovedTarget] = useState(null);
+  const [cancellingApprovedId, setCancellingApprovedId] = useState(null);
+
+  // HR/Admin xem toàn công ty nên không cần scope=mine và không bắt buộc
+  // có hồ sơ nhân viên (theo contract GET /leave/requests của backend).
+  const loadApproved = useCallback(async () => {
+    if (!isHrAdmin) return;
+    setApprovedLoading(true);
+    try {
+      const res = await api.get('/leave/requests', { params: { status: 'approved', page: 1, limit: 50 } });
+      const body = res?.data ?? res;
+      setApproved(Array.isArray(body) ? body : body?.data || []);
+      setApprovedError('');
+    } catch (e) { setApprovedError(errMsg(e)); }
+    finally { setApprovedLoading(false); }
+  }, [isHrAdmin]);
+  useEffect(() => { loadApproved(); }, [loadApproved]);
+
+  // Hủy đơn đã duyệt: hỏi xác nhận bằng ConfirmDialog (ghi rõ chỉ hoàn
+  // phép các ngày chưa tới), rồi gọi POST /leave/requests/:id/cancel-approved.
+  const confirmCancelApproved = async () => {
+    const target = cancelApprovedTarget;
+    setCancelApprovedTarget(null);
+    if (!target) return;
+    setCancellingApprovedId(target.id);
+    setError('');
+    try {
+      await api.post(`/leave/requests/${target.id}/cancel-approved`);
+      toast.success('Đã hủy đơn nghỉ đã duyệt. Số ngày phép của các ngày chưa tới đã được hoàn lại.');
+      loadApproved(); loadMine(); loadCalendar(); loadBalances();
+    } catch (err) { setError(errMsg(err)); }
+    finally { setCancellingApprovedId(null); }
   };
 
   /* --- Lịch nghỉ tháng --- */
@@ -507,6 +549,63 @@ export default function LeavePage() {
         </Card>
       )}
 
+      {/* === Đơn đã duyệt — chỉ HR/Admin, có thể hủy (hoàn phép ngày chưa tới) === */}
+      {isHrAdmin && (
+        <Card className="mt-6">
+          <CardHeader
+            title="Đơn đã duyệt — có thể hủy"
+            subtitle="HR/Admin có thể hủy đơn đã duyệt. Hệ thống chỉ hoàn lại số ngày phép của các ngày chưa tới; các ngày đã qua giữ nguyên."
+            actions={approved.length > 0 ? <Badge tone="green" dot>{approved.length} đơn đã duyệt</Badge> : null}
+          />
+          {approvedLoading ? (
+            <div className="space-y-3 p-5">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : approvedError && approved.length === 0 ? (
+            <div className="p-5">
+              <LoadError message={approvedError} onRetry={loadApproved} />
+            </div>
+          ) : approved.length === 0 ? (
+            <EmptyState title="Không có đơn nghỉ nào đã duyệt." description="Khi có đơn nghỉ được duyệt, đơn sẽ xuất hiện tại đây để HR/Admin hủy khi cần." />
+          ) : (
+            <CardBody>
+              {approvedError && (
+                <LoadError message={approvedError} onRetry={loadApproved} className="mb-4" />
+              )}
+              <StaggerList className="space-y-3">
+              {approved.map((r, i) => (
+                <StaggerItem key={r.id} index={i}>
+                <div className="rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900">
+                        {r.employee_name || r.employee?.full_name}
+                        <span className="ml-2 text-sm font-normal text-gray-400">{r.department_name || r.employee?.department_name || ''}</span>
+                      </p>
+                      <p className="mt-0.5 text-sm text-gray-600">
+                        {r.leave_type_name || ''} · {fmtDate(r.from_date)} → {fmtDate(r.to_date)} · {r.days_count ?? '—'} ngày
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-gray-500">Lý do: {r.reason}</p>
+                      <div className="mt-2"><StatusBadge status={r.status} /></div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button type="button" variant="ghost" size="sm" loading={cancellingApprovedId === r.id}
+                        onClick={() => setCancelApprovedTarget(r)}
+                        className="text-[#B42318] ring-1 ring-inset ring-[#FDA29B] hover:bg-[#FEF3F2] hover:text-[#B42318]">
+                        Hủy đơn
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                </StaggerItem>
+              ))}
+              </StaggerList>
+            </CardBody>
+          )}
+        </Card>
+      )}
+
       {/* === Lịch nghỉ tháng (ẩn hẳn khi tài khoản thiếu hồ sơ mà endpoint đòi hồ sơ) === */}
       {!calendarHidden && (
       <Card className="mt-6">
@@ -563,6 +662,17 @@ export default function LeavePage() {
         danger
         onConfirm={confirmCancel}
         onCancel={() => setCancelTarget(null)}
+      />
+      <ConfirmDialog
+        open={cancelApprovedTarget != null}
+        title="Hủy đơn nghỉ đã duyệt"
+        description={cancelApprovedTarget
+          ? `Hủy đơn nghỉ đã duyệt của ${cancelApprovedTarget.employee_name || cancelApprovedTarget.employee?.full_name || 'nhân viên'} (${fmtDate(cancelApprovedTarget.from_date)} → ${fmtDate(cancelApprovedTarget.to_date)})? Hệ thống chỉ hoàn lại số ngày phép của các ngày chưa tới; các ngày đã qua giữ nguyên và không được hoàn.`
+          : ''}
+        confirmLabel="Hủy đơn"
+        danger
+        onConfirm={confirmCancelApproved}
+        onCancel={() => setCancelApprovedTarget(null)}
       />
     </div>
   );

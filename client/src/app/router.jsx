@@ -23,6 +23,7 @@ import {
   EmployeeDetailPage,
   EmployeeListPage,
   FeedPage,
+  HolidaysPage,
   JobDetailPage,
   JobListPage,
   JourneyPage,
@@ -205,6 +206,10 @@ const router = createBrowserRouter([
       },
       // --- Mở rộng v3 ---
       { path: 'shifts', element: lazyPage(ShiftsPage) },
+      {
+        path: 'holidays',
+        element: guardedPage(HolidaysPage, ['admin', 'hr']),
+      },
       { path: 'documents', element: lazyPage(DocumentsPage) },
       {
         path: 'offboarding',
