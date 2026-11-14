@@ -188,3 +188,10 @@ def test_overview_still_forbidden_for_employee(client, roster):
     token = login(client, "minh@hrm.local", "Employee@123")
     resp = client.get("/api/v1/stats/overview", headers=auth_headers(token))
     assert resp.status_code == 403
+
+
+def test_is_weekend_flag_matches_today(client, roster):
+    """Cờ cuối tuần đúng với thứ trong tuần của ngày hôm nay."""
+    data = _get_today(client, "admin@hrm.local", "Admin@123")
+    assert data["date"] == stats_routes._today().isoformat()
+    assert data["isWeekend"] == (stats_routes._today().weekday() >= 5)

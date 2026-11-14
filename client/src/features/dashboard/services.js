@@ -196,6 +196,7 @@ function normalizeTodayStats(payload) {
 
   return {
     date: pick(body, ['date']),
+    isWeekend: pick(body, ['isWeekend', 'is_weekend'], false),
     generatedAt: pick(body, ['generatedAt', 'generated_at']),
     scope: pick(body, ['scope'], ''),
     counts,

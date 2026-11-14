@@ -857,7 +857,7 @@ function TodayRealtimeCard({ user }) {
       <Card>
         <CardHeader
           title="Hôm nay — Trực tiếp"
-          subtitle={`Ngày ${formatDate(data.date)} · Cập nhật lúc ${formatClock(data.generatedAt) || '—'}${scopeSuffix}`}
+          subtitle={`Ngày ${formatDate(data.date)} · Cập nhật lúc ${formatClock(data.generatedAt) || '—'}${scopeSuffix}${data.isWeekend ? ' · Cuối tuần — không phải ngày làm việc' : ''}`}
           actions={
             <Button
               type="button"

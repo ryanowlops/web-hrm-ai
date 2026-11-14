@@ -685,6 +685,7 @@ def today_stats():
 
     return jsonify({
         "date": today.isoformat(),
+        "isWeekend": today.weekday() >= 5,
         "generated_at": _now_ict().isoformat(),
         "scope": scope,
         "counts": {
