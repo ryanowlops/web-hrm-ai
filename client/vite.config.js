@@ -36,6 +36,16 @@ export default defineConfig({
           'vendor-query': ['@tanstack/react-query'],
           'vendor-charts': ['recharts'],
           'vendor-http': ['axios'],
+          // Tách shell Astryx + motion + icons ra chunk riêng: các chunk này
+          // gần như không đổi giữa các lần deploy nên trình duyệt cache dài
+          // hạn, lần sau chỉ tải lại chunk app nhỏ (index) thay vì cả 945KB.
+          'vendor-astryx': [
+            '@astryxdesign/core',
+            '@astryxdesign/theme-neutral',
+            '@stylexjs/stylex',
+          ],
+          'vendor-motion': ['motion'],
+          'vendor-icons': ['lucide-react'],
         },
       },
     },
