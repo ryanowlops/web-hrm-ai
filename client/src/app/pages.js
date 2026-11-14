@@ -54,6 +54,12 @@ const importCheckinQrPage = () => import('../features/checkin/CheckinQrPage.jsx'
 const importBriefingPage = () => import('../features/briefing/BriefingPage.jsx');
 const importProbationPage = () =>
   import('../features/probation/pages/ProbationPage.jsx');
+const importOfferLettersPage = () =>
+  import('../features/offer-letters/pages/OfferLettersPage.jsx');
+const importShiftSwapsPage = () =>
+  import('../features/shift-swaps/pages/ShiftSwapsPage.jsx');
+const importDisciplinaryPage = () =>
+  import('../features/disciplinary/pages/DisciplinaryPage.jsx');
 
 export const LoginPage = lazy(importLoginPage);
 export const PublicJobsPage = lazy(importPublicJobsPage);
@@ -94,6 +100,9 @@ export const CheckinPage = lazy(importCheckinPage);
 export const CheckinQrPage = lazy(importCheckinQrPage);
 export const BriefingPage = lazy(importBriefingPage);
 export const ProbationPage = lazy(importProbationPage);
+export const OfferLettersPage = lazy(importOfferLettersPage);
+export const ShiftSwapsPage = lazy(importShiftSwapsPage);
+export const DisciplinaryPage = lazy(importDisciplinaryPage);
 
 // Map đường dẫn menu → các chunk cần tải trước khi điều hướng tới.
 const ROUTE_PREFETCHERS = {
@@ -130,6 +139,9 @@ const ROUTE_PREFETCHERS = {
   '/checkin-qr': [importCheckinQrPage],
   '/briefing': [importBriefingPage],
   '/probation': [importProbationPage],
+  '/offer-letters': [importOfferLettersPage],
+  '/shift-swaps': [importShiftSwapsPage],
+  '/disciplinary': [importDisciplinaryPage],
   '/admin': [importAdminPage],
   '/jobs': [importPublicJobsPage],
   '/login': [importLoginPage],

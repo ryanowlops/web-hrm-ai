@@ -51,6 +51,9 @@ from app.models.interview_kit import InterviewKit
 from app.models.briefing import Briefing
 from app.models.holiday import Holiday
 from app.models.probation import ProbationEvaluation
+from app.models.offer_letter import OfferLetter
+from app.models.shift_swap import ShiftSwapRequest
+from app.models.disciplinary import DisciplinaryRecord
 
 __all__ = [
     # users / org
@@ -135,6 +138,10 @@ __all__ = [
     "Holiday",
     # quản lý thử việc (bảng mới — đánh giá thử việc)
     "ProbationEvaluation",
+    # thư mời nhận việc / đổi ca / kỷ luật (bảng mới)
+    "OfferLetter",
+    "ShiftSwapRequest",
+    "DisciplinaryRecord",
     # misc
     "Notification",
     "Setting",

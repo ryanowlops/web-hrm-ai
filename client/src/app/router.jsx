@@ -19,6 +19,7 @@ import {
   DashboardPage,
   DepartmentListPage,
   DisplayPage,
+  DisciplinaryPage,
   DocumentsPage,
   EmployeeDetailPage,
   EmployeeListPage,
@@ -33,6 +34,7 @@ import {
   MockInterviewPage,
   NotificationsPage,
   OffboardingPage,
+  OfferLettersPage,
   OnboardingPage,
   OrgChartPage,
   PayrollPage,
@@ -41,6 +43,7 @@ import {
   PublicJobsPage,
   ReportsPage,
   RewardsPage,
+  ShiftSwapsPage,
   ShiftsPage,
   SkillsPage,
   SurveysPage,
@@ -246,6 +249,18 @@ const router = createBrowserRouter([
       {
         path: 'probation',
         element: guardedPage(ProbationPage, ['admin', 'hr', 'manager']),
+      },
+      {
+        path: 'offer-letters',
+        element: guardedPage(OfferLettersPage, ['admin', 'hr']),
+      },
+      {
+        path: 'shift-swaps',
+        element: guardedPage(ShiftSwapsPage, ['admin', 'hr', 'manager', 'employee']),
+      },
+      {
+        path: 'disciplinary',
+        element: guardedPage(DisciplinaryPage, ['admin', 'hr', 'manager']),
       },
     ],
   },
