@@ -34,14 +34,19 @@ from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
 from flask import current_app
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models import (
+    Announcement,
     Attendance,
+    Contract,
     Department,
     Employee,
+    Holiday,
     LeaveRequest,
+    OvertimeRequest,
     PayrollItem,
     PayrollPeriod,
 )
@@ -538,6 +543,223 @@ def tool_team_overview(user, **_args) -> str:
     )
 
 
+def _manager_department_ids(employee) -> list[int]:
+    """Phòng mà manager quản lý (Department.manager_id); rơi về phòng của
+    chính mình khi chưa được gắn làm quản lý phòng nào."""
+    if employee is None:
+        return []
+    ids = [d.id for d in Department.query.filter_by(manager_id=employee.id).all()]
+    if not ids and employee.department_id:
+        ids = [employee.department_id]
+    return ids
+
+
+def tool_department_headcount(user, **_args) -> str:
+    """Sĩ số từng phòng — số liệu tổng hợp, không chứa dữ liệu cá nhân.
+
+    admin/hr: toàn công ty, chi tiết từng phòng. manager: các phòng mình
+    quản lý + tổng công ty. employee: tổng công ty + phòng của mình.
+    """
+    role = getattr(user, "role", "employee")
+    employee = _employee_of(user)
+    rows = (db.session.query(Department.id, Department.name,
+                             func.count(Employee.id))
+            .join(Employee, Employee.department_id == Department.id)
+            .filter(Employee.status != Employee.STATUS_RESIGNED)
+            .group_by(Department.id, Department.name)
+            .order_by(func.count(Employee.id).desc(), Department.name)
+            .all())
+    total = sum(n for _, _, n in rows)
+    by_id = {dept_id: (name, n) for dept_id, name, n in rows}
+
+    if role in ("admin", "hr"):
+        lines = [f"Sĩ số công ty: {total} nhân viên đang làm việc "
+                 f"thuộc {len(rows)} phòng ban:"]
+        for _dept_id, name, n in rows:
+            lines.append(f"- {name}: {n} người.")
+        return "\n".join(lines)
+
+    if role == "manager":
+        if employee is None:
+            return _NO_PROFILE_TEXT
+        dept_ids = _manager_department_ids(employee)
+        lines = [f"Sĩ số các phòng bạn quản lý (tổng công ty {total} người):"]
+        for dept_id in dept_ids:
+            name, n = by_id.get(dept_id, ("—", 0))
+            lines.append(f"- {name}: {n} người.")
+        return "\n".join(lines)
+
+    if employee is None:
+        return _NO_PROFILE_TEXT
+    own = by_id.get(employee.department_id)
+    own_text = (f"phòng {own[0]} của bạn có {own[1]} người"
+                if own else "bạn chưa được gắn vào phòng ban nào")
+    return (f"Công ty hiện có {total} nhân viên đang làm việc; "
+            f"{own_text}.")
+
+
+def tool_holidays(user, year=None, **_args) -> str:
+    """Ngày lễ của 1 năm — lịch chung của công ty, mọi role đều xem được."""
+    today = _today()
+    year = int(year) if year else today.year
+    first = date(year, 1, 1)
+    next_first = date(year + 1, 1, 1)
+    rows = (Holiday.query
+            .filter(Holiday.date >= first, Holiday.date < next_first)
+            .order_by(Holiday.date).all())
+    if not rows:
+        return f"Năm {year} chưa có ngày lễ nào được cấu hình trong hệ thống."
+    lines = [f"Ngày lễ năm {year} ({len(rows)} ngày):"]
+    for h in rows:
+        lines.append(f"- {_fmt_date(h.date)}: {h.name}.")
+    return "\n".join(lines)
+
+
+def tool_announcements(user, **_args) -> str:
+    """5 thông báo mới nhất của công ty — mọi role đều xem được."""
+    rows = (Announcement.query
+            .order_by(Announcement.is_pinned.desc(),
+                      Announcement.created_at.desc(),
+                      Announcement.id.desc())
+            .limit(5).all())
+    if not rows:
+        return "Hiện chưa có thông báo nào của công ty."
+    lines = ["Thông báo mới nhất của công ty:"]
+    for a in rows:
+        when = (a.created_at.strftime("%d/%m/%Y")
+                if getattr(a, "created_at", None) else "—")
+        pin = " [Ghim]" if a.is_pinned else ""
+        content = (a.content or "").strip()
+        if len(content) > 120:
+            content = content[:117] + "..."
+        lines.append(f"- {a.title}{pin} ({when}): {content}")
+    return "\n".join(lines)
+
+
+def tool_overtime_summary(user, month=None, year=None, **_args) -> str:
+    """Tổng hợp tăng ca 1 tháng theo quyền: employee = của mình;
+    manager = nhóm mình; admin/hr = toàn công ty."""
+    role = getattr(user, "role", "employee")
+    employee = _employee_of(user)
+    today = _today()
+    month = int(month) if month else today.month
+    year = int(year) if year else today.year
+    first, next_first = _month_range(year, month)
+    query = (OvertimeRequest.query
+             .filter(OvertimeRequest.work_date >= first,
+                     OvertimeRequest.work_date < next_first))
+    if role in ("admin", "hr"):
+        scope_text = "toàn công ty"
+    elif role == "manager":
+        if employee is None:
+            return _NO_PROFILE_TEXT
+        from app.blueprints.leave import services as leave_services
+
+        ids = sorted(leave_services._team_employee_ids(employee))
+        query = query.filter(
+            OvertimeRequest.employee_id.in_(ids or [-1]))
+        scope_text = "nhóm của bạn"
+    else:
+        if employee is None:
+            return _NO_PROFILE_TEXT
+        query = query.filter(OvertimeRequest.employee_id == employee.id)
+        scope_text = "của bạn"
+    rows = (query.options(selectinload(OvertimeRequest.employee))
+            .order_by(OvertimeRequest.work_date.desc()).all())
+    approved = [r for r in rows
+                if r.status == OvertimeRequest.STATUS_APPROVED]
+    pending = [r for r in rows if r.status in (
+        OvertimeRequest.STATUS_PENDING,
+        OvertimeRequest.STATUS_MANAGER_APPROVED)]
+    hours = sum(float(r.hours or 0) for r in approved)
+    lines = [f"Tăng ca tháng {month}/{year} {scope_text}: "
+             f"{len(approved)} đơn đã duyệt "
+             f"({_fmt_days(hours)} giờ), {len(pending)} đơn đang chờ duyệt."]
+    if role in ("admin", "hr", "manager") and approved:
+        per_person = {}
+        for r in approved:
+            name = r.employee.full_name if r.employee else "—"
+            per_person[name] = per_person.get(name, 0) + float(r.hours or 0)
+        for name, h in sorted(per_person.items(),
+                              key=lambda kv: -kv[1])[:3]:
+            lines.append(f"- {name}: {_fmt_days(h)} giờ đã duyệt.")
+    elif role == "employee":
+        for r in rows[:5]:
+            status = {"pending": "chờ duyệt",
+                      "manager_approved": "chờ HR duyệt",
+                      "approved": "đã duyệt",
+                      "rejected": "bị từ chối"}.get(r.status, r.status)
+            lines.append(f"- {_fmt_date(r.work_date)}: "
+                         f"{_fmt_days(r.hours)} giờ — {status}.")
+    return "\n".join(lines)
+
+
+def tool_probation_overview(user, **_args) -> str:
+    """Danh sách thử việc theo quyền: admin/hr = toàn công ty;
+    manager = phòng mình; employee = chỉ hợp đồng của mình."""
+    role = getattr(user, "role", "employee")
+    employee = _employee_of(user)
+    today = _today()
+    from app.blueprints.probation import services as probation_services
+
+    if role == "employee":
+        if employee is None:
+            return _NO_PROFILE_TEXT
+        contracts = [c for c in Contract.query.filter_by(
+                         employee_id=employee.id,
+                         status=Contract.STATUS_ACTIVE).all()
+                     if probation_services.is_probation_contract(c)]
+        if not contracts:
+            return "Bạn hiện không trong thời gian thử việc."
+        c = contracts[0]
+        if c.end_date is None:
+            return (f"Bạn đang trong thời gian thử việc từ "
+                    f"{_fmt_date(c.start_date)} (chưa xác định ngày kết thúc).")
+        days = (c.end_date - today).days
+        if days < 0:
+            return (f"Thời gian thử việc của bạn đã hết hạn "
+                    f"{_fmt_date(c.end_date)} ({-days} ngày trước) — "
+                    "HR sẽ đánh giá và chuyển chính thức.")
+        return (f"Bạn đang trong thời gian thử việc, còn {days} ngày "
+                f"(kết thúc {_fmt_date(c.end_date)}).")
+
+    try:
+        contracts = probation_services._probation_contracts(user)
+    except Exception as exc:
+        from app.errors import ApiError
+
+        if isinstance(exc, ApiError):
+            return exc.message
+        raise
+    if not contracts:
+        return "Hiện không có nhân viên nào đang trong thời gian thử việc."
+    # Nạp tên nhân viên 1 lượt thay vì lazy load từng hợp đồng.
+    emp_map = {e.id: e for e in Employee.query.filter(
+        Employee.id.in_([c.employee_id for c in contracts])).all()}
+    expiring = sum(
+        1 for c in contracts
+        if c.end_date is not None
+        and 0 <= (c.end_date - today).days
+        <= probation_services.EXPIRING_SOON_DAYS)
+    overdue = sum(
+        1 for c in contracts
+        if c.end_date is not None and (c.end_date - today).days < 0)
+    scope_text = ("phòng bạn quản lý" if role == "manager"
+                  else "toàn công ty")
+    lines = [f"Hiện có {len(contracts)} nhân viên đang thử việc ở "
+             f"{scope_text} ({expiring} sắp hết hạn trong "
+             f"{probation_services.EXPIRING_SOON_DAYS} ngày, {overdue} quá hạn):"]
+    for c in contracts[:10]:
+        emp = emp_map.get(c.employee_id)
+        name = emp.full_name if emp else f"NV#{c.employee_id}"
+        end = _fmt_date(c.end_date) if c.end_date else "không xác định"
+        lines.append(f"- {name} — kết thúc thử việc {end}.")
+    if len(contracts) > 10:
+        lines.append(f"... và {len(contracts) - 10} người nữa "
+                     "(xem chi tiết ở trang Thử việc).")
+    return "\n".join(lines)
+
+
 TOOLS = {
     "leave_balance": tool_my_leave_balance,
     "payslip": tool_my_payslip,
@@ -545,6 +767,11 @@ TOOLS = {
     "who_on_leave": tool_who_on_leave,
     "pending_approvals": tool_my_pending_approvals,
     "team_overview": tool_team_overview,
+    "department_headcount": tool_department_headcount,
+    "holidays": tool_holidays,
+    "announcements": tool_announcements,
+    "overtime_summary": tool_overtime_summary,
+    "probation_overview": tool_probation_overview,
 }
 
 
@@ -631,6 +858,28 @@ def detect_intent(question: str) -> tuple[str, dict] | None:
     if "cho duyet" in folded:
         return "pending_approvals", {}
 
+    if ("ngay le" in folded or "nghi le" in folded
+            or "lich nghi le" in folded or "le tet" in folded):
+        return "holidays", {"year": year}
+
+    if ("thong bao moi" in folded or "thong bao gan day" in folded
+            or "xem thong bao" in folded or "thong bao cong ty" in folded):
+        return "announcements", {}
+
+    if ("thu viec" in folded and "he so" not in folded
+            and "luong" not in folded):
+        return "probation_overview", {}
+
+    if ("tang ca" in folded and "tien" not in folded
+            and "luong" not in folded
+            and ("don tang ca" in folded or "ai tang ca" in folded
+                 or "thong ke" in folded or "tong hop" in folded)):
+        return "overtime_summary", {"month": month, "year": year}
+
+    if ("si so tung phong" in folded or "moi phong bao nhieu" in folded
+            or "phong nao dong" in folded or "si so cac phong" in folded):
+        return "department_headcount", {}
+
     if ("si so" in folded or "bao nhieu nhan vien" in folded
             or "tong nhan vien" in folded or "nhan su phong" in folded):
         return "team_overview", {}
@@ -650,9 +899,12 @@ _CLASSIFY_SYSTEM_PROMPT = (
     "phiếu lương/bảng lương — của bản thân, của nhân viên khác, hoặc toàn công ty), \"attendance\" (hỏi tổng hợp chấm công "
     "của bản thân), \"who_on_leave\" (hỏi ai đang nghỉ phép), "
     "\"pending_approvals\" (hỏi đơn đang chờ duyệt), \"team_overview\" (hỏi "
-    "sĩ số/tổng quan nhân sự), \"none\" (mọi câu hỏi khác, đặc biệt là hỏi "
-    "chính sách/quy chế). month/year là tháng/năm được nhắc tới trong câu "
-    "hỏi (số nguyên) hoặc null nếu không nhắc."
+    "sĩ số/tổng quan nhân sự), \"department_headcount\" (hỏi sĩ số từng "
+    "phòng ban), \"holidays\" (hỏi ngày lễ trong năm), \"announcements\" "
+    "(hỏi thông báo mới của công ty), \"overtime_summary\" (hỏi tổng hợp "
+    "tăng ca), \"probation_overview\" (hỏi ai đang thử việc), \"none\" "
+    "(mọi câu hỏi khác, đặc biệt là hỏi chính sách/quy chế). month/year là "
+    "tháng/năm được nhắc tới trong câu hỏi (số nguyên) hoặc null nếu không nhắc."
 )
 
 
