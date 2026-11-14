@@ -22,6 +22,7 @@ phòng/nhóm role "manager" (Manager@123), còn lại role "employee"
 Đây là mật khẩu MẪU cho môi trường demo — tuyệt đối không dùng ở production.
 Script chạy lại nhiều lần an toàn: đã có dữ liệu thì không tạo trùng.
 """
+import random
 from datetime import date, datetime, time, timedelta
 
 from werkzeug.security import generate_password_hash
@@ -32,6 +33,7 @@ from app.models import (
     Announcement,
     Asset,
     AssetAssignment,
+    Attendance,
     Contract,
     Course,
     CourseEnrollment,
@@ -59,6 +61,65 @@ DEMO_USERS = [
     ("manager@hrm.local", "Manager@123", "Trần Văn Minh", "manager", "NV0001"),
     ("employee@hrm.local", "Employee@123", "Phạm Thị Lan", "employee", "NV0003"),
 ]
+
+
+def seed_demo_attendance_november() -> dict:
+    """Chấm công mẫu tháng 11/2026 cho buổi demo ngày 15/11/2026.
+
+    Chuyển các bản ghi còn "absent" của ngày làm việc 02–13/11/2026 thành
+    present (~85%, check-in 07:45–08:30, check-out 17:30–18:15) hoặc late
+    (~8%, check-in 08:45–09:30, check-out 17:30–18:00); còn lại giữ
+    absent. RNG seed cố định (20261114) và duyệt theo (employee_id,
+    work_date) nên phân bổ ổn định. Idempotent: chạy lại không đổi gì vì
+    không còn bản ghi absent trong khoảng đó.
+
+    Cố tình CHỈ chạm tới 02–13/11/2026: các ngày sau đó (nếu materialize
+    tạo absent mới) KHÔNG được seed — đó là dữ liệu thật. Không động vào
+    bản ghi on_leave (đã có đơn nghỉ duyệt) và nhân viên resigned.
+    """
+    first = date(2026, 11, 2)
+    cutoff = date(2026, 11, 13)
+    rng = random.Random(20261114)
+    records = (
+        Attendance.query.join(Employee, Attendance.employee_id == Employee.id)
+        .filter(
+            Attendance.work_date >= first,
+            Attendance.work_date <= cutoff,
+            Attendance.status == Attendance.STATUS_ABSENT,
+            Employee.status.in_(("working", "on_leave")),
+        )
+        .order_by(Attendance.employee_id, Attendance.work_date)
+        .all()
+    )
+    counts = {"present": 0, "late": 0, "kept_absent": 0}
+    for rec in records:
+        draw = rng.random()
+        if draw < 0.85:
+            status = Attendance.STATUS_PRESENT
+            in_min = rng.randrange(7 * 60 + 45, 8 * 60 + 31)
+            out_min = rng.randrange(17 * 60 + 30, 18 * 60 + 16)
+        elif draw < 0.93:
+            status = Attendance.STATUS_LATE
+            in_min = rng.randrange(8 * 60 + 45, 9 * 60 + 31)
+            out_min = rng.randrange(17 * 60 + 30, 18 * 60 + 1)
+        else:
+            counts["kept_absent"] += 1
+            continue
+        rec.status = status
+        rec.check_in_at = datetime.combine(
+            rec.work_date, time(in_min // 60, in_min % 60)
+        )
+        rec.check_out_at = datetime.combine(
+            rec.work_date, time(out_min // 60, out_min % 60)
+        )
+        counts[status] += 1
+    db.session.commit()
+    print(
+        "Seed cham cong demo 11/2026: "
+        f"present +{counts['present']}, late +{counts['late']}, "
+        f"absent giu nguyen {counts['kept_absent']}."
+    )
+    return counts
 
 
 def main() -> None:
@@ -853,6 +914,10 @@ def main() -> None:
                     status=_JobPosting.STATUS_OPEN,
                 )
             )
+
+        # Chấm công mẫu tháng 11/2026 cho buổi demo 15/11: chỉ chuyển
+        # absent 02–13/11 thành present/late (idempotent, xem hàm trên).
+        seed_demo_attendance_november()
 
         db.session.commit()
         print("Seed xong: 4 tài khoản demo, 2 phòng ban, 4 nhân viên mẫu + dữ liệu mở rộng v2 + v3.")
