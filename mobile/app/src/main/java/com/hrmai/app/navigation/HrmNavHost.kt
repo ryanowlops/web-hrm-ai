@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
@@ -117,6 +118,7 @@ import com.hrmai.app.feature.checkin.CheckinScanRoute
 import com.hrmai.app.feature.checkinadmin.CheckinAdminRoute
 import com.hrmai.app.feature.cvcheck.CvCheckRoute
 import com.hrmai.app.feature.departments.DepartmentsRoute
+import com.hrmai.app.feature.disciplinary.DisciplinaryRoute
 import com.hrmai.app.feature.documents.DocumentsRoute
 import com.hrmai.app.feature.employees.EmployeeDetailRoute
 import com.hrmai.app.feature.employees.EmployeesRoute
@@ -131,6 +133,7 @@ import com.hrmai.app.feature.leave.LeaveRoute
 import com.hrmai.app.feature.mockinterview.MockInterviewRoute
 import com.hrmai.app.feature.notifications.NotificationsRoute
 import com.hrmai.app.feature.offboarding.OffboardingRoute
+import com.hrmai.app.feature.offerletters.OfferLettersRoute
 import com.hrmai.app.feature.onboarding.OnboardingRoute
 import com.hrmai.app.feature.orgchart.OrgChartRoute
 import com.hrmai.app.feature.payroll.PayrollRoute
@@ -142,6 +145,7 @@ import com.hrmai.app.feature.recruitment.RecruitmentRoute
 import com.hrmai.app.feature.reports.ReportsRoute
 import com.hrmai.app.feature.rewards.RewardsRoute
 import com.hrmai.app.feature.shifts.ShiftsRoute
+import com.hrmai.app.feature.shiftswaps.ShiftSwapsRoute
 import com.hrmai.app.feature.skills.SkillsRoute
 import com.hrmai.app.feature.surveys.SurveysRoute
 import com.hrmai.app.feature.teamcalendar.TeamCalendarRoute
@@ -192,6 +196,10 @@ object Routes {
     const val CHECKIN_ADMIN = "checkin-admin"
     const val JD_GENERATOR = "jd-generator"
     const val BRIEFING = "briefing"
+    // Port 3 tính năng mới từ web (11/2026) — parity mobile = web
+    const val OFFER_LETTERS = "offer-letters"
+    const val SHIFT_SWAPS = "shift-swaps"
+    const val DISCIPLINARY = "disciplinary"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -212,10 +220,10 @@ private fun isRouteAllowed(route: String, role: String?, hasEmployee: Boolean): 
     return when (base) {
         Routes.EMPLOYEES, Routes.DEPARTMENTS, Routes.ORG_CHART,
         Routes.TEAM_CALENDAR, Routes.RECRUITMENT, Routes.REPORTS,
-        Routes.ATTRITION -> managerUp
+        Routes.ATTRITION, Routes.DISCIPLINARY -> managerUp
         Routes.ADMIN -> role == "admin"
         Routes.OFFBOARDING, Routes.CHECKIN_ADMIN, Routes.BRIEFING,
-        Routes.PAYROLL_ADMIN -> hrUp
+        Routes.PAYROLL_ADMIN, Routes.OFFER_LETTERS -> hrUp
         // Hành trình / cửa hàng đổi thưởng chỉ dành cho tài khoản có hồ sơ
         // nhân viên (vd tài khoản admin thuần hệ thống thì ẩn).
         Routes.REWARDS, Routes.JOURNEY -> hasEmployee
@@ -243,6 +251,7 @@ private val DETAIL_TITLES = mapOf(
     Routes.PERFORMANCE to "KPI & OKR",
     Routes.TRAINING to "Đào tạo",
     Routes.SHIFTS to "Ca làm việc",
+    Routes.SHIFT_SWAPS to "Đổi ca làm việc",
     Routes.ASSETS to "Tài sản",
     Routes.DOCUMENTS to "Tài liệu & giấy xác nhận",
     Routes.ONBOARDING to "Onboarding",
@@ -258,6 +267,7 @@ private val DETAIL_TITLES = mapOf(
     Routes.REPORTS to "Báo cáo",
     Routes.ATTRITION to "Rủi ro nghỉ việc",
     Routes.OFFBOARDING to "Quy trình nghỉ việc",
+    Routes.DISCIPLINARY to "Kỷ luật",
     Routes.PAYROLL_ADMIN to "Quản lý lương",
     Routes.ADMIN to "Quản trị tài khoản",
     Routes.JOBS to "Việc làm đang mở",
@@ -268,6 +278,7 @@ private val DETAIL_TITLES = mapOf(
     Routes.CHECKIN_ADMIN to "Mã QR chấm công",
     Routes.JD_GENERATOR to "Tạo JD bằng AI",
     Routes.BRIEFING to "Báo cáo điều hành",
+    Routes.OFFER_LETTERS to "Thư mời nhận việc",
 )
 
 @Composable
@@ -513,6 +524,10 @@ private fun MainShell(container: AppContainer) {
             composable(Routes.CHECKIN_ADMIN) { CheckinAdminRoute(container) }
             composable(Routes.JD_GENERATOR) { JdGeneratorRoute(container) }
             composable(Routes.BRIEFING) { BriefingRoute(container) }
+            // Port 3 tính năng mới từ web (11/2026)
+            composable(Routes.OFFER_LETTERS) { OfferLettersRoute(container) }
+            composable(Routes.SHIFT_SWAPS) { ShiftSwapsRoute(container) }
+            composable(Routes.DISCIPLINARY) { DisciplinaryRoute(container) }
             }
         }
     }
@@ -562,6 +577,7 @@ private fun MoreRoute(
                     add(Triple(Routes.PERFORMANCE, "KPI & OKR", Icons.Filled.TrendingUp))
                     add(Triple(Routes.TRAINING, "Đào tạo", Icons.Filled.School))
                     add(Triple(Routes.SHIFTS, "Ca làm việc", Icons.Filled.Schedule))
+                    add(Triple(Routes.SHIFT_SWAPS, "Đổi ca làm việc", Icons.Filled.SwapHoriz))
                     add(Triple(Routes.ASSETS, "Tài sản của tôi", Icons.Filled.Devices))
                     add(Triple(Routes.DOCUMENTS, "Tài liệu & giấy xác nhận", Icons.Filled.Description))
                     add(Triple(Routes.ONBOARDING, "Onboarding", Icons.Filled.PersonAdd))
@@ -585,6 +601,7 @@ private fun MoreRoute(
                         add(Triple(Routes.RECRUITMENT, "Tuyển dụng", Icons.Filled.Assignment))
                         add(Triple(Routes.REPORTS, "Báo cáo", Icons.Filled.Assessment))
                         add(Triple(Routes.ATTRITION, "Rủi ro nghỉ việc", Icons.Filled.Warning))
+                        add(Triple(Routes.DISCIPLINARY, "Kỷ luật", Icons.Filled.Warning))
                     },
                 )
             )
@@ -597,6 +614,7 @@ private fun MoreRoute(
                         add(Triple(Routes.CHECKIN_ADMIN, "Mã QR chấm công", Icons.Filled.QrCode))
                         add(Triple(Routes.BRIEFING, "Báo cáo điều hành", Icons.Filled.Assessment))
                         add(Triple(Routes.OFFBOARDING, "Quy trình nghỉ việc", Icons.Filled.ExitToApp))
+                        add(Triple(Routes.OFFER_LETTERS, "Thư mời nhận việc", Icons.Filled.Description))
                         add(Triple(Routes.PAYROLL_ADMIN, "Quản lý lương", Icons.Filled.Payments))
                         if (role == "admin") {
                             add(Triple(Routes.ADMIN, "Quản trị tài khoản", Icons.Filled.Settings))
