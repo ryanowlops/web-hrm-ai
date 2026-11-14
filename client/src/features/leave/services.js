@@ -103,3 +103,27 @@ export async function getCalendar(month, year) {
   const res = unwrap(await api.get('/leave/calendar', { params: { month: mm } }));
   return Array.isArray(res) ? res : res.data || [];
 }
+
+/** Chính sách cộng dồn phép năm. GET /leave/carry-policy
+ *  -> { maxDays, expiryMmdd } (backend có thể trả snake_case: max_days, expiry_mmdd). */
+export async function getCarryPolicy() {
+  const res = unwrap(await api.get('/leave/carry-policy'));
+  return (res && res.data !== undefined ? res.data : res) || {};
+}
+
+/** Cập nhật chính sách cộng dồn (chỉ admin/hr).
+ *  PUT /leave/carry-policy — backend nhận snake_case { max_days, expiry_mmdd }. */
+export async function updateCarryPolicy(payload) {
+  const body = {
+    max_days: payload.maxDays ?? payload.max_days,
+    expiry_mmdd: payload.expiryMmdd ?? payload.expiry_mmdd,
+  };
+  return unwrap(await api.put('/leave/carry-policy', body));
+}
+
+/** Chốt phép năm: cộng dồn phép thừa của năm {year} sang năm sau (chỉ admin/hr).
+ *  POST /leave/rollover { year }
+ *  -> { fromYear, toYear, employeesProcessed, employeesCarried, totalCarriedDays, skippedExisting } */
+export async function runRollover(year) {
+  return unwrap(await api.post('/leave/rollover', { year }));
+}

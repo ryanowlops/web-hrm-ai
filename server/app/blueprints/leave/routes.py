@@ -109,6 +109,41 @@ def my_balance():
 
 
 # ---------------------------------------------------------------------------
+# Cộng dồn phép năm: chính sách + rollover cuối năm
+# ---------------------------------------------------------------------------
+
+@bp.get("/carry-policy")
+@jwt_required()
+def get_carry_policy():
+    """Chính sách cộng dồn phép hiện hành (mọi role đã đăng nhập xem được)."""
+    return jsonify(services.get_carry_policy())
+
+
+@bp.put("/carry-policy")
+@require_roles("hr", "admin")
+def update_carry_policy():
+    """Đổi chính sách cộng dồn (chỉ HR/Admin).
+
+    Body: {"max_days": 0..30, "expiry_mmdd": "MM-DD"} — cho phép cập nhật
+    từng phần; giá trị sai -> 400.
+    """
+    data = request.get_json(force=True) or {}
+    return jsonify(services.update_carry_policy(data))
+
+
+@bp.post("/rollover")
+@require_roles("hr", "admin")
+def rollover():
+    """Cộng dồn phép thừa cuối năm (chỉ HR/Admin).
+
+    Body: {"year": <năm phép thừa>} — bỏ trống thì mặc định năm trước.
+    Chỉ cho rollover năm đã qua; chạy lần 2 cùng năm là idempotent.
+    """
+    data = request.get_json(silent=True) or {}
+    return jsonify(services.rollover_leave(data.get("year")))
+
+
+# ---------------------------------------------------------------------------
 # Đơn xin nghỉ
 # ---------------------------------------------------------------------------
 

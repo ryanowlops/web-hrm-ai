@@ -107,3 +107,47 @@ class LeaveBalance(TimestampMixin, db.Model):
             f"<LeaveBalance id={self.id} employee_id={self.employee_id} "
             f"year={self.year} used={self.used_days}/{self.total_days}>"
         )
+
+
+class LeaveCarryover(TimestampMixin, db.Model):
+    """Phep nam thua duoc cong don sang nam sau (1 row / nhan vien / loai phep /
+    nam goc). Phep cong don song rieng o bang nay — KHONG cong vao
+    LeaveBalance.total_days cua nam sau; han dung qua expires_on thi het
+    gia tri (khong tinh vao available, khong bi tru, khong duoc hoan).
+
+    Unique (employee_id, leave_type_id, from_year) lam chot chan cuoi cho
+    tinh idempotent cua rollover (chay 2 lan cung nam khong tao trung).
+    """
+
+    __tablename__ = "leave_carryovers"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "employee_id",
+            "leave_type_id",
+            "from_year",
+            name="uq_leave_carryover_emp_type_year",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(
+        db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True
+    )
+    leave_type_id = db.Column(
+        db.Integer, db.ForeignKey("leave_types.id"), nullable=False, index=True
+    )
+    # Nam phep thua duoc cong don (VD phep thua 2025 cong sang 2026).
+    from_year = db.Column(db.Integer, nullable=False, index=True)
+    # So ngay cong don luc tao (sau khi ap dung gioi han policy).
+    initial_days = db.Column(db.Float, nullable=False, default=0.0)
+    # So ngay cong don con lai (giam khi dung, tang khi hoan, khong vuot initial).
+    days_remaining = db.Column(db.Float, nullable=False, default=0.0)
+    # Han dung (VD 31/03 nam sau theo policy mac dinh).
+    expires_on = db.Column(db.Date, nullable=False, index=True)
+
+    def __repr__(self):
+        return (
+            f"<LeaveCarryover id={self.id} employee_id={self.employee_id} "
+            f"from_year={self.from_year} remaining={self.days_remaining}/"
+            f"{self.initial_days} expires={self.expires_on}>"
+        )

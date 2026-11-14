@@ -4,6 +4,7 @@ import api from '../../../api/axiosClient';
 import {
   getLeaveTypes, getMyBalances, createRequest, getMyRequests, cancelRequest,
   getPendingForMe, approveRequest, rejectRequest, getCalendar,
+  getCarryPolicy, updateCarryPolicy, runRollover,
 } from '../services';
 import {
   Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, EmptyState,
@@ -77,16 +78,31 @@ function MonthNav({ cursor, onChange }) {
 }
 
 /* Thẻ số dư phép phẳng theo StatCard của UI kit: số ngày còn lại là giá trị
-   chính, dòng phụ ghi đã dùng / tổng số ngày của loại nghỉ. */
+   chính, dòng phụ ghi đã dùng / tổng số ngày của loại nghỉ. Khi có phép cộng
+   dồn từ năm trước (carried_days > 0) thì thêm dòng cộng dồn + khả dụng. */
 function BalanceCard({ balance: b }) {
-  const total = b.total_days ?? 0;
-  const used = b.used_days ?? 0;
-  const remaining = b.remaining_days ?? Math.max(total - used, 0);
+  const total = b.total_days ?? b.totalDays ?? 0;
+  const used = b.used_days ?? b.usedDays ?? 0;
+  const remaining = b.remaining_days ?? b.remainingDays ?? Math.max(total - used, 0);
+  const carried = b.carried_days ?? b.carriedDays ?? 0;
+  const available = b.available_days ?? b.availableDays ?? null;
+  const expiry = b.carried_expires_on ?? b.carriedExpiresOn ?? null;
   return (
     <StatCard
-      label={b.leave_type_name || b.name}
+      label={b.leave_type_name || b.leave_typeName || b.name}
       value={remaining}
-      sub={`ngày còn lại · Đã dùng ${used} / ${total} ngày`}
+      sub={(
+        <>
+          ngày còn lại · Đã dùng {used} / {total} ngày
+          {carried > 0 && (
+            <>
+              <br />
+              Cộng dồn: {carried} ngày{expiry ? ` (hết hạn ${fmtDate(expiry)})` : ''}
+              {available != null ? ` · Khả dụng: ${available} ngày` : ''}
+            </>
+          )}
+        </>
+      )}
     />
   );
 }
@@ -292,6 +308,76 @@ export default function LeavePage() {
       loadApproved(); loadMine(); loadCalendar(); loadBalances();
     } catch (err) { setError(errMsg(err)); }
     finally { setCancellingApprovedId(null); }
+  };
+
+  /* --- Chốt phép năm / cộng dồn (chỉ Admin / HR) --- */
+  const [carryPolicy, setCarryPolicy] = useState(null);
+  const [policyForm, setPolicyForm] = useState({ maxDays: '', expiryMmdd: '03-31' });
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [rolloverYear, setRolloverYear] = useState(year - 1);
+  const [rolloverResult, setRolloverResult] = useState(null);
+  const [rolloverConfirm, setRolloverConfirm] = useState(false);
+  const [runningRollover, setRunningRollover] = useState(false);
+
+  // Chính sách cộng dồn: backend trả { maxDays, expiryMmdd } (chấp cả
+  // snake_case). Endpoint chưa có thì form giữ mặc định, thao tác lưu/chốt
+  // sẽ báo lỗi cụ thể khi gọi API — không chặn cả trang.
+  const loadCarryPolicy = useCallback(async () => {
+    if (!isHrAdmin) return;
+    try {
+      const raw = await getCarryPolicy();
+      const normalized = {
+        maxDays: raw.maxDays ?? raw.max_days ?? '',
+        expiryMmdd: raw.expiryMmdd ?? raw.expiry_mmdd ?? '',
+      };
+      setCarryPolicy(normalized);
+      setPolicyForm({ maxDays: normalized.maxDays, expiryMmdd: normalized.expiryMmdd });
+    } catch {
+      setCarryPolicy(null);
+    }
+  }, [isHrAdmin]);
+  useEffect(() => { loadCarryPolicy(); }, [loadCarryPolicy]);
+
+  const savePolicy = async () => {
+    const maxDays = Number(policyForm.maxDays);
+    const expiryMmdd = String(policyForm.expiryMmdd || '').trim();
+    if (!Number.isInteger(maxDays) || maxDays < 0) {
+      setError('Số ngày cộng dồn tối đa phải là số nguyên không âm.');
+      return;
+    }
+    if (!/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(expiryMmdd)) {
+      setError('Hạn dùng phải có dạng MM-DD, ví dụ 03-31.');
+      return;
+    }
+    setSavingPolicy(true); setError('');
+    try {
+      await updateCarryPolicy({ maxDays, expiryMmdd });
+      setCarryPolicy({ maxDays, expiryMmdd });
+      toast.success('Đã lưu chính sách cộng dồn phép.');
+    } catch (err) { setError(errMsg(err)); }
+    finally { setSavingPolicy(false); }
+  };
+
+  // Chốt phép năm: chỉ chạy sau khi xác nhận ở ConfirmDialog (ghi rõ chỉ
+  // cộng tối đa theo chính sách, ngày thừa mất, chạy lại không tạo trùng).
+  const confirmRollover = async () => {
+    setRolloverConfirm(false);
+    setRunningRollover(true); setError('');
+    try {
+      const raw = await runRollover(Number(rolloverYear));
+      const body = raw?.data ?? raw ?? {};
+      setRolloverResult({
+        fromYear: body.fromYear ?? body.from_year ?? rolloverYear,
+        toYear: body.toYear ?? body.to_year ?? Number(rolloverYear) + 1,
+        employeesProcessed: body.employeesProcessed ?? body.employees_processed ?? 0,
+        employeesCarried: body.employeesCarried ?? body.employees_carried ?? 0,
+        totalCarriedDays: body.totalCarriedDays ?? body.total_carried_days ?? 0,
+        skippedExisting: body.skippedExisting ?? body.skipped_existing ?? 0,
+      });
+      toast.success('Đã chốt phép năm.');
+      loadBalances();
+    } catch (err) { setError(errMsg(err)); }
+    finally { setRunningRollover(false); }
   };
 
   /* --- Lịch nghỉ tháng --- */
@@ -606,6 +692,69 @@ export default function LeavePage() {
         </Card>
       )}
 
+      {/* === Chốt phép năm — cộng dồn (chỉ Admin / HR, không cần hồ sơ nhân viên) === */}
+      {isHrAdmin && (
+        <Card className="mt-6">
+          <CardHeader
+            title="Chốt phép năm (cộng dồn)"
+            subtitle="Chuyển phép thừa của một năm sang năm sau theo chính sách cộng dồn. Chạy lại cùng một năm không tạo trùng."
+          />
+          <CardBody className="space-y-5">
+            <div className="flex flex-wrap items-end gap-3">
+              <FormField label="Năm cần chốt" className="w-40">
+                <Select value={rolloverYear} onChange={(e) => setRolloverYear(Number(e.target.value))}>
+                  {[year - 2, year - 1, year].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </Select>
+              </FormField>
+              <Button type="button" variant="primary" loading={runningRollover} onClick={() => setRolloverConfirm(true)}>
+                {runningRollover ? 'Đang chốt…' : `Chốt phép năm ${rolloverYear}`}
+              </Button>
+              <p className="w-full text-xs leading-relaxed text-gray-400">
+                {`Phép thừa của mỗi nhân viên được cộng tối đa ${(carryPolicy?.maxDays ?? policyForm.maxDays) || '—'} ngày sang năm ${Number(rolloverYear) + 1}${(carryPolicy?.expiryMmdd || policyForm.expiryMmdd) ? `, hạn dùng ${carryPolicy?.expiryMmdd || policyForm.expiryMmdd} năm ${Number(rolloverYear) + 1}` : ''}; số ngày vượt giới hạn sẽ mất.`}
+              </p>
+            </div>
+
+            {rolloverResult && (
+              <div className="rounded-lg bg-gray-50 px-3.5 py-3 text-sm leading-relaxed text-gray-700">
+                <p className="font-medium text-gray-900">
+                  Kết quả chốt phép năm {rolloverResult.fromYear} → {rolloverResult.toYear}
+                </p>
+                <p className="mt-1">
+                  Đã xử lý {rolloverResult.employeesProcessed} nhân viên · {rolloverResult.employeesCarried} người được cộng dồn,
+                  tổng {rolloverResult.totalCarriedDays} ngày
+                  {rolloverResult.skippedExisting > 0
+                    ? ` · ${rolloverResult.skippedExisting} người đã chốt từ trước nên bỏ qua`
+                    : ' · không có ai đã chốt từ trước'}.
+                </p>
+              </div>
+            )}
+
+            <div className="border-t border-gray-100 pt-4">
+              <h4 className="text-sm font-semibold text-gray-900">Chính sách cộng dồn</h4>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <FormField label="Tối đa cộng dồn (ngày)" className="w-44">
+                  <Input
+                    type="number" min={0} step={1} value={policyForm.maxDays}
+                    onChange={(e) => setPolicyForm({ ...policyForm, maxDays: e.target.value })}
+                  />
+                </FormField>
+                <FormField label="Hạn dùng (MM-DD)" hint="Ví dụ: 03-31 nghĩa là hết hạn 31/03 năm sau." className="w-48">
+                  <Input
+                    value={policyForm.expiryMmdd} placeholder="03-31"
+                    onChange={(e) => setPolicyForm({ ...policyForm, expiryMmdd: e.target.value })}
+                  />
+                </FormField>
+                <Button type="button" variant="secondary" loading={savingPolicy} onClick={savePolicy}>
+                  Lưu chính sách
+                </Button>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       {/* === Lịch nghỉ tháng (ẩn hẳn khi tài khoản thiếu hồ sơ mà endpoint đòi hồ sơ) === */}
       {!calendarHidden && (
       <Card className="mt-6">
@@ -654,6 +803,14 @@ export default function LeavePage() {
       </Card>
       )}
 
+      <ConfirmDialog
+        open={rolloverConfirm}
+        title={`Chốt phép năm ${rolloverYear}`}
+        description={`Chốt phép năm ${rolloverYear}: phép thừa của mỗi nhân viên được cộng tối đa ${(carryPolicy?.maxDays ?? policyForm.maxDays) || '—'} ngày sang năm ${Number(rolloverYear) + 1}, số ngày vượt giới hạn sẽ mất. Đã chốt rồi thì chạy lại không tạo trùng.`}
+        confirmLabel="Chốt phép năm"
+        onConfirm={confirmRollover}
+        onCancel={() => setRolloverConfirm(false)}
+      />
       <ConfirmDialog
         open={cancelTarget != null}
         title="Huỷ đơn nghỉ"

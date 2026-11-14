@@ -7,7 +7,7 @@ from app.models.users import TimestampMixin, User, utcnow
 from app.models.org import Department, Position
 from app.models.employees import Contract, Employee
 from app.models.attendance import Attendance
-from app.models.leave import LeaveBalance, LeaveRequest, LeaveType
+from app.models.leave import LeaveBalance, LeaveCarryover, LeaveRequest, LeaveType
 from app.models.payroll import PayrollItem, PayrollPeriod
 from app.models.recruitment import AiJob, Candidate, CvAnalysis, JobPosting
 from app.models.kb import ChatLog, KbChunk, KbDocument
@@ -64,6 +64,7 @@ __all__ = [
     "LeaveType",
     "LeaveRequest",
     "LeaveBalance",
+    "LeaveCarryover",
     # payroll
     "PayrollPeriod",
     "PayrollItem",

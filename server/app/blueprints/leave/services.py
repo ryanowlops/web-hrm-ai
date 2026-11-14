@@ -7,6 +7,7 @@ Toàn bộ logic nghiệp vụ nằm ở đây (routes chỉ validate + gọi se
 - Phân quyền theo dữ liệu (ownership / phòng ban) kiểm tra tại đây, không tin frontend.
 """
 
+import calendar
 from datetime import date, timedelta
 
 from flask_jwt_extended import get_jwt_identity
@@ -20,9 +21,11 @@ from app.models import (
     Employee,
     Holiday,
     LeaveBalance,
+    LeaveCarryover,
     LeaveRequest,
     LeaveType,
     Notification,
+    Setting,
     User,
 )
 
@@ -226,11 +229,273 @@ def _has_quota(leave_type):
     return bool(leave_type.paid) and (leave_type.annual_quota_days or 0) > 0
 
 
+# ---------------------------------------------------------------------------
+# Cộng dồn phép năm (carryover)
+#
+# Phép thừa cuối năm được cộng dồn sang năm sau, tối đa max_days ngày /
+# người / loại phép, hạn dùng tới expires_on (mặc định 31/03 năm sau).
+# Phép cộng dồn sống riêng ở bảng leave_carryovers — KHÔNG cộng vào
+# LeaveBalance.total_days của năm sau. Dùng phép cộng dồn TRƯỚC (FIFO,
+# hết hạn gần nhất trước), hoàn phép theo thứ tự ngược (quota trước,
+# cộng dồn sau).
+# ---------------------------------------------------------------------------
+
+KEY_CARRY_MAX_DAYS = "leave.carry_max_days"
+KEY_CARRY_EXPIRY_MMDD = "leave.carry_expiry_mmdd"
+CARRY_MAX_DAYS_DEFAULT = 5
+CARRY_EXPIRY_DEFAULT = "03-31"
+
+
+def _parse_mmdd(value):
+    """'MM-DD' -> (month, day) hoặc None nếu sai định dạng / ngày không tồn tại.
+
+    Lấy năm nhuận 2000 làm chuẩn nên 29/02 được chấp nhận; khi đổi ra
+    ngày thật của năm không nhuận thì _carry_expiry_date kẹp về 28/02.
+    """
+    if not isinstance(value, str):
+        return None
+    parts = value.split("-")
+    if len(parts) != 2:
+        return None
+    try:
+        month, day = int(parts[0]), int(parts[1])
+        date(2000, month, day)
+    except (ValueError, TypeError):
+        return None
+    return (month, day)
+
+
+def _carry_expiry_date(year, mmdd):
+    """Ngày hết hạn phép cộng dồn của năm `year` theo policy 'MM-DD'."""
+    parsed = _parse_mmdd(mmdd) or _parse_mmdd(CARRY_EXPIRY_DEFAULT)
+    month, day = parsed
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(day, last_day))
+
+
+def get_carry_policy():
+    """Chính sách cộng dồn hiện hành (đọc Setting, sai giá trị -> mặc định)."""
+    try:
+        max_days = float(Setting.get_value(KEY_CARRY_MAX_DAYS, CARRY_MAX_DAYS_DEFAULT))
+    except (TypeError, ValueError):
+        max_days = float(CARRY_MAX_DAYS_DEFAULT)
+    if not 0 <= max_days <= 30:
+        max_days = float(CARRY_MAX_DAYS_DEFAULT)
+    raw_expiry = Setting.get_value(KEY_CARRY_EXPIRY_MMDD, CARRY_EXPIRY_DEFAULT)
+    expiry = raw_expiry if _parse_mmdd(raw_expiry) else CARRY_EXPIRY_DEFAULT
+    return {"max_days": max_days, "expiry_mmdd": expiry}
+
+
+def update_carry_policy(data):
+    """Đổi chính sách cộng dồn (chỉ admin/hr — route đã chặn role).
+
+    Cho phép cập nhật từng phần. max_days phải là số trong 0..30;
+    expiry_mmdd phải là 'MM-DD' hợp lệ. Giá trị sai -> 400.
+    """
+    policy = get_carry_policy()
+    if "max_days" in data and data["max_days"] is not None:
+        value = data["max_days"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ApiError(
+                400, "VALIDATION_ERROR",
+                "max_days phải là số trong khoảng 0..30.",
+            )
+        if not 0 <= float(value) <= 30:
+            raise ApiError(
+                400, "VALIDATION_ERROR",
+                "max_days phải trong khoảng 0..30.",
+            )
+        policy["max_days"] = float(value)
+        Setting.set_value(KEY_CARRY_MAX_DAYS, float(value))
+    if "expiry_mmdd" in data and data["expiry_mmdd"] is not None:
+        if not _parse_mmdd(data["expiry_mmdd"]):
+            raise ApiError(
+                400, "VALIDATION_ERROR",
+                "expiry_mmdd phải có dạng MM-DD và là ngày hợp lệ (VD '03-31').",
+            )
+        policy["expiry_mmdd"] = data["expiry_mmdd"]
+        Setting.set_value(KEY_CARRY_EXPIRY_MMDD, data["expiry_mmdd"])
+    db.session.commit()
+    return policy
+
+
+def _carried_rows(employee_id, leave_type_id, year, on_date):
+    """Các row cộng dồn (from_year = year-1) còn hiệu lực tại on_date."""
+    return (
+        LeaveCarryover.query.filter_by(
+            employee_id=employee_id,
+            leave_type_id=leave_type_id,
+            from_year=year - 1,
+        )
+        .filter(
+            LeaveCarryover.expires_on >= on_date,
+            LeaveCarryover.days_remaining > 0,
+        )
+        .all()
+    )
+
+
+def carried_days(employee_id, leave_type, year, on_date=None):
+    """Tổng ngày phép cộng dồn còn lại, chưa hết hạn tại on_date."""
+    on_date = on_date or date.today()
+    rows = _carried_rows(employee_id, leave_type.id, year, on_date)
+    return sum((row.days_remaining or 0) for row in rows)
+
+
+def available_days(employee_id, leave_type, year, on_date=None):
+    """Số ngày phép khả dụng = (quota năm year còn lại) + phép cộng dồn chưa hết hạn."""
+    on_date = on_date or date.today()
+    balance = get_or_create_balance(employee_id, leave_type, year)
+    quota_remaining = (balance.total_days or 0) - (balance.used_days or 0)
+    return quota_remaining + carried_days(employee_id, leave_type, year, on_date)
+
+
+def _consume_days(employee_id, leave_type, year, days, on_date=None):
+    """Trừ phép FIFO: dùng phép cộng dồn TRƯỚC (hết hạn gần nhất trước),
+    phần còn lại mới cộng vào balance.used_days của năm `year`."""
+    on_date = on_date or date.today()
+    remaining = days or 0
+    if remaining <= 0:
+        return
+    rows = sorted(
+        _carried_rows(employee_id, leave_type.id, year, on_date),
+        key=lambda row: (row.expires_on, row.id),
+    )
+    for row in rows:
+        if remaining <= 0:
+            break
+        take = min(row.days_remaining or 0, remaining)
+        row.days_remaining = (row.days_remaining or 0) - take
+        remaining -= take
+    if remaining > 0:
+        balance = get_or_create_balance(employee_id, leave_type, year)
+        balance.used_days = (balance.used_days or 0) + remaining
+
+
+def _refund_days(employee_id, leave_type, year, days, on_date=None):
+    """Hoàn phép theo thứ tự NGƯỢC với lúc trừ: giảm balance.used_days
+    trước (phần quota — vì lúc trừ quota được dùng SAU CÙNG), phần còn lại
+    cộng lại vào days_remaining của cộng dồn (không vượt initial_days,
+    chỉ cộng cho row chưa hết hạn tại on_date; phần hoàn cho row đã hết
+    hạn thì mất luôn — phép cộng dồn quá hạn không còn giá trị)."""
+    on_date = on_date or date.today()
+    remaining = days or 0
+    if remaining <= 0:
+        return
+    balance = get_or_create_balance(employee_id, leave_type, year)
+    used = balance.used_days or 0
+    take_from_quota = min(used, remaining)
+    balance.used_days = used - take_from_quota
+    remaining -= take_from_quota
+    if remaining > 0:
+        # Hoàn vào cộng dồn theo thứ tự ngược lúc trừ (hết hạn muộn nhất
+        # trước — vì lúc trừ lấy hết hạn gần nhất trước). KHÁC với lúc trừ:
+        # row đã dùng hết (days_remaining = 0) vẫn được hoàn lại, miễn là
+        # chưa hết hạn và còn chỗ (initial - remaining > 0).
+        rows = sorted(
+            LeaveCarryover.query.filter_by(
+                employee_id=employee_id,
+                leave_type_id=leave_type.id,
+                from_year=year - 1,
+            )
+            .filter(LeaveCarryover.expires_on >= on_date)
+            .all(),
+            key=lambda row: (row.expires_on, row.id),
+            reverse=True,
+        )
+        for row in rows:
+            if remaining <= 0:
+                break
+            room = (row.initial_days or 0) - (row.days_remaining or 0)
+            add = min(room, remaining)
+            if add <= 0:
+                continue
+            row.days_remaining = (row.days_remaining or 0) + add
+            remaining -= add
+        # remaining > 0 ở đây nghĩa là phần hoàn thuộc về row đã hết hạn:
+        # mất luôn, không cộng vào đâu (ghi chú để sau này khỏi thắc mắc).
+
+
+def rollover_leave(year=None):
+    """Cộng dồn phép thừa cuối năm `year` sang năm year+1 (chỉ admin/hr).
+
+    Với mỗi nhân viên đang làm việc x mỗi loại phép có quota: unused =
+    max(0, total - used) của balance năm `year`; carried =
+    min(unused, max_days theo policy); carried > 0 và chưa có row
+    (employee, type, from_year=year) thì tạo LeaveCarryover với hạn dùng
+    theo policy, đồng thời đảm bảo balance năm year+1 tồn tại. Chạy lần 2
+    cùng year là idempotent: không tạo trùng, totalCarriedDays = 0.
+    """
+    today = date.today()
+    from_year = year if year is not None else today.year - 1
+    if from_year >= today.year:
+        raise ApiError(
+            400, "VALIDATION_ERROR",
+            "Chỉ cộng dồn phép của năm đã qua (year phải nhỏ hơn năm hiện tại).",
+        )
+    policy = get_carry_policy()
+    max_days = policy["max_days"]
+    expires_on = _carry_expiry_date(from_year + 1, policy["expiry_mmdd"])
+
+    employees = Employee.query.filter(
+        Employee.status.in_((Employee.STATUS_WORKING, Employee.STATUS_ON_LEAVE))
+    ).all()
+    leave_types = LeaveType.query.filter(
+        LeaveType.paid.is_(True), LeaveType.annual_quota_days > 0
+    ).all()
+
+    employees_carried = set()
+    total_carried = 0.0
+    skipped_existing = 0
+    for employee in employees:
+        for leave_type in leave_types:
+            balance = LeaveBalance.query.filter_by(
+                employee_id=employee.id,
+                leave_type_id=leave_type.id,
+                year=from_year,
+            ).first()
+            if balance is None:
+                continue
+            unused = max(0, (balance.total_days or 0) - (balance.used_days or 0))
+            carried = min(unused, max_days)
+            if carried <= 0:
+                continue
+            existing = LeaveCarryover.query.filter_by(
+                employee_id=employee.id,
+                leave_type_id=leave_type.id,
+                from_year=from_year,
+            ).first()
+            if existing is not None:
+                skipped_existing += 1
+                continue
+            db.session.add(LeaveCarryover(
+                employee_id=employee.id,
+                leave_type_id=leave_type.id,
+                from_year=from_year,
+                initial_days=carried,
+                days_remaining=carried,
+                expires_on=expires_on,
+            ))
+            # Đảm bảo balance năm sau tồn tại (phép cộng dồn KHÔNG cộng vào
+            # total_days — nó sống riêng ở bảng carryover).
+            get_or_create_balance(employee.id, leave_type, from_year + 1)
+            employees_carried.add(employee.id)
+            total_carried += carried
+    db.session.commit()
+    return {
+        "fromYear": from_year,
+        "toYear": from_year + 1,
+        "employeesProcessed": len(employees),
+        "employeesCarried": len(employees_carried),
+        "totalCarriedDays": total_carried,
+        "skippedExisting": skipped_existing,
+    }
+
+
 def _check_balance(employee_id, leave_type, from_date, days_count):
     if not _has_quota(leave_type):
         return
-    balance = get_or_create_balance(employee_id, leave_type, from_date.year)
-    remaining = (balance.total_days or 0) - (balance.used_days or 0)
+    remaining = available_days(employee_id, leave_type, from_date.year)
     if days_count > remaining:
         raise ApiError(
             400,
@@ -473,13 +738,13 @@ def hr_decision(request_id, data, actor_employee=None):
     decision, note = _validate_decision(data)
     if decision == "approved":
         # Kiểm tra lại số dư TRƯỚC khi trừ: hai đơn có thể cùng được tạo
-        # khi còn đủ phép nhưng duyệt cả hai sẽ làm số dư âm.
+        # khi còn đủ phép nhưng duyệt cả hai sẽ làm số dư âm. Số dư khả
+        # dụng = quota còn lại + phép cộng dồn chưa hết hạn.
         leave_type = db.session.get(LeaveType, request.leave_type_id)
         if leave_type is not None and _has_quota(leave_type):
-            balance = get_or_create_balance(
+            remaining = available_days(
                 request.employee_id, leave_type, request.from_date.year
             )
-            remaining = (balance.total_days or 0) - (balance.used_days or 0)
             if (request.days_count or 0) > remaining:
                 raise ApiError(
                     409,
@@ -493,13 +758,14 @@ def hr_decision(request_id, data, actor_employee=None):
     request.decided_at = func.now()
 
     if decision == "approved":
-        # Trừ số dư phép + thông báo + đổi trạng thái: tất cả trong 1 transaction (commit cuối).
+        # Trừ số dư phép FIFO (cộng dồn trước, quota sau) + thông báo +
+        # đổi trạng thái: tất cả trong 1 transaction (commit cuối).
         leave_type = db.session.get(LeaveType, request.leave_type_id)
         if leave_type is not None and _has_quota(leave_type):
-            balance = get_or_create_balance(
-                request.employee_id, leave_type, request.from_date.year
+            _consume_days(
+                request.employee_id, leave_type, request.from_date.year,
+                request.days_count or 0,
             )
-            balance.used_days = (balance.used_days or 0) + (request.days_count or 0)
         request.status = STATUS_APPROVED
         _sync_attendance_for_approved_leave(request)
         _notify_employee(
@@ -582,10 +848,13 @@ def cancel_approved_leave(request_id, actor_user=None):
     if future_days:
         leave_type = db.session.get(LeaveType, request.leave_type_id)
         if leave_type is not None and _has_quota(leave_type):
-            balance = get_or_create_balance(
-                request.employee_id, leave_type, request.from_date.year
+            # Hoàn theo thứ tự ngược lúc trừ: giảm used_days (quota) trước,
+            # phần còn lại cộng lại vào phép cộng dồn (không vượt initial,
+            # row đã hết hạn thì phần hoàn đó mất luôn).
+            _refund_days(
+                request.employee_id, leave_type, request.from_date.year,
+                future_days,
             )
-            balance.used_days = max(0, (balance.used_days or 0) - future_days)
 
     request.status = STATUS_CANCELLED
     _notify_employee(

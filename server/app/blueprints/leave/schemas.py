@@ -5,7 +5,11 @@
   Response không bao giờ chứa dữ liệu ngoài phạm vi module này.
 """
 
+from datetime import date
+
 from marshmallow import Schema, fields, validate
+
+from app.models import LeaveCarryover
 
 
 class CreateLeaveRequestSchema(Schema):
@@ -37,9 +41,34 @@ def leave_type_to_dict(leave_type):
     }
 
 
+def _carried_summary(employee_id, leave_type_id, year):
+    """Phép cộng dồn còn lại (chưa hết hạn tại hôm nay) + hạn gần nhất."""
+    today = date.today()
+    rows = (
+        LeaveCarryover.query.filter_by(
+            employee_id=employee_id,
+            leave_type_id=leave_type_id,
+            from_year=year - 1,
+        )
+        .filter(
+            LeaveCarryover.expires_on >= today,
+            LeaveCarryover.days_remaining > 0,
+        )
+        .all()
+    )
+    carried = sum((row.days_remaining or 0) for row in rows)
+    expires = min((row.expires_on for row in rows), default=None)
+    return carried, expires
+
+
 def balance_to_dict(leave_type, balance):
     total = balance.total_days or 0
     used = balance.used_days or 0
+    # remaining_days giữ nguyên nghĩa cũ (quota còn lại) để không vỡ
+    # client/test cũ; phép cộng dồn hiện riêng ở 3 field dưới.
+    carried, expires = _carried_summary(
+        balance.employee_id, balance.leave_type_id, balance.year
+    )
     return {
         "id": balance.id,
         "employee_id": balance.employee_id,
@@ -49,6 +78,9 @@ def balance_to_dict(leave_type, balance):
         "total_days": total,
         "used_days": used,
         "remaining_days": total - used,
+        "carried_days": carried,
+        "carried_expires_on": expires.isoformat() if expires else None,
+        "available_days": (total - used) + carried,
     }
 
 
