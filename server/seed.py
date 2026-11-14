@@ -66,19 +66,21 @@ DEMO_USERS = [
 def seed_demo_attendance_november() -> dict:
     """Chấm công mẫu tháng 11/2026 cho buổi demo ngày 15/11/2026.
 
-    Chuyển các bản ghi còn "absent" của ngày làm việc 02–13/11/2026 thành
-    present (~85%, check-in 07:45–08:30, check-out 17:30–18:15) hoặc late
-    (~8%, check-in 08:45–09:30, check-out 17:30–18:00); còn lại giữ
-    absent. Quyết định của mỗi bản ghi dùng RNG gieo theo CHÍNH
-    (employee_id, work_date) của nó — không dùng một RNG chạy tuần tự
-    (bản chạy tuần tự sẽ đổi dữ liệu mỗi lần chạy lại vì tập absent còn
-    lại thay đổi). Nhờ đó chạy lại là idempotent thật: bản ghi đã giữ
-    absent thì lần sau vẫn giữ absent, bản ghi đã chuyển thì không còn
-    absent để xét.
+    Đặt trạng thái cho mọi bản ghi của ngày làm việc 02–13/11/2026 theo
+    một hàm thuần túy của (employee_id, work_date): absent ~7%,
+    late ~8% (check-in 08:45–09:30, check-out 17:30–18:00), còn lại
+    present ~85% (check-in 07:45–08:30, check-out 17:30–18:15).
 
-    Cố tình CHỈ chạm tới 02–13/11/2026: các ngày sau đó (nếu materialize
-    tạo absent mới) KHÔNG được seed — đó là dữ liệu thật. Không động vào
-    bản ghi on_leave (đã có đơn nghỉ duyệt) và nhân viên resigned.
+    Vì trạng thái đích chỉ phụ thuộc vào (employee_id, work_date) nên hàm
+    vừa idempotent (chạy lại không đổi gì) vừa TỰ SỬA (nếu một lần deploy
+    trước đã chuyển hết absent thành present/late thì lần chạy này đưa
+    đúng ~7% về absent). RNG gieo theo từng bản ghi, không dùng một RNG
+    chạy tuần tự (bản chạy tuần tự đổi dữ liệu mỗi lần chạy lại).
+
+    Không động vào: bản ghi on_leave (đã có đơn nghỉ duyệt), nhân viên
+    resigned, ngày ngoài 02–13/11/2026, và bản ghi chấm công THẬT
+    (check-in nằm ngoài khung giờ seed — vd bản ghi late 23:30 có sẵn
+    trên production được giữ nguyên).
     """
     first = date(2026, 11, 2)
     cutoff = date(2026, 11, 13)
@@ -87,45 +89,64 @@ def seed_demo_attendance_november() -> dict:
         .filter(
             Attendance.work_date >= first,
             Attendance.work_date <= cutoff,
-            Attendance.status == Attendance.STATUS_ABSENT,
             Employee.status.in_(("working", "on_leave")),
         )
         .order_by(Attendance.employee_id, Attendance.work_date)
         .all()
     )
-    counts = {"present": 0, "late": 0, "kept_absent": 0}
+    counts = {"present": 0, "late": 0, "absent": 0, "on_leave": 0, "skipped_real": 0}
     for rec in records:
-        # RNG riêng cho từng bản ghi -> quyết định ổn định qua các lần chạy.
+        if rec.status == Attendance.STATUS_ON_LEAVE:
+            counts["on_leave"] += 1
+            continue
+        if rec.check_in_at is not None and not _is_seed_checkin(rec):
+            # Chấm công thật (ngoài khung giờ seed) -> không động vào.
+            counts["skipped_real"] += 1
+            continue
         rng = random.Random(
             f"demo-attendance-2026-11-{rec.employee_id}-{rec.work_date.isoformat()}"
         )
         draw = rng.random()
-        if draw < 0.85:
-            status = Attendance.STATUS_PRESENT
-            in_min = rng.randrange(7 * 60 + 45, 8 * 60 + 31)
-            out_min = rng.randrange(17 * 60 + 30, 18 * 60 + 16)
-        elif draw < 0.93:
-            status = Attendance.STATUS_LATE
+        if draw < 0.07:
+            desired, in_min, out_min = Attendance.STATUS_ABSENT, None, None
+        elif draw < 0.15:
+            desired = Attendance.STATUS_LATE
             in_min = rng.randrange(8 * 60 + 45, 9 * 60 + 31)
             out_min = rng.randrange(17 * 60 + 30, 18 * 60 + 1)
         else:
-            counts["kept_absent"] += 1
-            continue
-        rec.status = status
-        rec.check_in_at = datetime.combine(
-            rec.work_date, time(in_min // 60, in_min % 60)
+            desired = Attendance.STATUS_PRESENT
+            in_min = rng.randrange(7 * 60 + 45, 8 * 60 + 31)
+            out_min = rng.randrange(17 * 60 + 30, 18 * 60 + 16)
+        rec.status = desired
+        rec.check_in_at = (
+            datetime.combine(rec.work_date, time(in_min // 60, in_min % 60))
+            if in_min is not None
+            else None
         )
-        rec.check_out_at = datetime.combine(
-            rec.work_date, time(out_min // 60, out_min % 60)
+        rec.check_out_at = (
+            datetime.combine(rec.work_date, time(out_min // 60, out_min % 60))
+            if out_min is not None
+            else None
         )
-        counts[status] += 1
+        counts[desired] += 1
     db.session.commit()
     print(
         "Seed cham cong demo 11/2026: "
-        f"present +{counts['present']}, late +{counts['late']}, "
-        f"absent giu nguyen {counts['kept_absent']}."
+        f"present {counts['present']}, late {counts['late']}, "
+        f"absent {counts['absent']}, on_leave {counts['on_leave']}, "
+        f"bo qua cham cong that {counts['skipped_real']}."
     )
     return counts
+
+
+def _is_seed_checkin(rec) -> bool:
+    """True nếu check-in nằm trong khung giờ mà seed demo tạo ra."""
+    if rec.check_in_at is None:
+        return False
+    minute = rec.check_in_at.hour * 60 + rec.check_in_at.minute
+    return (7 * 60 + 45 <= minute <= 8 * 60 + 30) or (
+        8 * 60 + 45 <= minute <= 9 * 60 + 30
+    )
 
 
 def main() -> None:
