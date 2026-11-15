@@ -25,17 +25,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,7 +75,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hrmai.app.core.di.AppContainer
 import com.hrmai.app.core.ui.ErrorState
 import com.hrmai.app.core.ui.HrmCard
-import com.hrmai.app.core.ui.InitialAvatar
 import com.hrmai.app.core.ui.LoadingState
 import com.hrmai.app.core.ui.StatusChip
 import com.hrmai.app.core.ui.theme.BorderGray
@@ -83,7 +85,6 @@ import com.hrmai.app.core.ui.theme.DangerRed
 import com.hrmai.app.core.ui.theme.InkDark
 import com.hrmai.app.core.ui.theme.InkMuted
 import com.hrmai.app.core.ui.theme.SuccessGreen
-import com.hrmai.app.core.ui.theme.WarningAmber
 import com.hrmai.app.core.util.Format
 import java.time.LocalDate
 
@@ -179,17 +180,17 @@ private fun ChatbotScreen(
                     message = state.historyError,
                     onRetry = onRetryHistory,
                 )
-                state.messages.isEmpty() -> EmptyConversation(onPick = { submit(it) })
+                state.messages.isEmpty() -> EmptyConversation(userName = userName, onPick = { submit(it) })
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(state.messages, key = { it.id }) { msg ->
+                    itemsIndexed(state.messages, key = { _, it -> it.id }) { index, msg ->
                         MessageRow(
                             msg = msg,
-                            userName = userName,
+                            isLast = index == state.messages.lastIndex,
                             showRetry = msg.isError && state.lastFailedQuestion != null && !state.sending,
                             onRetry = onRetryLast,
                             onConfirmAction = onConfirmAction,
@@ -217,22 +218,31 @@ private fun ChatbotScreen(
 
 @Composable
 private fun ChatHeader() {
-    Surface(color = Color.White, shadowElevation = 0.dp) {
+    Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
         Row(
             modifier = Modifier.fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
-                    .background(BrandBlue),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.SmartToy,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
+            // Avatar AI + chấm xanh "đang hoạt động".
+            Box(modifier = Modifier.size(40.dp)) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                        .background(BrandBlue),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SmartToy,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Box(
+                    modifier = Modifier.size(11.dp).clip(CircleShape)
+                        .background(Color(0xFF12B76A))
+                        .border(2.dp, Color.White, CircleShape)
+                        .align(Alignment.BottomEnd),
                 )
             }
             Spacer(Modifier.width(10.dp))
@@ -248,12 +258,13 @@ private fun ChatHeader() {
                     StatusChip(text = "AI", bg = BrandBlueSoft, fg = BrandBlue)
                 }
                 Text(
-                    text = "Trả lời từ tài liệu quy chế, kèm nguồn trích dẫn",
+                    text = "Đang hoạt động · Quy chế & dữ liệu thật",
                     style = MaterialTheme.typography.bodySmall,
                     color = InkMuted,
                 )
             }
         }
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(BorderGray))
     }
 }
 
@@ -261,7 +272,8 @@ private fun ChatHeader() {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EmptyConversation(onPick: (String) -> Unit) {
+private fun EmptyConversation(userName: String?, onPick: (String) -> Unit) {
+    val firstName = userName?.trim()?.split(" ")?.lastOrNull()?.takeIf { it.isNotBlank() }
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -281,7 +293,8 @@ private fun EmptyConversation(onPick: (String) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
         Text(
-            text = "Xin chào! Bạn muốn hỏi gì về quy chế công ty?",
+            text = if (firstName != null) "Xin chào, $firstName! Bạn muốn hỏi gì?"
+            else "Xin chào! Bạn muốn hỏi gì?",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = InkDark,
@@ -302,30 +315,31 @@ private fun EmptyConversation(onPick: (String) -> Unit) {
     }
 }
 
-/* ------------------------------- Hàng gợi ý -------------------------------- */
-
-@OptIn(ExperimentalLayoutApi::class)
+/* ------------------------------- Hàng gợi ý --------------------------------
+   Một hàng cuộn ngang duy nhất (thay cho khối FlowRow nhiều dòng chiếm
+   ~120dp trước đây): luôn thấy được ô nhập + tin nhắn mới nhất. */
 @Composable
 private fun SuggestionBar(
     sending: Boolean,
     userRole: String?,
     onPick: (String) -> Unit,
 ) {
-    Column(
+    LazyRow(
         modifier = Modifier.fillMaxWidth().background(Color.White)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        item {
             SuggestionChip(
                 text = "Xin nghỉ phép giúp tôi…",
                 enabled = !sending,
                 accent = true,
                 onClick = { onPick("Xin nghỉ phép giúp tôi…") },
             )
-            if (userRole in listOf("manager", "hr", "admin")) {
+        }
+        if (userRole in listOf("manager", "hr", "admin")) {
+            item {
                 SuggestionChip(
                     text = "Duyệt đơn đang chờ của team tôi",
                     enabled = !sending,
@@ -333,9 +347,9 @@ private fun SuggestionBar(
                     onClick = { onPick("Duyệt đơn đang chờ của team tôi") },
                 )
             }
-            LIVE_SUGGESTIONS.forEach { s ->
-                SuggestionChip(text = s, enabled = !sending, onClick = { onPick(s) })
-            }
+        }
+        items(LIVE_SUGGESTIONS) { s ->
+            SuggestionChip(text = s, enabled = !sending, onClick = { onPick(s) })
         }
     }
 }
@@ -349,17 +363,18 @@ private fun SuggestionChip(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(50))
             .background(if (accent) BrandBlueSoft else Color.White)
-            .border(1.dp, if (accent) BrandBlue else BorderGray, RoundedCornerShape(10.dp))
+            .border(1.dp, if (accent) BrandBlue else BorderGray, RoundedCornerShape(50))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             color = if (accent) BrandBlue else InkDark,
             fontWeight = FontWeight.Medium,
+            maxLines = 1,
         )
     }
 }
@@ -373,6 +388,7 @@ private fun InputBar(
     sending: Boolean,
     onSubmit: () -> Unit,
 ) {
+    val canSend = input.isNotBlank() && !sending
     Surface(color = Color.White, shadowElevation = 0.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -391,21 +407,30 @@ private fun InputBar(
                 },
                 placeholder = { Text("Nhập câu hỏi về quy chế, nghỉ phép…") },
                 maxLines = 4,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF2F4F7),
+                    unfocusedContainerColor = Color(0xFFF2F4F7),
+                    disabledContainerColor = Color(0xFFF2F4F7),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    cursorColor = BrandBlue,
+                ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSubmit() }),
             )
             Spacer(Modifier.width(8.dp))
             IconButton(
                 onClick = onSubmit,
-                enabled = input.isNotBlank() && !sending,
-                modifier = Modifier.size(48.dp).clip(CircleShape)
-                    .background(if (input.isNotBlank() && !sending) BrandBlue else BorderGray),
+                enabled = canSend,
+                modifier = Modifier.size(46.dp).clip(CircleShape)
+                    .background(if (canSend) BrandBlue else Color(0xFFF2F4F7)),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Send,
+                    imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Gửi câu hỏi",
-                    tint = Color.White,
+                    tint = if (canSend) Color.White else InkMuted,
                 )
             }
         }
@@ -417,13 +442,15 @@ private fun InputBar(
 @Composable
 private fun MessageRow(
     msg: ChatMessage,
-    userName: String?,
+    isLast: Boolean,
     showRetry: Boolean,
     onRetry: () -> Unit,
     onConfirmAction: (String) -> Unit,
     onCancelAction: (String) -> Unit,
 ) {
     if (msg.fromUser) {
+        // Tin của mình: bong bóng xanh phải, không avatar từng tin (rối mắt),
+        // giờ chỉ hiện ở tin cuối cùng của đoạn chat.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
@@ -431,11 +458,11 @@ private fun MessageRow(
         ) {
             Column(
                 horizontalAlignment = Alignment.End,
-                modifier = Modifier.widthIn(max = 300.dp),
+                modifier = Modifier.widthIn(max = 320.dp),
             ) {
                 Box(
                     modifier = Modifier.clip(
-                        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp),
+                        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp),
                     ).background(BrandBlue).padding(horizontal = 14.dp, vertical = 10.dp),
                 ) {
                     Text(
@@ -444,10 +471,8 @@ private fun MessageRow(
                         color = Color.White,
                     )
                 }
-                TimeLabel(msg.createdAt, alignEnd = true)
+                if (isLast) TimeLabel(msg.createdAt, alignEnd = true)
             }
-            Spacer(Modifier.width(8.dp))
-            InitialAvatar(name = userName, sizeDp = 30)
         }
     } else {
         Row(
@@ -470,14 +495,14 @@ private fun MessageRow(
             Spacer(Modifier.width(8.dp))
             Column(
                 horizontalAlignment = Alignment.Start,
-                modifier = Modifier.widthIn(max = 320.dp),
+                modifier = Modifier.widthIn(max = 340.dp),
             ) {
                 when {
                     msg.isTyping -> Column {
                         TypingBubble()
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "AI đang tra cứu, bản miễn phí có thể mất tới 30 giây…",
+                            text = "AI đang tra cứu, có thể mất vài giây…",
                             style = MaterialTheme.typography.bodySmall,
                             color = InkMuted,
                         )
@@ -485,7 +510,7 @@ private fun MessageRow(
                     msg.isError -> {
                         Box(
                             modifier = Modifier.clip(
-                                RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+                                RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
                             ).background(Color(0xFFFEF3F2)).padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
                             Text(
@@ -501,9 +526,9 @@ private fun MessageRow(
                     else -> {
                         Box(
                             modifier = Modifier.clip(
-                                RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+                                RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
                             ).background(Color.White)
-                                .border(1.dp, BorderGray, RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
+                                .border(1.dp, BorderGray, RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
                             Text(
@@ -526,7 +551,7 @@ private fun MessageRow(
                         ModeRow(msg)
                     }
                 }
-                if (!msg.isTyping) TimeLabel(msg.createdAt, alignEnd = false)
+                if (!msg.isTyping && isLast) TimeLabel(msg.createdAt, alignEnd = false)
             }
         }
     }
@@ -557,9 +582,9 @@ private fun TypingBubble() {
     val transition = rememberInfiniteTransition(label = "typing")
     Row(
         modifier = Modifier.clip(
-            RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+            RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
         ).background(Color.White)
-            .border(1.dp, BorderGray, RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
+            .border(1.dp, BorderGray, RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp))
             .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -607,33 +632,40 @@ private fun SourcesSection(sources: List<ChatSource>) {
             )
         }
         if (expanded) {
-            Spacer(Modifier.height(4.dp))
-            sources.forEach { s ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Description,
-                        contentDescription = null,
-                        tint = BrandBlue,
-                        modifier = Modifier.size(15.dp).padding(top = 1.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Column {
-                        Text(
-                            text = s.title + (s.page?.let { " · trang $it" } ?: ""),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = InkDark,
-                            fontWeight = FontWeight.Medium,
+            Spacer(Modifier.height(6.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFF9FAFB))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                sources.forEach { s ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Description,
+                            contentDescription = null,
+                            tint = BrandBlue,
+                            modifier = Modifier.size(15.dp).padding(top = 1.dp),
                         )
-                        if (s.excerpt.isNotBlank()) {
+                        Spacer(Modifier.width(6.dp))
+                        Column {
                             Text(
-                                text = s.excerpt,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = InkMuted,
-                                maxLines = 3,
+                                text = s.title + (s.page?.let { " · trang $it" } ?: ""),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = InkDark,
+                                fontWeight = FontWeight.Medium,
                             )
+                            if (s.excerpt.isNotBlank()) {
+                                Text(
+                                    text = s.excerpt,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = InkMuted,
+                                    maxLines = 3,
+                                )
+                            }
                         }
                     }
                 }
@@ -777,7 +809,7 @@ private fun ModeRow(msg: ChatMessage) {
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = WarningAmber,
+                        color = InkMuted,
                     )
                 }
             }
