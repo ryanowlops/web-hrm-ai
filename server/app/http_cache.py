@@ -36,6 +36,13 @@ _store: dict = {}
 _lock = threading.Lock()
 
 
+def clear() -> None:
+    """Xoá toàn bộ cache (dùng cho test đo query; production dùng cơ chế
+    TTL + xoá khi ghi có sẵn)."""
+    with _lock:
+        _store.clear()
+
+
 def _cacheable_path(path: str) -> bool:
     return any(path == p or path.startswith(p) for p in _CACHE_PREFIXES)
 

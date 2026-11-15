@@ -23,6 +23,8 @@ import calendar
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+from sqlalchemy.orm import selectinload
+
 from app.blueprints.payroll.calculator import (
     DEFAULT_INSURANCE_RATE,
     _money,
@@ -844,7 +846,17 @@ def lock_period(period_id: int, actor) -> PayrollPeriod:
 
 def list_items(period_id: int, args):
     period = get_period(period_id)
-    query = db.session.query(PayrollItem).filter(PayrollItem.period_id == period.id)
+    # item_to_dict chạm item.employee + employee.department + item.period
+    # cho MỖI dòng — không eager-load thì 20 dòng = ~20 câu lazy load.
+    query = (
+        db.session.query(PayrollItem)
+        .options(
+            selectinload(PayrollItem.employee).selectinload(
+                Employee.department),
+            selectinload(PayrollItem.period),
+        )
+        .filter(PayrollItem.period_id == period.id)
+    )
     employee_id = args.get("employee_id", type=int)
     if employee_id:
         query = query.filter(PayrollItem.employee_id == employee_id)

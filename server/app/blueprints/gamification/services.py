@@ -15,7 +15,8 @@ Nguyên tắc điểm thưởng (feature-expansion-v4 mục 2.2):
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func
+from sqlalchemy import case, func, insert
+from sqlalchemy.orm import selectinload
 
 from app.blueprints.auth.guards import load_current_user
 from app.extensions import db
@@ -186,6 +187,118 @@ def sync_points(employee_id):
     return added
 
 
+def sync_points_many(employee_ids):
+    """Đồng bộ điểm cho NHIỀU nhân viên trong vài câu query (dùng cho
+    leaderboard). Cùng luật idempotent với sync_points nhưng không gọi
+    sync_points từng người (mỗi người ~7 câu: 20 người -> ~140 câu, 49
+    người -> ~340 câu chỉ riêng sync).
+
+    - 1 câu SELECT lấy toàn bộ source_ref đã có (cả 3 nguồn).
+    - 3 câu SELECT lấy toàn bộ nguồn điểm (kudo / khoá học / ngày đúng giờ).
+    - 1 câu INSERT đa dòng cho các dòng ledger còn thiếu.
+    UNIQUE(employee_id, source_type, source_ref) chống cộng trùng; nếu 2
+    request chạy song song cùng chèn 1 dòng thì bắt IntegrityError, rollback
+    rồi tiếp tục — dòng đó đã có, tổng điểm đọc sau vẫn đúng.
+    """
+    ids = [i for i in dict.fromkeys(employee_ids) if i is not None]
+    if not ids:
+        return 0
+    sources = (
+        PointsLedger.SOURCE_KUDO,
+        PointsLedger.SOURCE_TRAINING,
+        PointsLedger.SOURCE_ONTIME,
+    )
+    existing = {stype: set() for stype in sources}
+    for emp_id, stype, ref in (
+        db.session.query(
+            PointsLedger.employee_id, PointsLedger.source_type,
+            PointsLedger.source_ref)
+        .filter(PointsLedger.employee_id.in_(ids),
+                PointsLedger.source_type.in_(sources))
+        .all()
+    ):
+        existing[stype].add((emp_id, ref))
+
+    new_rows = []
+    for kudo in (
+        Kudo.query.filter(Kudo.to_employee_id.in_(ids))
+        .order_by(Kudo.id.asc()).all()
+    ):
+        ref = f"kudo:{kudo.id}"
+        if (kudo.to_employee_id, ref) in existing[PointsLedger.SOURCE_KUDO]:
+            continue
+        existing[PointsLedger.SOURCE_KUDO].add((kudo.to_employee_id, ref))
+        new_rows.append({
+            "employee_id": kudo.to_employee_id, "delta": POINTS_PER_KUDO,
+            "source_type": PointsLedger.SOURCE_KUDO, "source_ref": ref,
+            "note": "Nhận kudo từ đồng nghiệp",
+        })
+    for enr in (
+        CourseEnrollment.query.filter(
+            CourseEnrollment.employee_id.in_(ids),
+            CourseEnrollment.status == CourseEnrollment.STATUS_COMPLETED)
+        .options(selectinload(CourseEnrollment.course))
+        .order_by(CourseEnrollment.id.asc()).all()
+    ):
+        ref = f"course:{enr.id}"
+        if (enr.employee_id, ref) in existing[PointsLedger.SOURCE_TRAINING]:
+            continue
+        existing[PointsLedger.SOURCE_TRAINING].add((enr.employee_id, ref))
+        title = enr.course.title if enr.course else "khoá học"
+        new_rows.append({
+            "employee_id": enr.employee_id, "delta": POINTS_PER_COURSE,
+            "source_type": PointsLedger.SOURCE_TRAINING, "source_ref": ref,
+            "note": f"Hoàn thành khoá học: {title}",
+        })
+    for record in (
+        Attendance.query.filter(
+            Attendance.employee_id.in_(ids),
+            Attendance.status == Attendance.STATUS_PRESENT)
+        .order_by(Attendance.work_date.asc()).all()
+    ):
+        ref = f"attendance:{record.work_date.isoformat()}"
+        if (record.employee_id, ref) in existing[PointsLedger.SOURCE_ONTIME]:
+            continue
+        existing[PointsLedger.SOURCE_ONTIME].add((record.employee_id, ref))
+        new_rows.append({
+            "employee_id": record.employee_id,
+            "delta": POINTS_PER_ONTIME_DAY,
+            "source_type": PointsLedger.SOURCE_ONTIME, "source_ref": ref,
+            "note": f"Đi làm đúng giờ ngày "
+                    f"{record.work_date.strftime('%d/%m/%Y')}",
+        })
+    if new_rows:
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            db.session.execute(insert(PointsLedger), new_rows)
+            db.session.flush()
+        except IntegrityError:
+            # Request khác đã chèn trùng dòng trong lúc này — rollback
+            # rồi tiếp tục, tổng điểm đọc sau vẫn đúng.
+            db.session.rollback()
+    return len(new_rows)
+
+
+def _totals_many(employee_ids):
+    """(balance, earned, spent) cho nhiều nhân viên trong 1 câu query
+    (thay cho get_totals gọi 3 câu SUM cho từng người)."""
+    rows = (
+        db.session.query(
+            PointsLedger.employee_id,
+            func.coalesce(func.sum(PointsLedger.delta), 0),
+            func.coalesce(func.sum(case(
+                (PointsLedger.delta > 0, PointsLedger.delta), else_=0)), 0),
+            func.coalesce(func.sum(case(
+                (PointsLedger.delta < 0, -PointsLedger.delta), else_=0)), 0),
+        )
+        .filter(PointsLedger.employee_id.in_(employee_ids))
+        .group_by(PointsLedger.employee_id)
+        .all()
+    )
+    return {emp_id: (int(b), int(e), int(s)) for emp_id, b, e, s in rows}
+
+
 def get_totals(employee_id):
     """Trả (balance, total_earned, total_spent) từ sổ cái."""
     balance = (
@@ -249,42 +362,43 @@ def my_points(user):
 
 
 def leaderboard(limit=10):
-    """Top theo tổng điểm đã kiếm; sync trước cho mọi nhân viên đang làm."""
+    """Top theo tổng điểm đã kiếm; sync trước cho mọi nhân viên đang làm.
+
+    Trước đây gọi sync_points + get_totals từng người: 20 nhân viên tốn
+    ~208 câu (140 sync + 30 SUM + 10 lazy department + INSERT lần đầu),
+    49 nhân viên prod tốn ~500 câu. Giờ: sync gộp (5 câu) + tổng gộp
+    (1 câu) + department eager-load — tổng ~8 câu, không tăng theo
+    số nhân viên.
+    """
     employees = (
         Employee.query.filter(Employee.status != Employee.STATUS_RESIGNED)
+        .options(selectinload(Employee.department))
         .order_by(Employee.id.asc())
         .all()
     )
-    for employee in employees:
-        sync_points(employee.id)
-    db.session.commit()
-
-    earned_rows = (
-        db.session.query(
-            PointsLedger.employee_id, func.sum(PointsLedger.delta)
-        )
-        .filter(PointsLedger.delta > 0)
-        .group_by(PointsLedger.employee_id)
-        .all()
-    )
-    earned_map = {emp_id: int(total or 0) for emp_id, total in earned_rows}
+    employee_ids = [employee.id for employee in employees]
+    sync_points_many(employee_ids)
+    totals = _totals_many(employee_ids)
     by_id = {employee.id: employee for employee in employees}
     items = []
-    for employee_id, total_earned in earned_map.items():
+    for employee_id, (balance, earned, _spent) in totals.items():
         employee = by_id.get(employee_id)
-        if employee is None or total_earned <= 0:
+        if employee is None or earned <= 0:
             continue
-        balance, _, _ = get_totals(employee_id)
         items.append(
             {
                 "employee": schemas.employee_brief(employee),
                 "department": (
                     employee.department.name if employee.department else None
                 ),
-                "total_earned": total_earned,
+                "total_earned": earned,
                 "balance": balance,
             }
         )
+    # Commit SAU khi đã dựng xong items: commit expire toàn bộ object
+    # trong session (expire_on_commit), dựng items sau commit sẽ làm mỗi
+    # employee + department bị SELECT lại 1 lần (20 người -> +25 câu).
+    db.session.commit()
     items.sort(
         key=lambda item: (
             -item["total_earned"],
