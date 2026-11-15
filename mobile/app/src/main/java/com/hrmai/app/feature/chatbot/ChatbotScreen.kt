@@ -38,6 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -172,7 +173,11 @@ private fun ChatbotScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(CanvasGray).imePadding()) {
-        ChatHeader()
+        ChatHeader(
+            historyLoading = state.historyLoading,
+            sending = state.sending,
+            onRefresh = onRetryHistory,
+        )
         Box(modifier = Modifier.weight(1f)) {
             when {
                 state.historyLoading && state.messages.isEmpty() -> LoadingState()
@@ -217,7 +222,7 @@ private fun ChatbotScreen(
 /* --------------------------------- Header --------------------------------- */
 
 @Composable
-private fun ChatHeader() {
+private fun ChatHeader(historyLoading: Boolean, sending: Boolean, onRefresh: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
         Row(
             modifier = Modifier.fillMaxWidth()
@@ -261,6 +266,23 @@ private fun ChatHeader() {
                     text = "Đang hoạt động · Quy chế & dữ liệu thật",
                     style = MaterialTheme.typography.bodySmall,
                     color = InkMuted,
+                )
+            }
+            // Tải lại lịch sử: màn chat chỉ tải 1 lần lúc mở, không có
+            // pull-to-refresh — nút này gọi lại loadHistory để đồng bộ
+            // tin nhắn mới từ web (hoặc từ máy khác) mà không cần mở lại app.
+            // Khoá lúc đang gửi: loadHistory thay toàn bộ danh sách tin nhắn,
+            // bấm giữa lúc gửi sẽ làm mất bong bóng đang chờ trả lời.
+            IconButton(
+                onClick = onRefresh,
+                enabled = !historyLoading && !sending,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Tải lại lịch sử",
+                    tint = InkMuted,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
