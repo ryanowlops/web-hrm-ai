@@ -212,7 +212,7 @@ def get_activity(limit: int = 10):
             "type": "kudo",
             "actor_name": from_name,
             "text": f"{from_name} đã tặng kudos cho {to_name}: “{_excerpt(kudo.message, 70)}”",
-            "at": kudo.created_at.isoformat() if kudo.created_at else None,
+            "at": schemas._iso(kudo.created_at),
             "link": "/kudos",
         })
 
@@ -230,7 +230,7 @@ def get_activity(limit: int = 10):
             "type": "announcement",
             "actor_name": author_name,
             "text": f"Thông báo mới: {_excerpt(ann.title, 80)}",
-            "at": ann.created_at.isoformat() if ann.created_at else None,
+            "at": schemas._iso(ann.created_at),
             "link": "/announcements",
         })
 
@@ -249,7 +249,7 @@ def get_activity(limit: int = 10):
             "type": "new_employee",
             "actor_name": emp.full_name,
             "text": f"{emp.full_name} vừa gia nhập công ty{suffix}",
-            "at": emp.created_at.isoformat() if emp.created_at else None,
+            "at": schemas._iso(emp.created_at),
             "link": "/employees",
         })
 
@@ -273,7 +273,7 @@ def get_activity(limit: int = 10):
             "type": "attendance",
             "actor_name": name,
             "text": f"{name} đã chấm công lúc {hhmm}",
-            "at": att.check_in_at.isoformat() if att.check_in_at else None,
+            "at": schemas._iso_ict_to_utc(att.check_in_at),
             "link": "/attendance",
         })
 
@@ -289,7 +289,7 @@ def get_activity(limit: int = 10):
             "type": "post",
             "actor_name": author_name,
             "text": f"{author_name} đã đăng bài mới: “{_excerpt(post.content, 70)}”",
-            "at": post.created_at.isoformat() if post.created_at else None,
+            "at": schemas._iso(post.created_at),
             "link": "/feed",
         })
 

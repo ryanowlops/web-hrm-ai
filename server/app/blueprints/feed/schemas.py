@@ -4,10 +4,38 @@ Serialize thủ công theo quy ước của module engagement (snake_case).
 Validate trả danh sách lỗi dạng [{"field": ..., "message": ...}] để
 routes đóng vào error.details chuẩn.
 """
+from datetime import timezone
+from zoneinfo import ZoneInfo
+
+ICT = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 def _iso(value):
-    return value.isoformat() if value else None
+    """ISO 8601 UTC có hậu tố Z.
+
+    created_at/updated_at lưu UTC naive (TimestampMixin.utcnow + cột
+    DateTime không múi giờ): isoformat() trần không có múi giờ nên
+    trình duyệt hiểu nhầm thành giờ địa phương (+07) -> bài mới đăng
+    hiện "7 giờ trước". Gắn Z để client parse đúng UTC.
+    """
+    if not value:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _iso_ict_to_utc(value):
+    """ISO 8601 UTC (Z) từ mốc giờ Việt Nam naive (vd check_in_at của
+    module chấm công lưu wall-clock +07, KHÔNG phải UTC — gắn Z trực
+    tiếp sẽ lệch 7 giờ về tương lai)."""
+    if not value:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=ICT)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _author_block(user):
